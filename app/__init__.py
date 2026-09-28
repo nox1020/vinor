@@ -557,11 +557,22 @@ def create_app() -> Flask:
             except Exception:
                 pass
 
+        # آنبوردینگ مشاور: فقط نوشتن‌های کلاینت APK/WebView از CSRF معاف‌اند.
+        # POST /api/consultant/simulate وضعیت بررسی را می‌نویسد و معاف نیست.
+        # GET /cities و GET /status متد امن هستند؛ status?simulate فقط با dry-run یا نشست ادمین می‌نویسد.
         if consultant_api_bp is not None:
-            try:
-                csrf.exempt(consultant_api_bp)
-            except Exception:
-                pass
+            for endpoint in (
+                "consultant_api.consultant_apply",
+                "consultant_api.consultant_profile",
+                "consultant_api.consultant_documents",
+                "consultant_api.consultant_availability",
+            ):
+                try:
+                    view = app.view_functions.get(endpoint)
+                    if view is not None:
+                        csrf.exempt(view)
+                except Exception:
+                    pass
 
         # SMS API از CSRF مستثنا است
         if sms_api_bp is not None:
@@ -720,11 +731,13 @@ def create_app() -> Flask:
                         return redirect(url_for("express_partner.login"))
                     except Exception:
                         return redirect("/express/partner/login")
-                path_api = (request.path or "").startswith("/express/partner/api/")
+                req_path = request.path or ""
+                path_api = req_path.startswith("/express/partner/api/") or req_path.startswith("/api/consultant/")
                 wants_json = (
                     path_api
                     or request.headers.get("X-Requested-With") == "XMLHttpRequest"
                     or "application/json" in (request.headers.get("Accept") or "")
+                    or "application/json" in (request.headers.get("Content-Type") or "")
                 )
                 if wants_json:
                     from flask import jsonify
