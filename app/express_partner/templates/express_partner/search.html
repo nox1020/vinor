@@ -2,76 +2,110 @@
 {% block title %}جستجو | وینور{% endblock %}
 
 {% block content %}
-{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-{{ ep_header_start(id='searchPageHeader') }}
-{% call ep_header_row('جستجو', url_for('express_partner.home'), back_nav=false) %}{% endcall %}
-{{ ep_header_end() }}
-
 <style>
-  html:has(#vinorSearchPage),
-  body:has(#vinorSearchPage) { background: #000 !important; }
+  /* همان توکن‌های خانهٔ وینور — بدون رنگ تازه */
   #vinorSearchPage {
-    background: #000;
-    color: #fff;
+    --vn-search-bg: #000000;
+    --vn-search-raised: #1c1c1e;
+    --vn-search-raised-2: #2f2f2f;
+    --vn-search-text: #ececec;
+    --vn-search-muted: #8e8e93;
+    --vn-search-border: rgba(255, 255, 255, 0.08);
+    --vn-search-accent: #10b981;
+    --vn-search-radius: 12px;
+    background: var(--vn-search-bg);
+    color: var(--vn-search-text);
     min-height: 100dvh;
     padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+    font-family: Vazirmatn, 'Vazirmatn Fallback', Tahoma, sans-serif;
   }
+  html:has(#vinorSearchPage),
+  body:has(#vinorSearchPage) { background: var(--vn-search-bg, #000) !important; }
   #vinorSearchPage .vn-search-shell {
     max-width: 28rem;
     margin-inline: auto;
   }
-  #vinorSearchPage .vn-search-field {
+  #vinorSearchPage .vn-search-bar {
     position: sticky;
-    z-index: 2;
-    padding: 0.35rem 0.9rem 0.65rem;
-    background: #000;
+    top: 0;
+    z-index: 3;
+    padding: calc(0.55rem + env(safe-area-inset-top, 0px)) 0.9rem 0.35rem;
+    background: var(--vn-search-bg);
   }
-  #vinorSearchPage .vn-search-field label {
+  #vinorSearchPage .vn-search-bar label {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    height: 2.75rem;
+    gap: 0.5rem;
+    height: 2.85rem;
     padding: 0 0.85rem;
-    border-radius: 0.9rem;
-    background: #1a1a1a;
-    border: 1px solid rgba(255,255,255,0.08);
-    color: #a1a1aa;
+    border-radius: var(--vn-search-radius);
+    background: var(--vn-search-raised);
+    border: 1px solid var(--vn-search-border);
+    color: var(--vn-search-muted);
   }
-  #vinorSearchPage .vn-search-field svg {
-    width: 1.05rem;
-    height: 1.05rem;
+  #vinorSearchPage .vn-search-bar label:focus-within {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+  #vinorSearchPage .vn-search-bar svg {
+    width: 1.1rem;
+    height: 1.1rem;
     flex-shrink: 0;
   }
-  #vinorSearchPage .vn-search-field input {
+  #vinorSearchPage .vn-search-bar input {
     flex: 1;
     min-width: 0;
     border: 0;
     outline: none;
     background: transparent;
-    color: #fafafa;
+    color: var(--vn-search-text);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: 0.92rem;
   }
-  #vinorSearchPage .vn-search-field input::placeholder { color: #71717a; }
+  #vinorSearchPage .vn-search-bar input::placeholder { color: var(--vn-search-muted); }
+  #vinorSearchPage .vn-search-clear {
+    flex-shrink: 0;
+    width: 1.6rem;
+    height: 1.6rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--vn-search-raised-2);
+    color: var(--vn-search-text);
+    font: inherit;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  #vinorSearchPage .vn-search-clear[hidden] { display: none; }
+  #vinorSearchPage .vn-search-count {
+    margin: 0;
+    padding: 0.15rem 1rem 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--vn-search-muted);
+    text-align: right;
+  }
+  #vinorSearchPage .vn-search-count[hidden] { display: none; }
   #vinorSearchPage .vn-search-list { display: flex; flex-direction: column; }
   #vinorSearchPage .vn-search-row {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    min-height: 5.5rem;
     padding: 0.7rem 0.9rem;
     text-decoration: none;
     color: inherit;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid var(--vn-search-border);
+    transition: background 0.15s ease;
   }
-  #vinorSearchPage .vn-search-row:active { background: rgba(255,255,255,0.04); }
+  #vinorSearchPage .vn-search-row:active { background: var(--vn-search-raised); }
   #vinorSearchPage .vn-search-thumb {
     position: relative;
-    width: 4.5rem;
-    height: 3.4rem;
+    width: 5.6rem;
+    height: 4.35rem;
     flex-shrink: 0;
-    border-radius: 0.55rem;
+    border-radius: var(--vn-search-radius);
     overflow: hidden;
-    background: #1a2332;
+    background: var(--vn-search-raised-2);
   }
   #vinorSearchPage .vn-search-thumb img {
     width: 100%;
@@ -84,76 +118,79 @@
     height: 100%;
     display: grid;
     place-items: center;
-    color: #52525b;
+    color: var(--vn-search-muted);
     font-size: 0.85rem;
   }
   #vinorSearchPage .vn-search-shots {
     position: absolute;
-    left: 0.2rem;
-    bottom: 0.2rem;
+    left: 0.28rem;
+    bottom: 0.28rem;
     display: inline-flex;
     align-items: center;
     gap: 0.15rem;
-    padding: 0.05rem 0.28rem;
-    border-radius: 0.35rem;
-    background: rgba(0,0,0,0.62);
-    color: #fff;
+    padding: 0.08rem 0.32rem;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.62);
+    color: var(--vn-search-text);
     font-size: 0.62rem;
     font-weight: 700;
   }
-  #vinorSearchPage .vn-search-meta { min-width: 0; flex: 1; }
+  #vinorSearchPage .vn-search-meta { min-width: 0; flex: 1; text-align: right; }
   #vinorSearchPage .vn-search-name {
     margin: 0;
-    font-size: 0.84rem;
+    font-size: 0.92rem;
     font-weight: 700;
-    color: #f4f4f5;
-    line-height: 1.35;
+    color: var(--vn-search-text);
+    line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
   #vinorSearchPage .vn-search-price {
-    margin: 0.15rem 0 0;
-    font-size: 0.78rem;
+    margin: 0.2rem 0 0;
+    font-size: 0.84rem;
     font-weight: 700;
-    color: #d4d4d8;
+    color: var(--vn-search-text);
   }
   #vinorSearchPage .vn-search-comm {
-    margin: 0.1rem 0 0;
+    margin: 0.12rem 0 0;
     font-size: 0.72rem;
     font-weight: 800;
-    color: #34d399;
+    color: var(--vn-search-accent);
   }
   #vinorSearchPage .vn-search-loc {
-    margin: 0.05rem 0 0;
-    font-size: 0.68rem;
-    color: #71717a;
+    margin: 0.12rem 0 0;
+    font-size: 0.72rem;
+    color: var(--vn-search-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   #vinorSearchPage .vn-search-empty {
-    padding: 3.5rem 1.25rem;
+    padding: 4.5rem 1.5rem;
     text-align: center;
-    color: #71717a;
-    font-size: 0.85rem;
+    color: var(--vn-search-muted);
+    font-size: 0.88rem;
+    line-height: 1.6;
   }
   #vinorSearchPage .vn-search-row.is-hidden { display: none; }
 </style>
 
 <div id="vinorSearchPage" class="partner-page-scroll-pad" data-vinor-search-page>
   <div class="vn-search-shell">
-    <div class="vn-search-field ep-partner-sticky-below-header">
+    <div class="vn-search-bar">
       <label>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
           <circle cx="11" cy="11" r="7"></circle>
           <path d="M20 20l-3.5-3.5" stroke-linecap="round"></path>
         </svg>
         <input id="vinorSearchInput" type="search" inputmode="search" enterkeyhint="search"
-               placeholder="جستجوی ملک، محله یا قیمت" autocomplete="off" aria-label="جستجوی ملک">
+               placeholder="جستجو در آگهی‌ها" autocomplete="off" aria-label="جستجو در آگهی‌ها">
+        <button type="button" id="vinorSearchClear" class="vn-search-clear" hidden aria-label="پاک کردن">×</button>
       </label>
     </div>
+    <p id="vinorSearchCount" class="vn-search-count" hidden></p>
 
     {% if search_ads %}
     <div id="vinorSearchList" class="vn-search-list" role="list">
@@ -163,6 +200,7 @@
       {% set _internal = _ad_url.startswith('/express/partner/') %}
       {% set _ext = false if _internal else (ad.external|default(_src != 'vinor')) %}
       {% set _hay = (ad.title ~ ' ' ~ ad.price ~ ' ' ~ ad.location)|lower %}
+      {% set _loc = (ad.location|default(''))|string %}
       <a class="vn-search-row"
          role="listitem"
          href="{{ ad.url }}"
@@ -171,7 +209,7 @@
          title="{{ ad.title|e }}">
         <div class="vn-search-thumb" aria-hidden="true">
           {% if ad.image_url %}
-          <img src="{{ ad.image_url }}" alt="" loading="lazy" decoding="async">
+          <img src="{{ ad.image_url }}" alt="" {% if loop.index <= 4 %}loading="eager"{% else %}loading="lazy" decoding="async"{% endif %}>
           {% else %}
           <div class="vn-search-thumb-ph"><i class="fas fa-image"></i></div>
           {% endif %}
@@ -187,8 +225,8 @@
           {% if is_approved and ad.commission_amount %}
           <p class="vn-search-comm">پورسانت {{ ad.commission_amount|toman(false) }} تومان</p>
           {% endif %}
-          {% if ad.location %}
-          <p class="vn-search-loc">{{ ad.location }}</p>
+          {% if _loc %}
+          <p class="vn-search-loc">{% if _loc.startswith('در ') %}{{ _loc }}{% else %}در {{ _loc }}{% endif %}</p>
           {% endif %}
         </div>
       </a>
@@ -211,8 +249,14 @@
   var input = document.getElementById('vinorSearchInput');
   var list = document.getElementById('vinorSearchList');
   var empty = document.getElementById('vinorSearchEmpty');
+  var clearBtn = document.getElementById('vinorSearchClear');
+  var countEl = document.getElementById('vinorSearchCount');
   if (!input || !list) return;
 
+  var fa = '۰۱۲۳۴۵۶۷۸۹';
+  function faNum(n) {
+    return String(n).replace(/\d/g, function (d) { return fa.charAt(Number(d)); });
+  }
   function norm(s) {
     return String(s || '')
       .replace(/[يى]/g, 'ی')
@@ -222,9 +266,9 @@
       .toLowerCase()
       .trim();
   }
-
   function apply() {
     var q = norm(input.value);
+    if (clearBtn) clearBtn.hidden = !input.value;
     var rows = list.querySelectorAll('.vn-search-row');
     var shown = 0;
     for (var i = 0; i < rows.length; i++) {
@@ -234,10 +278,21 @@
       if (ok) shown += 1;
     }
     if (empty) empty.hidden = shown > 0;
+    if (countEl) {
+      countEl.hidden = shown === 0;
+      countEl.textContent = faNum(shown) + ' آگهی';
+    }
   }
-
   input.addEventListener('input', apply);
   input.addEventListener('search', apply);
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function () {
+      input.value = '';
+      apply();
+      try { input.focus(); } catch (_) {}
+    });
+  }
+  apply();
 })();
 </script>
 {% endblock %}
