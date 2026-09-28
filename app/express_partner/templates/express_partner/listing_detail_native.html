@@ -4,207 +4,348 @@
 
 {% block content %}
 <style>
-  html:has(#vinorListingDetail),
-  body:has(#vinorListingDetail) { background: #000 !important; }
-  html:has(#vinorListingDetail) #bottomNavMenu { display: none !important; }
+  /* همان توکن‌های خانهٔ وینور — بدون رنگ تازه */
   #vinorListingDetail {
-    background: #000;
-    color: #ececec;
+    --vn-ld-bg: #000000;
+    --vn-ld-raised: #1c1c1e;
+    --vn-ld-raised-2: #2f2f2f;
+    --vn-ld-text: #ececec;
+    --vn-ld-muted: #8e8e93;
+    --vn-ld-border: rgba(255, 255, 255, 0.08);
+    --vn-ld-accent: #10b981;
+    --vn-ld-danger: #e22828;
+    --vn-ld-radius: 12px;
+    background: var(--vn-ld-bg);
+    color: var(--vn-ld-text);
     min-height: 100dvh;
     max-width: 28rem;
     margin-inline: auto;
-    padding: 0 0 2.5rem;
-    font-family: Vazirmatn, sans-serif;
+    padding: 0 0 calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    font-family: Vazirmatn, 'Vazirmatn Fallback', Tahoma, sans-serif;
   }
-  #vinorListingDetail .vn-ld__bar {
+  html:has(#vinorListingDetail),
+  body:has(#vinorListingDetail) { background: var(--vn-ld-bg, #000) !important; }
+  html:has(#vinorListingDetail) #bottomNavMenu { display: none !important; }
+
+  #vinorListingDetail .vn-ld__gallery-wrap {
+    position: relative;
+    background: var(--vn-ld-raised);
+  }
+  #vinorListingDetail .vn-ld__chrome {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    z-index: 2;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.55rem 0.75rem 0.45rem;
+    padding: calc(0.55rem + env(safe-area-inset-top, 0px)) 0.75rem 0.45rem;
+    pointer-events: none;
   }
+  #vinorListingDetail .vn-ld__chrome > * { pointer-events: auto; }
   #vinorListingDetail .vn-ld__orb {
-    width: 2.625rem;
-    height: 2.625rem;
-    border-radius: 9999px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: #111;
-    color: #ececec;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--vn-ld-border);
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--vn-ld-text);
     display: grid;
     place-items: center;
     flex-shrink: 0;
     text-decoration: none;
     font-size: 1.25rem;
     line-height: 1;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
-  #vinorListingDetail .vn-ld__title-pill {
-    flex: 1;
-    height: 2.625rem;
-    border-radius: 9999px;
-    background: #111;
-    border: 1px solid rgba(255,255,255,0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: #fff;
+  #vinorListingDetail .vn-ld__fav.is-on { color: var(--vn-ld-danger); }
+  #vinorListingDetail .vn-ld__fav .text-amber-400,
+  #vinorListingDetail .vn-ld__fav .vinor-fav-icon.text-amber-400 {
+    color: var(--vn-ld-danger) !important;
   }
-  #vinorListingDetail .vn-ld__fav.is-on { color: #fbbf24; }
   #vinorListingDetail .vn-ld__gallery {
     display: flex;
-    gap: 0.4rem;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    background: #111;
+    scrollbar-width: none;
   }
+  #vinorListingDetail .vn-ld__gallery::-webkit-scrollbar { display: none; }
   #vinorListingDetail .vn-ld__gallery img {
     width: 100%;
     min-width: 100%;
-    height: 14rem;
+    height: min(62vw, 18rem);
     object-fit: cover;
     scroll-snap-align: start;
-    background: #1a2332;
+    background: var(--vn-ld-raised-2);
     flex-shrink: 0;
   }
   #vinorListingDetail .vn-ld__empty {
-    height: 14rem;
-    background: #1a2332;
+    height: min(62vw, 18rem);
+    background: var(--vn-ld-raised-2);
     display: grid;
     place-items: center;
-    color: #52525b;
+    color: var(--vn-ld-muted);
     font-size: 2rem;
   }
-  #vinorListingDetail .vn-ld__body { padding: 1rem; }
+  #vinorListingDetail .vn-ld__counter {
+    position: absolute;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 2;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: var(--vn-ld-text);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  #vinorListingDetail .vn-ld__counter[hidden] { display: none; }
+
+  #vinorListingDetail .vn-ld__body { padding: 1rem 1rem 0.25rem; }
   #vinorListingDetail .vn-ld__badge {
     display: inline-block;
     font-size: 0.7rem;
     font-weight: 700;
-    color: #bae6fd;
-    background: #152030;
+    color: var(--vn-ld-muted);
+    background: var(--vn-ld-raised);
+    border: 1px solid var(--vn-ld-border);
     border-radius: 999px;
     padding: 0.15rem 0.55rem;
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.55rem;
   }
   #vinorListingDetail h1 {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: 1.05rem;
     font-weight: 700;
-    color: #fff;
-    line-height: 1.45;
+    color: var(--vn-ld-text);
+    line-height: 1.5;
   }
   #vinorListingDetail .vn-ld__price {
-    margin: 0.5rem 0 0;
-    font-size: 1rem;
-    color: #94a3b8;
+    margin: 0.55rem 0 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--vn-ld-text);
   }
   #vinorListingDetail .vn-ld__comm {
     margin: 0.35rem 0 0;
     font-size: 0.82rem;
     font-weight: 700;
-    color: #34d399;
+    color: var(--vn-ld-accent);
   }
   #vinorListingDetail .vn-ld__meta {
-    margin: 0.5rem 0 0;
-    font-size: 0.8125rem;
-    color: #8e8e93;
+    margin: 0.45rem 0 0;
+    font-size: 0.8rem;
+    color: var(--vn-ld-muted);
   }
   #vinorListingDetail .vn-ld__rows {
     margin: 1rem 0 0;
-    border-top: 1px solid rgba(255,255,255,0.08);
+    border-top: 1px solid var(--vn-ld-border);
   }
   #vinorListingDetail .vn-ld__row {
     display: flex;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.55rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    font-size: 0.8125rem;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid var(--vn-ld-border);
+    font-size: 0.84rem;
   }
-  #vinorListingDetail .vn-ld__row-k { color: #8e8e93; }
-  #vinorListingDetail .vn-ld__row-v { color: #ececec; font-weight: 600; text-align: left; }
+  #vinorListingDetail .vn-ld__row-k { color: var(--vn-ld-muted); }
+  #vinorListingDetail .vn-ld__row-v {
+    color: var(--vn-ld-text);
+    font-weight: 700;
+    text-align: left;
+  }
+
+  #vinorListingDetail .vn-ld__desc-block { margin: 1.1rem 0 0; }
+  #vinorListingDetail .vn-ld__desc-label {
+    margin: 0 0 0.4rem;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--vn-ld-text);
+  }
   #vinorListingDetail .vn-ld__desc {
-    margin: 1rem 0 0;
+    margin: 0;
     font-size: 0.875rem;
-    line-height: 1.7;
-    color: #e4e4e7;
+    line-height: 1.75;
+    color: var(--vn-ld-text);
     white-space: pre-wrap;
   }
-  #vinorListingDetail .vn-ld__divar {
-    display: block;
+  #vinorListingDetail .vn-ld__desc.is-clamped {
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #vinorListingDetail .vn-ld__more {
+    margin: 0.45rem 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--vn-ld-accent);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #vinorListingDetail .vn-ld__more[hidden] { display: none; }
+
+  #vinorListingDetail .vn-ld__publish {
     margin: 1.25rem 0 0;
-    padding: 0.9rem 1rem;
-    border-radius: 9999px;
-    background: #1c1c1e;
-    border: 1px solid rgba(255,255,255,0.1);
-    color: #fff;
+    padding: 1rem;
+    border-radius: var(--vn-ld-radius);
+    background: var(--vn-ld-raised);
+    border: 1px solid var(--vn-ld-border);
+  }
+  #vinorListingDetail .vn-ld__publish h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--vn-ld-text);
+  }
+  #vinorListingDetail .vn-ld__publish > p {
+    margin: 0.35rem 0 0.75rem;
+    color: var(--vn-ld-muted);
+    font-size: 0.78rem;
+  }
+  #vinorListingDetail .vn-ld__pay {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.7rem;
+  }
+  #vinorListingDetail .vn-ld__pay label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 2rem;
+    padding: 0 0.7rem;
+    border-radius: var(--vn-ld-radius);
+    border: 1px solid var(--vn-ld-border);
+    background: var(--vn-ld-raised-2);
+    color: var(--vn-ld-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  #vinorListingDetail .vn-ld__field {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.7rem;
+    color: var(--vn-ld-muted);
+    font-size: 0.78rem;
+  }
+  #vinorListingDetail .vn-ld__field input[type="number"] {
+    width: 4.2rem;
+    min-height: 2rem;
+    border-radius: var(--vn-ld-radius);
+    border: 1px solid var(--vn-ld-border);
+    background: var(--vn-ld-bg);
+    color: var(--vn-ld-text);
+    text-align: center;
+    font-family: inherit;
+  }
+  #vinorListingDetail .vn-ld__check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 0.85rem;
+    color: var(--vn-ld-muted);
+    font-size: 0.75rem;
+  }
+  #vinorListingDetail .vn-ld__publish button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.55rem;
+    width: 100%;
+    padding: 0 0.9rem;
+    border-radius: var(--vn-ld-radius);
+    background: var(--vn-ld-accent);
+    color: var(--vn-ld-bg);
+    font-weight: 800;
+    font-size: 0.85rem;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  #vinorListingDetail .vn-ld__published {
+    margin: 1rem 0 0;
+    padding: 0.85rem 1rem;
+    border-radius: var(--vn-ld-radius);
+    background: var(--vn-ld-raised);
+    border: 1px solid var(--vn-ld-border);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--vn-ld-accent);
+  }
+
+  #vinorListingDetail .vn-ld__sticky {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 4;
+    max-width: 28rem;
+    margin-inline: auto;
+    padding: 0.65rem 0.9rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+    background: var(--vn-ld-bg);
+    border-top: 1px solid var(--vn-ld-border);
+  }
+  #vinorListingDetail .vn-ld__sticky a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    border-radius: var(--vn-ld-radius);
+    background: var(--vn-ld-raised);
+    border: 1px solid var(--vn-ld-border);
+    color: var(--vn-ld-text);
     text-align: center;
     font-weight: 700;
     font-size: 0.9rem;
     text-decoration: none;
   }
-  #vinorListingDetail .vn-ld__publish {
-    margin: 1.25rem 0 0;
-    padding: 1rem;
-    border-radius: 1rem;
-    background: linear-gradient(160deg, #065f46 0%, #0b1220 70%);
-    border: 1px solid rgba(16,185,129,.28);
-  }
-  #vinorListingDetail .vn-ld__publish h2 { margin: 0; font-size: 1rem; color: #fff; }
-  #vinorListingDetail .vn-ld__publish p { margin: .35rem 0 .7rem; color: #a7f3d0; font-size: .78rem; }
-  #vinorListingDetail .vn-ld__pay { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .7rem; }
-  #vinorListingDetail .vn-ld__pay label {
-    display: inline-flex; align-items: center; gap: .3rem; min-height: 2rem;
-    padding: 0 .7rem; border-radius: .65rem; border: 1px solid rgba(255,255,255,.12);
-    background: rgba(255,255,255,.05); color: #ececec; font-size: .75rem; font-weight: 700;
-  }
-  #vinorListingDetail .vn-ld__field {
-    display: flex; align-items: center; gap: .45rem; margin: 0 0 .7rem; color: #d1d5db; font-size: .78rem;
-  }
-  #vinorListingDetail .vn-ld__field input[type="number"] {
-    width: 4.2rem; min-height: 2rem; border-radius: .55rem; border: 1px solid rgba(255,255,255,.12);
-    background: #111827; color: #fff; text-align: center; font-family: inherit;
-  }
-  #vinorListingDetail .vn-ld__check {
-    display: flex; align-items: center; gap: .4rem; margin: 0 0 .85rem; color: #a1a1aa; font-size: .75rem;
-  }
-  #vinorListingDetail .vn-ld__publish button {
-    display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0 .9rem;
-    border-radius: .75rem; background: #10b981; color: #052e16; font-weight: 800; font-size: .8rem;
-    border: 0; cursor: pointer; font-family: inherit;
-  }
-  #vinorListingDetail .vn-ld__published {
-    margin: .75rem 0 0; font-size: .8rem; font-weight: 700; color: #6ee7b7;
+  #vinorListingDetail.vn-ld--no-sticky {
+    padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   }
 </style>
 
-<article id="vinorListingDetail" data-listing-code="{{ d.code|e }}" data-listing-source="{{ d.source|e }}">
-  <header class="vn-ld__bar">
-    <button type="button" class="vn-ld__orb" id="listingDetailBack" aria-label="بازگشت">‹</button>
-    <div class="vn-ld__title-pill">جزئیات آگهی</div>
-    {% if d.can_favorite %}
-    <button type="button"
-            class="vn-ld__orb vn-ld__fav"
-            data-fav-code="{{ d.code|e }}"
-            data-land-detail-fav
-            aria-label="نشان کردن"
-            aria-pressed="false">
-      <i class="far fa-bookmark vinor-fav-icon" aria-hidden="true"></i>
-    </button>
-    {% else %}
-    <span class="vn-ld__orb" aria-hidden="true"></span>
-    {% endif %}
-  </header>
+<article id="vinorListingDetail"
+         class="{% if not (d.show_divar and d.divar_url) %}vn-ld--no-sticky{% endif %}"
+         data-listing-code="{{ d.code|e }}"
+         data-listing-source="{{ d.source|e }}">
+  <div class="vn-ld__gallery-wrap">
+    <div class="vn-ld__chrome">
+      <button type="button" class="vn-ld__orb" id="listingDetailBack" aria-label="بازگشت">‹</button>
+      {% if d.can_favorite %}
+      <button type="button"
+              class="vn-ld__orb vn-ld__fav"
+              data-fav-code="{{ d.code|e }}"
+              data-land-detail-fav
+              aria-label="نشان کردن"
+              aria-pressed="false">
+        <i class="far fa-bookmark vinor-fav-icon" aria-hidden="true"></i>
+      </button>
+      {% else %}
+      <span class="vn-ld__orb" aria-hidden="true" style="visibility:hidden"></span>
+      {% endif %}
+    </div>
 
-  {% if d.images %}
-  <div class="vn-ld__gallery" dir="ltr" aria-label="گالری آگهی">
-    {% for img in d.images %}
-    <img src="{{ img|image_thumb_url }}" alt="{{ d.title or '' }}" {% if loop.first %}decoding="async"{% else %}loading="lazy"{% endif %}>
-    {% endfor %}
+    {% if d.images %}
+    <div class="vn-ld__gallery" id="listingDetailGallery" dir="ltr" aria-label="گالری آگهی">
+      {% for img in d.images %}
+      <img src="{{ img|image_thumb_url }}" alt="{{ d.title or '' }}" {% if loop.first %}decoding="async"{% else %}loading="lazy"{% endif %}>
+      {% endfor %}
+    </div>
+    {% if d.images|length > 1 %}
+    <span class="vn-ld__counter" id="listingDetailCounter" aria-live="polite">۱ از {{ d.images|length|fa_digits }}</span>
+    {% endif %}
+    {% else %}
+    <div class="vn-ld__empty" aria-hidden="true"><i class="fas fa-image"></i></div>
+    {% endif %}
   </div>
-  {% else %}
-  <div class="vn-ld__empty" aria-hidden="true"><i class="fas fa-image"></i></div>
-  {% endif %}
 
   <div class="vn-ld__body">
     {% if d.source == 'divar' %}
@@ -237,15 +378,11 @@
     {% endif %}
 
     {% if d.description %}
-    <p class="vn-ld__desc">{{ d.description }}</p>
-    {% endif %}
-
-    {% if d.show_divar and d.divar_url %}
-    <a class="vn-ld__divar"
-       href="{{ d.divar_url }}"
-       target="_blank"
-       rel="noopener noreferrer"
-       data-vinor-direct-action="1">دیدن در دیوار</a>
+    <div class="vn-ld__desc-block">
+      <p class="vn-ld__desc-label">توضیحات</p>
+      <p class="vn-ld__desc is-clamped" id="listingDetailDesc">{{ d.description }}</p>
+      <button type="button" class="vn-ld__more" id="listingDetailMore" hidden>نمایش بیشتر</button>
+    </div>
     {% endif %}
 
     {% if d.can_publish %}
@@ -276,12 +413,26 @@
     <p class="vn-ld__published">این ملک برای فروش منتشر شده است.</p>
     {% endif %}
   </div>
+
+  {% if d.show_divar and d.divar_url %}
+  <div class="vn-ld__sticky">
+    <a href="{{ d.divar_url }}"
+       target="_blank"
+       rel="noopener noreferrer"
+       data-vinor-direct-action="1">دیدن در دیوار</a>
+  </div>
+  {% endif %}
 </article>
 
 {% include 'express_partner/partials/vinor_favorites_script.html' %}
 {% include 'express_partner/partials/partner_tab_footer.html' %}
 <script>
 (function () {
+  var fa = '۰۱۲۳۴۵۶۷۸۹';
+  function faNum(n) {
+    return String(n).replace(/\d/g, function (d) { return fa.charAt(Number(d)); });
+  }
+
   var back = document.getElementById('listingDetailBack');
   if (back) {
     back.addEventListener('click', function () {
@@ -298,6 +449,37 @@
       }
     });
   }
+
+  var gallery = document.getElementById('listingDetailGallery');
+  var counter = document.getElementById('listingDetailCounter');
+  if (gallery && counter) {
+    var imgs = gallery.querySelectorAll('img');
+    var total = imgs.length;
+    function updateCounter() {
+      if (total < 2) return;
+      var w = gallery.clientWidth || 1;
+      var idx = Math.round(gallery.scrollLeft / w) + 1;
+      if (idx < 1) idx = 1;
+      if (idx > total) idx = total;
+      counter.textContent = faNum(idx) + ' از ' + faNum(total);
+    }
+    gallery.addEventListener('scroll', updateCounter, { passive: true });
+    updateCounter();
+  }
+
+  var desc = document.getElementById('listingDetailDesc');
+  var more = document.getElementById('listingDetailMore');
+  if (desc && more) {
+    var needsClamp = desc.scrollHeight > desc.clientHeight + 4;
+    if (needsClamp) {
+      more.hidden = false;
+      more.addEventListener('click', function () {
+        var clamped = desc.classList.toggle('is-clamped');
+        more.textContent = clamped ? 'نمایش بیشتر' : 'نمایش کمتر';
+      });
+    }
+  }
+
   try {
     if (typeof window.vinorSyncFavButtons === 'function') window.vinorSyncFavButtons();
   } catch (_) {}
