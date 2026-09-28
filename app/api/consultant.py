@@ -59,10 +59,15 @@ def _guard(fn: Callable) -> Callable:
 
 
 def _admin_session() -> bool:
+    """نشست ادمین بعد از OTP ادمین: logged_in به‌همراه admin_phone.
+
+    نشست همکار فقط user_phone دارد و این شرط را برقرار نمی‌کند.
+    """
     return bool(session.get("logged_in") and session.get("admin_phone"))
 
 
 def _simulation_allowed() -> bool:
+    """نوشتن وضعیت بررسی فقط در dry-run صریح یا نشست ادمین."""
     return dry_run_enabled() or _admin_session()
 
 

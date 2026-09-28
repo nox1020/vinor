@@ -65,12 +65,20 @@ def consultant_api_enabled() -> bool:
 
 
 def dry_run_enabled() -> bool:
-    """شبیه‌سازی approved/rejected برای کلاینت. پیش‌فرض روشن است."""
-    return _env_bool("VINOR_CONSULTANT_DRY_RUN", "1")
+    """شبیه‌سازی تأیید برای کلاینت. پیش‌فرض خاموش است تا همکار نتواند خودش را تأیید کند.
+
+    این یک گیت امنیتی است، نه فلگ قابلیت محصول: فقط با VINOR_CONSULTANT_DRY_RUN=1 روشن می‌شود.
+    """
+    return _env_bool("VINOR_CONSULTANT_DRY_RUN", "0")
 
 
 def env_review_override() -> str:
-    """VINOR_CONSULTANT_SIMULATE=approved|rejected|pending — بدون نوشتن روی رکورد."""
+    """VINOR_CONSULTANT_SIMULATE روی خواندن اثر می‌گذارد و روی دیسک تأیید دائمی نمی‌نویسد.
+
+    فقط وقتی dry-run صریحاً روشن باشد اعمال می‌شود. در حالت پیش‌فرض (خاموش) نادیده گرفته می‌شود.
+    """
+    if not dry_run_enabled():
+        return ""
     raw = (os.environ.get("VINOR_CONSULTANT_SIMULATE") or "").strip().lower()
     if raw in ("approved", "rejected", "pending"):
         return raw
