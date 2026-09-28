@@ -452,6 +452,15 @@ def create_app() -> Flask:
         app.register_blueprint(webhook_bp)
     if express_api_bp is not None:
         app.register_blueprint(express_api_bp)
+
+    consultant_api_bp = None
+    try:
+        from .api.consultant import consultant_api_bp as _consultant_api_bp
+        consultant_api_bp = _consultant_api_bp
+    except Exception as e:
+        app.logger.warning(f"Consultant API disabled: {e}")
+    if consultant_api_bp is not None:
+        app.register_blueprint(consultant_api_bp)
     try:
         from app.auth.otp.routes import auth_otp_bp
         app.register_blueprint(auth_otp_bp)
@@ -545,6 +554,12 @@ def create_app() -> Flask:
         if express_api_bp is not None:
             try:
                 csrf.exempt(express_api_bp)
+            except Exception:
+                pass
+
+        if consultant_api_bp is not None:
+            try:
+                csrf.exempt(consultant_api_bp)
             except Exception:
                 pass
 
