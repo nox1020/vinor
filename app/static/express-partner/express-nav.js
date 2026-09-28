@@ -820,6 +820,99 @@
     }
   }
 
+  /** آخرین رندر تب آگهی‌ها — برگشت بدون انتظار شبکه و بدون انیمیشن پرش */
+  var adsHomeKeep = null;
+
+  function isAdsHomePath(pathname) {
+    var p = normPath(pathname || '');
+    return p === '/express/partner/home' ||
+      p === '/express/partner' ||
+      p === '/express/partner/dashboard';
+  }
+
+  function adsHomeHrefHasOverlay(href) {
+    try {
+      var u = parseUrl(href);
+      if (!u) return true;
+      return !!(
+        u.searchParams.get('land') ||
+        u.searchParams.get('divar') ||
+        u.searchParams.get('thread')
+      );
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function captureAdsHomeKeep() {
+    try {
+      if (!isAdsHomePath(window.location.pathname)) return;
+      var page = document.getElementById('homeDashboardPage');
+      if (!page || !page.classList.contains('ai-home-is-empty')) return;
+      var swapEl = document.getElementById('vinor-express-page-swap');
+      if (!swapEl || !swapEl.innerHTML) return;
+      var scriptsEl = document.getElementById('vinor-express-page-scripts');
+      adsHomeKeep = {
+        href: window.location.href.split('#')[0],
+        swap: swapEl.innerHTML,
+        scripts: scriptsEl ? scriptsEl.innerHTML : '',
+        title: document.title || ''
+      };
+    } catch (_) {}
+  }
+
+  function escKeepText(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function adsHomeKeepHtml() {
+    if (!adsHomeKeep || !adsHomeKeep.swap) return '';
+    var auth = 'guest';
+    try {
+      var meta = document.querySelector('meta[name="vinor-express-auth"]');
+      if (meta) auth = meta.getAttribute('content') || 'guest';
+    } catch (_) {}
+    return '<!DOCTYPE html><html><head><title>' + escKeepText(adsHomeKeep.title) +
+      '</title><meta name="vinor-express-auth" content="' + escKeepText(auth).replace(/"/g, '&quot;') +
+      '"></head><body><div id="vinor-express-page-swap">' + adsHomeKeep.swap +
+      '</div><div id="vinor-express-page-scripts">' + (adsHomeKeep.scripts || '') +
+      '</div></body></html>';
+  }
+
+  function hasAdsHomeKeep(href) {
+    try {
+      if (!adsHomeKeep || !adsHomeKeep.swap) return false;
+      var u = parseUrl(href);
+      if (!u || !isAdsHomePath(u.pathname)) return false;
+      if (adsHomeHrefHasOverlay(href)) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function rememberAdsHomeFromHtml(href, html) {
+    try {
+      if (!html || isAdsHomePath(window.location.pathname)) return;
+      var u = parseUrl(href);
+      if (!u || !isAdsHomePath(u.pathname)) return;
+      if (adsHomeHrefHasOverlay(href)) return;
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var newSwap = doc.getElementById('vinor-express-page-swap');
+      if (!newSwap || !newSwap.querySelector('#homeDashboardPage.ai-home-is-empty')) return;
+      var newScripts = doc.getElementById('vinor-express-page-scripts');
+      adsHomeKeep = {
+        href: u.origin + u.pathname + (u.search || ''),
+        swap: newSwap.innerHTML,
+        scripts: newScripts ? newScripts.innerHTML : '',
+        title: doc.title || ''
+      };
+    } catch (_) {}
+  }
+
   function prefetchPeerMainTabs(navKey) {
     try {
       var current = normPath(window.location.pathname);
@@ -1280,6 +1373,11 @@
       try { window.hideVinorPartnerSkeleton(); } catch (_) {}
     }
     prefetchPeerMainTabs(navKey);
+    if (!isAdsHomePath(window.location.pathname)) {
+      try {
+        prefetchHref(new URL('/express/partner/home', window.location.origin).href);
+      } catch (_) {}
+    }
     try {
       if (typeof window.__vinorSyncBottomNavBadges === 'function') {
         window.__vinorSyncBottomNavBadges();
@@ -1385,6 +1483,7 @@
         var doc = new DOMParser().parseFromString(payload.html, 'text/html');
         if (needsFullNavForResponse(href, resolved, doc)) return;
         storePrefetchHtml(resolved, payload.html);
+        rememberAdsHomeFromHtml(resolved, payload.html);
       })
       .catch(function () {})
       .finally(function () {
@@ -1394,6 +1493,8 @@
 
   function softNavigate(href, dir, opts) {
     opts = opts || {};
+    var restoringAdsHome = !opts.postLogin && hasAdsHomeKeep(href);
+    if (!restoringAdsHome) captureAdsHomeKeep();
     var gen = opts.navGen || bumpNavGeneration();
     var navKey = softTabKeyForUrl(href);
     var targetHref = navCacheKey(href);
@@ -1472,6 +1573,14 @@
         playEnterAnimation(dir);
       }
       return true;
+    }
+
+    var keptAdsHtml = restoringAdsHome ? adsHomeKeepHtml() : '';
+    if (keptAdsHtml) {
+      try {
+        opts.skipEnterAnim = true;
+        return Promise.resolve(applyHtml(keptAdsHtml, (adsHomeKeep && adsHomeKeep.href) || href));
+      } catch (_) {}
     }
 
     var cached = (!opts.postLogin && shouldUsePrefetchCache(href)) ? prefetchCache[targetHref] : null;
@@ -1563,7 +1672,7 @@
       var u = parseUrl(href);
       if (u) toDetail = isLandDetailPath(u.pathname);
     } catch (_) {}
-    if (prefersReducedMotion() || toDetail || hasPrefetchedHtml(href)) {
+    if (prefersReducedMotion() || toDetail || hasPrefetchedHtml(href) || hasAdsHomeKeep(href)) {
       return softNavigate(href, dir || 0, navOpts);
     }
     stripNavClasses(document.documentElement);
