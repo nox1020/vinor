@@ -186,7 +186,7 @@
   {% set _tab_search = '/search' in _p %}
   {% set _tab_post = '/listings/new' in _p or '/my-property' in _p or request.args.get('register') == '1' %}
   {% set _tab_me = '/profile' in _p and '/profile/edit' not in _p %}
-  {% set _post_href = url_for('express_partner.my_property') %}
+  {% set _post_href = url_for('express_partner.my_property', register=1) %}
   <div class="vn-divar-tabbar" role="navigation">
     <a class="vn-divar-tab{% if _tab_ads and not _tab_post %} is-active{% endif %}" href="{{ url_for('express_partner.home') }}" data-divar-tab="ads" aria-label="آگهی‌ها">
       <span class="vn-divar-tab__icon" aria-hidden="true">
