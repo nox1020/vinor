@@ -16,7 +16,7 @@
         data-step-profile="{{ url_for('express_partner.consultant_profile') }}"
         data-step-documents="{{ url_for('express_partner.consultant_documents') }}"
         data-step-status="{{ url_for('express_partner.consultant_status') }}"
-        data-step-dashboard="{{ url_for('express_partner.home') }}"
+        data-step-dashboard="{{ url_for('express_partner.consultant_dashboard') }}"
         data-login-url="{{ url_for('express_partner.home', menu=1, login_next=request.path) }}">
 
     <div class="mb-5 text-center">
@@ -28,7 +28,7 @@
 
     <form id="vnConsultForm" class="space-y-4" novalidate>
       <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4">
-        <p class="text-sm leading-7 text-zinc-300">درخواست روی همین حساب ثبت می‌شود. اگر قبلاً شروع کرده باشید، به وضعیت همان درخواست برمی‌گردید.</p>
+        <p class="text-sm leading-7 text-zinc-300">درخواست روی همین حساب ثبت می‌شود. اگر قبلاً شروع کرده باشید، به همان مرحله برمی‌گردید.</p>
       </section>
       <button type="submit" id="vnConsultSubmit"
               class="flex w-full min-h-[48px] items-center justify-center rounded-xl bg-emerald-600 py-4 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60">

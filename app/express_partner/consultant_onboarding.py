@@ -335,6 +335,7 @@ def onboarding_snapshot(phone: str) -> Optional[Dict[str, Any]]:
         "status": coarse_status(block),
         "next_step": next_step(block),
         "reject_reason": reject_reason_public(block),
+        "online": public_online(block),
     }
 
 

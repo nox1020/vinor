@@ -1,0 +1,73 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}داشبورد بازاریاب{% endblock %}
+
+{% block content %}
+<div class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  {% set consultant_step = 5 %}
+  {% set step_title = step_title|default('داشبورد') %}
+  {% include 'express_partner/partials/consultant_step_header.html' %}
+
+  <main id="vnConsultant"
+        class="mx-auto w-full px-4 pb-6 pt-4"
+        style="max-width:480px"
+        data-mode="dashboard"
+        data-approved="1"
+        data-availability-url="{{ url_for('consultant_api.consultant_availability') }}"
+        data-step-apply="{{ url_for('express_partner.consultant_apply') }}"
+        data-step-profile="{{ url_for('express_partner.consultant_profile') }}"
+        data-step-documents="{{ url_for('express_partner.consultant_documents') }}"
+        data-step-status="{{ url_for('express_partner.consultant_status') }}"
+        data-step-dashboard="{{ url_for('express_partner.consultant_dashboard') }}"
+        data-login-url="{{ url_for('express_partner.home', menu=1, login_next=request.path) }}">
+
+    <p id="vnConsultError" hidden class="mb-4 rounded-xl border border-rose-500/30 bg-rose-950/40 px-4 py-3 text-sm text-rose-100"></p>
+
+    <section id="vnSlides" aria-label="آشنایی بازاریاب">
+      <article data-slide="1" class="rounded-2xl border border-white/10 bg-[#12181f] p-5">
+        <p class="text-xs font-bold text-emerald-300">۱ از ۳</p>
+        <h2 class="mt-2 text-lg font-bold text-white">بازاریاب وینور شدید</h2>
+        <p class="mt-2 text-sm leading-7 text-zinc-300">درخواست شما تأیید شد. این سه نکته روی همین دستگاه می‌ماند و به صفحه آموزش وصل نیست.</p>
+      </article>
+      <article data-slide="2" hidden class="rounded-2xl border border-white/10 bg-[#12181f] p-5">
+        <p class="text-xs font-bold text-emerald-300">۲ از ۳</p>
+        <h2 class="mt-2 text-lg font-bold text-white">خرید و فروش</h2>
+        <p class="mt-2 text-sm leading-7 text-zinc-300">در این فاز فقط تخصص خرید و فروش فعال است. شهر همان شناسه‌ای است که در پروفایل انتخاب کردید.</p>
+      </article>
+      <article data-slide="3" hidden class="rounded-2xl border border-white/10 bg-[#12181f] p-5">
+        <p class="text-xs font-bold text-emerald-300">۳ از ۳</p>
+        <h2 class="mt-2 text-lg font-bold text-white">بعد از اسلایدها</h2>
+        <p class="mt-2 text-sm leading-7 text-zinc-300">داشبورد خالی است تا پرونده‌ای برسد. کلید آنلاین فقط همین‌جا و فقط بعد از تأیید روشن می‌شود.</p>
+      </article>
+      <button type="button" id="vnSlideNext"
+              class="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white">
+        بعدی
+      </button>
+    </section>
+
+    <section id="vnDash" hidden>
+      <div class="mb-4 text-center">
+        <h2 class="text-lg font-bold text-white">داشبورد</h2>
+        <p class="mt-1.5 text-xs text-zinc-500">بازاریاب وینور</p>
+      </div>
+      <section class="rounded-2xl border border-dashed border-white/15 bg-[#12181f] p-5 text-center">
+        <p class="text-sm font-bold text-white">هنوز پرونده‌ای نیست</p>
+        <p class="mt-2 text-xs leading-6 text-zinc-500">وقتی پرونده‌ای برسد همین‌جا دیده می‌شود.</p>
+      </section>
+      <label class="mt-4 flex min-h-[64px] items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#12181f] px-4 py-3">
+        <span>
+          <span class="block text-sm font-bold text-white">آنلاین</span>
+          <span class="mt-1 block text-[11px] text-zinc-500">فقط بعد از تأیید</span>
+        </span>
+        <input id="vnOnlineToggle" type="checkbox" {% if seed.online %}checked{% endif %} disabled
+               class="h-6 w-11 accent-emerald-500" aria-label="آنلاین">
+      </label>
+    </section>
+  </main>
+</div>
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ 'express-partner/consultant-onboarding.js'|static_version }}"></script>
+{% endblock %}

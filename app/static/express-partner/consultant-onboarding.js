@@ -12,7 +12,9 @@
   var profileUrl = root.getAttribute("data-profile-url") || "";
   var applyUrl = root.getAttribute("data-apply-url") || "";
   var documentsUrl = root.getAttribute("data-documents-url") || "";
+  var availabilityUrl = root.getAttribute("data-availability-url") || "";
   var loginUrl = root.getAttribute("data-login-url") || "";
+  var slidesKey = "vinor_consultant_slides_seen";
   var mode = root.getAttribute("data-mode") || "";
   var steps = {
     apply: root.getAttribute("data-step-apply") || "",
@@ -160,6 +162,9 @@
         if (btn) btn.disabled = false;
         return;
       }
+      if (result.data.consultant_id) {
+        try { sessionStorage.setItem("vinor_consultant_id", String(result.data.consultant_id)); } catch (err) {}
+      }
       go(result.data.next_step || "profile");
     } catch (err) {
       showError("ارتباط برقرار نشد. دوباره تلاش کنید.");
@@ -255,6 +260,76 @@
     }
   }
 
+  function slidesSeen() {
+    try { return localStorage.getItem(slidesKey) === "1"; } catch (err) { return false; }
+  }
+
+  function markSlides() {
+    try { localStorage.setItem(slidesKey, "1"); } catch (err) {}
+  }
+
+  function showDashboard() {
+    var slides = document.getElementById("vnSlides");
+    var dash = document.getElementById("vnDash");
+    var toggle = document.getElementById("vnOnlineToggle");
+    if (slides) slides.hidden = true;
+    if (dash) dash.hidden = false;
+    if (toggle && root.getAttribute("data-approved") === "1") toggle.disabled = false;
+  }
+
+  function bindSlides() {
+    var slides = document.getElementById("vnSlides");
+    if (!slides) return;
+    var panels = slides.querySelectorAll("[data-slide]");
+    var index = 0;
+    var next = document.getElementById("vnSlideNext");
+    function render() {
+      for (var i = 0; i < panels.length; i++) panels[i].hidden = i !== index;
+      if (next) next.textContent = index >= panels.length - 1 ? "ورود به داشبورد" : "بعدی";
+    }
+    if (slidesSeen()) {
+      showDashboard();
+      return;
+    }
+    render();
+    if (!next) return;
+    next.addEventListener("click", function () {
+      if (index < panels.length - 1) {
+        index += 1;
+        render();
+        return;
+      }
+      markSlides();
+      showDashboard();
+    });
+  }
+
+  async function submitAvailability() {
+    var toggle = document.getElementById("vnOnlineToggle");
+    if (!toggle || toggle.disabled || root.getAttribute("data-approved") !== "1") return;
+    var online = !!toggle.checked;
+    toggle.disabled = true;
+    try {
+      var result = await callApi(availabilityUrl, {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ online: online }),
+      });
+      if (!result) return;
+      if (!result.data || result.data.ok !== true) {
+        toggle.checked = !online;
+        showError((result.data && result.data.message) || "تغییر وضعیت آنلاین انجام نشد.");
+      } else {
+        hideError();
+      }
+    } catch (err) {
+      toggle.checked = !online;
+      showError("ارتباط برقرار نشد. دوباره تلاش کنید.");
+    }
+    if (root.getAttribute("data-approved") === "1") toggle.disabled = false;
+  }
+
   var form = document.getElementById("vnConsultForm");
   if (mode === "apply" && form) form.addEventListener("submit", submitApply);
   if (mode === "profile") {
@@ -264,4 +339,9 @@
     if (form) form.addEventListener("submit", submitProfile);
   }
   if (mode === "documents" && form) form.addEventListener("submit", submitDocuments);
+  if (mode === "dashboard") {
+    bindSlides();
+    var toggle = document.getElementById("vnOnlineToggle");
+    if (toggle) toggle.addEventListener("change", submitAvailability);
+  }
 })();
