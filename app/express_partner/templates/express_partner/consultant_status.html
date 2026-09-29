@@ -1,0 +1,42 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}وضعیت درخواست بازاریابی{% endblock %}
+
+{% block content %}
+<div class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  {% set consultant_step = 4 %}
+  {% set step_title = step_title|default('وضعیت درخواست') %}
+  {% include 'express_partner/partials/consultant_step_header.html' %}
+
+  <main class="mx-auto w-full px-4 pb-6 pt-4" style="max-width:480px">
+    <div class="mb-5 text-center">
+      <h2 class="text-lg font-bold text-white">وضعیت درخواست</h2>
+    </div>
+
+    <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4">
+      {% if seed.status == 'approved' %}
+      <p class="text-sm font-bold text-emerald-300">همکاری شما به‌عنوان بازاریاب وینور تأیید شده است.</p>
+      {% elif seed.status == 'rejected' %}
+      <p class="text-sm font-bold text-rose-200">درخواست بازاریابی تأیید نشد.</p>
+      {% if seed.reject_reason %}
+      <p class="mt-2 text-sm leading-7 text-zinc-300">{{ seed.reject_reason }}</p>
+      {% endif %}
+      {% elif seed.next_step == 'profile' %}
+      <p class="text-sm leading-7 text-zinc-200">درخواست ثبت شده است. برای ادامه، نام، شهر و تخصص را بنویسید.</p>
+      {% elif seed.next_step == 'documents' %}
+      <p class="text-sm leading-7 text-zinc-200">پروفایل ثبت شد. تصویر کارت ملی را بارگذاری کنید.</p>
+      {% else %}
+      <p class="text-sm leading-7 text-zinc-200">درخواست شما در انتظار بررسی است.</p>
+      {% endif %}
+    </section>
+
+    {% if continue_url and continue_label %}
+    <a href="{{ continue_url }}" data-vinor-express-nav
+       class="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white">
+      {{ continue_label }}
+    </a>
+    {% endif %}
+  </main>
+</div>
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}

@@ -864,15 +864,15 @@ def build_limited_ai_quick_prompts(
             item["href"] = href
         out.append(item)
 
-    apply_url = "/express/partner/apply"
+    apply_url = "/express/partner/consultant"
     thanks_url = "/express/partner/thanks"
     levels_url = "/express/partner/levels"
-    guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/apply"
+    guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/consultant"
     try:
         from flask import has_request_context, url_for
 
         if has_request_context():
-            apply_url = url_for("express_partner.apply")
+            apply_url = url_for("express_partner.consultant_gate")
             thanks_url = url_for("express_partner.thanks")
             levels_url = url_for("express_partner.coop_levels")
             guest_apply_url = url_for(

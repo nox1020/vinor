@@ -1,0 +1,24 @@
+{# هدر چسبان مراحل بازاریاب — همان شِل همکار، ستون حدود ۴۸۰ #}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link, ep_header_spacer %}
+{% set _step = consultant_step|default(1)|int %}
+{% set _fa = ['۰', '۱', '۲', '۳', '۴', '۵'] %}
+{% set _title = step_title|default('بازاریاب وینور') %}
+{% set _back = consultant_back_url|default(url_for('express_partner.home')) %}
+
+{{ ep_header_start(sticky=true) }}
+<div class="express-dash-header-inner w-full px-3 pt-2.5 pb-2 mx-auto ep-partner-header-inner--auto" style="max-width:480px">
+  <div class="flex items-center gap-2">
+    {{ ep_back_link(_back, nav_back=false) }}
+    <div class="vinor-dash-glass-pill ep-header-title-pill flex min-h-[42px] min-w-0 flex-1 items-center justify-center rounded-full px-3 py-1">
+      <div class="min-w-0 w-full text-center">
+        <h1 class="ep-partner-header-title">{{ _title }}</h1>
+        <p class="ep-partner-header-subtitle is-filtered">{{ _fa[_step] }} از ۵</p>
+      </div>
+    </div>
+    <div class="shrink-0 flex min-w-[42px] items-center justify-end">{{ ep_header_spacer() }}</div>
+  </div>
+</div>
+<div class="h-1 bg-black/[0.06] dark:bg-white/10" aria-hidden="true">
+  <div class="h-full bg-emerald-500 transition-all duration-300" style="width: {{ _step * 20 }}%"></div>
+</div>
+{{ ep_header_end() }}

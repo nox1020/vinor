@@ -307,6 +307,37 @@ def public_documents(block: Dict[str, Any]) -> Dict[str, Dict[str, bool]]:
     }
 
 
+def onboarding_snapshot(phone: str) -> Optional[Dict[str, Any]]:
+    """نمای فرم وب. مسیر فایل، شماره و شناسهٔ داخلی برنمی‌گردد."""
+    canonical = canonical_partner_phone(phone)
+    if not canonical:
+        return None
+    _partners, record = _load_pair(canonical)
+    if record is None:
+        return None
+    block = _onboarding(record)
+    if block is None:
+        return None
+    raw_name = block.get("name")
+    raw_city = block.get("city")
+    raw_specs = block.get("specialties")
+    specs = [
+        item for item in raw_specs
+        if isinstance(item, str) and item in ALLOWED_SPECIALTIES
+    ] if isinstance(raw_specs, list) else []
+    return {
+        "name": raw_name if isinstance(raw_name, str) else "",
+        "city": raw_city if isinstance(raw_city, str) and raw_city in CITY_IDS else "",
+        "specialties": [item for item in ALLOWED_SPECIALTIES if item in specs],
+        "profile_complete": profile_complete(block),
+        "documents_complete": documents_complete(block),
+        "documents": public_documents(block),
+        "status": coarse_status(block),
+        "next_step": next_step(block),
+        "reject_reason": reject_reason_public(block),
+    }
+
+
 def status_body(record: Dict[str, Any], block: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "role": CONSULTANT_ROLE,
