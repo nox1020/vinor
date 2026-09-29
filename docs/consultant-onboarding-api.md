@@ -2,6 +2,8 @@
 
 مسیر واحد اندروید و وب: `/api/consultant/*`
 
+رانندگی فرانت (S1 تا S5، CSRF برای APK/WebView، dry-run خاموش): `docs/consultant-front-notes.md`.
+
 نقش API برابر `consultant` است. برچسب UI «بازاریاب وینور» روی **همان رکورد Express Partner** نگاشت می‌شود (`api_role` و `consultant_onboarding`). سیستم apply دوم ساخته نشده است. تخصیص لید خارج از این stub است.
 
 احراز هویت همان نشست همکار است (کوکی `vinor_session` بعد از OTP موجود). بدون نشست: `401`. نوشتن‌های آنبوردینگ کلاینت از CSRF معاف‌اند تا WebView و APK با همان کوکی صدا بزنند. جزئیات در بخش CSRF است.
