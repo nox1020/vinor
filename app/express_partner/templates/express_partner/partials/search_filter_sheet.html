@@ -1,0 +1,136 @@
+{# شیت‌های فیلتر جستجو — قیمت، متراژ، محله، مرتب‌سازی. اعمال تا زدن «اعمال» روی لیست اثر ندارد. #}
+<div id="vinorSheetPrice" class="vn-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="vinorSheetPriceTitle">
+  <div class="vn-sheet__scrim" data-sheet-close></div>
+  <div class="vn-sheet__panel">
+    <div class="vn-sheet__head">
+      <h2 id="vinorSheetPriceTitle">قیمت</h2>
+      <button type="button" class="vn-sheet__x" data-sheet-close aria-label="بستن">×</button>
+    </div>
+    <div class="vn-sheet__body">
+      <label class="vn-sheet__field">
+        <span>حداقل (تومان)</span>
+        <input id="vinorPriceMin" class="vn-sheet__input" type="text" inputmode="numeric" autocomplete="off" dir="ltr"
+               aria-label="حداقل قیمت به تومان"
+               value="{% if search_query.price_min is not none %}{{ search_query.price_min|toman(false) }}{% endif %}">
+      </label>
+      <label class="vn-sheet__field">
+        <span>حداکثر (تومان)</span>
+        <input id="vinorPriceMax" class="vn-sheet__input" type="text" inputmode="numeric" autocomplete="off" dir="ltr"
+               aria-label="حداکثر قیمت به تومان"
+               value="{% if search_query.price_max is not none %}{{ search_query.price_max|toman(false) }}{% endif %}">
+      </label>
+      <div class="vn-sheet__presets" role="group" aria-label="بازهٔ قیمت">
+        <button type="button" data-price-min="" data-price-max="1000000000">تا ۱ میلیارد</button>
+        <button type="button" data-price-min="1000000000" data-price-max="3000000000">۱–۳ میلیارد</button>
+        <button type="button" data-price-min="3000000000" data-price-max="5000000000">۳–۵ میلیارد</button>
+        <button type="button" data-price-min="5000000000" data-price-max="10000000000">۵–۱۰ میلیارد</button>
+        <button type="button" data-price-min="10000000000" data-price-max="">بالای ۱۰ میلیارد</button>
+      </div>
+    </div>
+    <div class="vn-sheet__foot">
+      <button type="button" class="vn-btn-primary" data-sheet-apply="price">اعمال</button>
+      <button type="button" class="vn-btn-text" data-sheet-clear="price">پاک کردن</button>
+    </div>
+  </div>
+</div>
+
+<div id="vinorSheetArea" class="vn-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="vinorSheetAreaTitle">
+  <div class="vn-sheet__scrim" data-sheet-close></div>
+  <div class="vn-sheet__panel">
+    <div class="vn-sheet__head">
+      <h2 id="vinorSheetAreaTitle">متراژ</h2>
+      <button type="button" class="vn-sheet__x" data-sheet-close aria-label="بستن">×</button>
+    </div>
+    <div class="vn-sheet__body">
+      <label class="vn-sheet__field">
+        <span>حداقل (متر)</span>
+        <input id="vinorAreaMin" class="vn-sheet__input" type="text" inputmode="numeric" autocomplete="off" dir="ltr"
+               aria-label="حداقل متراژ"
+               value="{% if search_query.area_min is not none %}{{ search_query.area_min|fa_digits }}{% endif %}">
+      </label>
+      <label class="vn-sheet__field">
+        <span>حداکثر (متر)</span>
+        <input id="vinorAreaMax" class="vn-sheet__input" type="text" inputmode="numeric" autocomplete="off" dir="ltr"
+               aria-label="حداکثر متراژ"
+               value="{% if search_query.area_max is not none %}{{ search_query.area_max|fa_digits }}{% endif %}">
+      </label>
+      <div class="vn-sheet__presets" role="group" aria-label="بازهٔ متراژ">
+        <button type="button" data-area-min="" data-area-max="75">تا ۷۵</button>
+        <button type="button" data-area-min="75" data-area-max="100">۷۵–۱۰۰</button>
+        <button type="button" data-area-min="100" data-area-max="150">۱۰۰–۱۵۰</button>
+        <button type="button" data-area-min="150" data-area-max="200">۱۵۰–۲۰۰</button>
+        <button type="button" data-area-min="200" data-area-max="">بالای ۲۰۰</button>
+      </div>
+    </div>
+    <div class="vn-sheet__foot">
+      <button type="button" class="vn-btn-primary" data-sheet-apply="area">اعمال</button>
+      <button type="button" class="vn-btn-text" data-sheet-clear="area">پاک کردن</button>
+    </div>
+  </div>
+</div>
+
+<div id="vinorSheetDistrict" class="vn-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="vinorSheetDistrictTitle">
+  <div class="vn-sheet__scrim" data-sheet-close></div>
+  <div class="vn-sheet__panel">
+    <div class="vn-sheet__head">
+      <h2 id="vinorSheetDistrictTitle">محله</h2>
+      <button type="button" class="vn-sheet__x" data-sheet-close aria-label="بستن">×</button>
+    </div>
+    <div class="vn-sheet__body">
+      <input id="vinorDistrictSearch" class="vn-sheet__input" type="search" inputmode="search" autocomplete="off"
+             placeholder="جستجو در محله‌ها" aria-label="جستجو در محله‌ها">
+      <div id="vinorDistrictList" class="vn-sheet__choices" role="group" aria-label="محله‌ها">
+        {% for name in search_districts or [] %}
+        <label class="vn-search-check" data-district-row="{{ name }}">
+          <input type="checkbox" value="{{ name }}"{% if name in search_query.districts %} checked{% endif %}>
+          <span>{{ name }}</span>
+        </label>
+        {% else %}
+        <p class="vn-sheet__hint">محله‌ای در آگهی‌های فعلی نیست</p>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="vn-sheet__foot">
+      <button type="button" class="vn-btn-primary" data-sheet-apply="district">اعمال</button>
+      <button type="button" class="vn-btn-text" data-sheet-clear="district">پاک کردن</button>
+    </div>
+  </div>
+</div>
+
+<div id="vinorSheetSort" class="vn-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="vinorSheetSortTitle">
+  <div class="vn-sheet__scrim" data-sheet-close></div>
+  <div class="vn-sheet__panel">
+    <div class="vn-sheet__head">
+      <h2 id="vinorSheetSortTitle">مرتب‌سازی</h2>
+      <button type="button" class="vn-sheet__x" data-sheet-close aria-label="بستن">×</button>
+    </div>
+    <div class="vn-sheet__body">
+      <div class="vn-sheet__choices" role="radiogroup" aria-label="مرتب‌سازی">
+        <label class="vn-search-radio">
+          <input type="radio" name="vnSearchSort" value="newest"{% if search_query.sort == 'newest' %} checked{% endif %}>
+          <span>جدیدترین</span>
+        </label>
+        <label class="vn-search-radio">
+          <input type="radio" name="vnSearchSort" value="price_asc"{% if search_query.sort == 'price_asc' %} checked{% endif %}>
+          <span>ارزان‌ترین</span>
+        </label>
+        <label class="vn-search-radio">
+          <input type="radio" name="vnSearchSort" value="price_desc"{% if search_query.sort == 'price_desc' %} checked{% endif %}>
+          <span>گران‌ترین</span>
+        </label>
+        <label class="vn-search-radio">
+          <input type="radio" name="vnSearchSort" value="area_asc"{% if search_query.sort == 'area_asc' %} checked{% endif %}>
+          <span>کم‌متراژترین</span>
+        </label>
+        <label class="vn-search-radio">
+          <input type="radio" name="vnSearchSort" value="area_desc"{% if search_query.sort == 'area_desc' %} checked{% endif %}>
+          <span>بیشترین متراژ</span>
+        </label>
+      </div>
+    </div>
+    <div class="vn-sheet__foot">
+      <button type="button" class="vn-btn-primary" data-sheet-apply="sort">اعمال</button>
+      <button type="button" class="vn-btn-text" data-sheet-clear="sort">پاک کردن</button>
+    </div>
+  </div>
+</div>
