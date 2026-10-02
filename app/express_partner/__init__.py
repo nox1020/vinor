@@ -8,5 +8,6 @@ express_partner_bp = Blueprint(
 )
 
 from . import routes  # noqa: F401
+from . import consultant_ui  # noqa: F401
 
 

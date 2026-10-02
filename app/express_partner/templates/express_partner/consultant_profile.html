@@ -1,0 +1,96 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}پروفایل بازاریاب{% endblock %}
+
+{% block content %}
+<div class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  {% set consultant_step = 2 %}
+  {% set step_title = step_title|default('پروفایل') %}
+  {% include 'express_partner/partials/consultant_step_header.html' %}
+
+  <main id="vnConsultant"
+        class="mx-auto w-full px-4 pb-6 pt-4"
+        style="max-width:480px"
+        data-mode="profile"
+        data-cities-url="{{ url_for('consultant_api.consultant_cities') }}"
+        data-profile-url="{{ url_for('consultant_api.consultant_profile') }}"
+        data-selected-city="{{ seed.city }}"
+        data-step-apply="{{ url_for('express_partner.consultant_apply') }}"
+        data-step-profile="{{ url_for('express_partner.consultant_profile') }}"
+        data-step-documents="{{ url_for('express_partner.consultant_documents') }}"
+        data-step-status="{{ url_for('express_partner.consultant_status') }}"
+        data-step-dashboard="{{ url_for('express_partner.consultant_dashboard') }}"
+        data-login-url="{{ url_for('express_partner.home', menu=1, login_next=request.path) }}">
+
+    <div class="mb-5 text-center">
+      <h2 class="text-lg font-bold text-white">نام، شهر و تخصص</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">شهر از فهرست فاز ۱ انتخاب می‌شود. حداقل یک تخصص خرید یا فروش لازم است.</p>
+    </div>
+
+    <p id="vnConsultError" hidden class="mb-4 rounded-xl border border-rose-500/30 bg-rose-950/40 px-4 py-3 text-sm text-rose-100"></p>
+
+    <form id="vnConsultForm" class="space-y-4" novalidate>
+      <section class="space-y-4 rounded-2xl border border-white/10 bg-[#12181f] p-4">
+        <div>
+          <label for="vnConsultName" class="mb-2 block text-xs font-semibold text-zinc-300">نام و نام خانوادگی</label>
+          <input id="vnConsultName" name="name" type="text" required minlength="2" maxlength="40"
+                 value="{{ seed.name }}" autocomplete="name" placeholder="مثال: علی محمدی"
+                 class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-sm text-white outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">
+          <p data-field-error="name" class="mt-1 text-[11px] text-rose-300"></p>
+        </div>
+
+        <div>
+          <label for="vnConsultCity" class="mb-2 block text-xs font-semibold text-zinc-300">شهر فعالیت</label>
+          <select id="vnConsultCity" name="city" required disabled
+                  class="w-full rounded-xl border border-white/10 bg-[#0a1018] px-3 py-3 text-sm text-white outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30">
+            <option value="">در حال دریافت شهرها…</option>
+          </select>
+          <p id="vnConsultCityHint" class="mt-1.5 text-[11px] text-zinc-500"></p>
+          <button type="button" id="vnConsultCityRetry" hidden
+                  class="mt-2 text-xs font-bold text-emerald-400">تلاش دوباره</button>
+          <p data-field-error="city" class="mt-1 text-[11px] text-rose-300"></p>
+        </div>
+
+        <fieldset>
+          <legend class="mb-2 text-xs font-semibold text-zinc-300">تخصص</legend>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block">
+              <input class="peer sr-only" type="checkbox" name="specialty" value="buy" {% if 'buy' in seed.specialties %}checked{% endif %}>
+              <span class="flex min-h-[48px] items-center justify-center rounded-xl border border-white/10 bg-[#0a1018] text-sm font-bold text-zinc-200 peer-checked:border-emerald-400/60 peer-checked:bg-emerald-600 peer-checked:text-white">خرید</span>
+            </label>
+            <label class="block">
+              <input class="peer sr-only" type="checkbox" name="specialty" value="sell" {% if 'sell' in seed.specialties %}checked{% endif %}>
+              <span class="flex min-h-[48px] items-center justify-center rounded-xl border border-white/10 bg-[#0a1018] text-sm font-bold text-zinc-200 peer-checked:border-emerald-400/60 peer-checked:bg-emerald-600 peer-checked:text-white">فروش</span>
+            </label>
+            <label class="block cursor-not-allowed">
+              <input class="sr-only" type="checkbox" value="rent" disabled aria-disabled="true">
+              <span class="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/5 bg-[#0a1018] text-sm font-bold text-zinc-500 opacity-60">
+                اجاره
+                <em class="text-[10px] font-semibold not-italic text-zinc-500">به‌زودی</em>
+              </span>
+            </label>
+            <label class="block cursor-not-allowed">
+              <input class="sr-only" type="checkbox" value="build" disabled aria-disabled="true">
+              <span class="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/5 bg-[#0a1018] text-sm font-bold text-zinc-500 opacity-60">
+                ساخت
+                <em class="text-[10px] font-semibold not-italic text-zinc-500">به‌زودی</em>
+              </span>
+            </label>
+          </div>
+          <p data-field-error="specialties" class="mt-1 text-[11px] text-rose-300"></p>
+        </fieldset>
+      </section>
+
+      <button type="submit" id="vnConsultSubmit"
+              class="flex w-full min-h-[48px] items-center justify-center rounded-xl bg-emerald-600 py-4 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60">
+        ثبت و ادامه
+      </button>
+    </form>
+  </main>
+</div>
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ 'express-partner/consultant-onboarding.js'|static_version }}"></script>
+{% endblock %}

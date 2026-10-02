@@ -1,0 +1,65 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}مدارک بازاریاب{% endblock %}
+
+{% block content %}
+<div class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  {% set consultant_step = 3 %}
+  {% set step_title = step_title|default('مدارک') %}
+  {% include 'express_partner/partials/consultant_step_header.html' %}
+
+  <main id="vnConsultant"
+        class="mx-auto w-full px-4 pb-6 pt-4"
+        style="max-width:480px"
+        data-mode="documents"
+        data-documents-url="{{ url_for('consultant_api.consultant_documents') }}"
+        data-step-apply="{{ url_for('express_partner.consultant_apply') }}"
+        data-step-profile="{{ url_for('express_partner.consultant_profile') }}"
+        data-step-documents="{{ url_for('express_partner.consultant_documents') }}"
+        data-step-status="{{ url_for('express_partner.consultant_status') }}"
+        data-step-dashboard="{{ url_for('express_partner.consultant_dashboard') }}"
+        data-login-url="{{ url_for('express_partner.home', menu=1, login_next=request.path) }}">
+
+    <div class="mb-5 text-center">
+      <h2 class="text-lg font-bold text-white">مدارک</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">کارت ملی الزامی است. پروانه اختیاری است. jpg، png یا pdf تا ۵ مگابایت.</p>
+    </div>
+
+    <p id="vnConsultError" hidden class="mb-4 rounded-xl border border-rose-500/30 bg-rose-950/40 px-4 py-3 text-sm text-rose-100"></p>
+
+    <form id="vnConsultForm" class="space-y-4" novalidate>
+      <section class="space-y-4 rounded-2xl border border-white/10 bg-[#12181f] p-4">
+        <div>
+          <label for="vnConsultNationalId" class="mb-2 block text-xs font-semibold text-zinc-300">تصویر کارت ملی</label>
+          <input id="vnConsultNationalId" name="national_id" type="file" required
+                 accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                 class="block w-full text-sm text-zinc-300 file:ml-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-xs file:font-bold file:text-white">
+          {% if seed.documents.national_id.uploaded %}
+          <p class="mt-1.5 text-[11px] text-emerald-300">قبلاً بارگذاری شده. برای جایگزینی فایل تازه بفرستید.</p>
+          {% endif %}
+          <p data-field-error="national_id" class="mt-1 text-[11px] text-rose-300"></p>
+        </div>
+        <div>
+          <label for="vnConsultLicense" class="mb-2 block text-xs font-semibold text-zinc-300">پروانه <span class="font-normal text-zinc-500">(اختیاری)</span></label>
+          <input id="vnConsultLicense" name="license" type="file"
+                 accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                 class="block w-full text-sm text-zinc-300 file:ml-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-2 file:text-xs file:font-bold file:text-white">
+          {% if seed.documents.license.uploaded %}
+          <p class="mt-1.5 text-[11px] text-emerald-300">پروانه قبلاً بارگذاری شده.</p>
+          {% endif %}
+          <p data-field-error="license" class="mt-1 text-[11px] text-rose-300"></p>
+        </div>
+      </section>
+      <button type="submit" id="vnConsultSubmit"
+              class="flex w-full min-h-[48px] items-center justify-center rounded-xl bg-emerald-600 py-4 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60">
+        ارسال مدارک
+      </button>
+    </form>
+  </main>
+</div>
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ 'express-partner/consultant-onboarding.js'|static_version }}"></script>
+{% endblock %}

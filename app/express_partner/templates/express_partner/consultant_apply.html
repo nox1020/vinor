@@ -1,0 +1,46 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}شروع درخواست بازاریابی{% endblock %}
+
+{% block content %}
+<div class="min-h-[100dvh] bg-[#050a0e] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100">
+  {% set consultant_step = 1 %}
+  {% set step_title = step_title|default('شروع درخواست') %}
+  {% include 'express_partner/partials/consultant_step_header.html' %}
+
+  <main id="vnConsultant"
+        class="mx-auto w-full px-4 pb-6 pt-4"
+        style="max-width:480px"
+        data-mode="apply"
+        data-apply-url="{{ url_for('consultant_api.consultant_apply') }}"
+        data-step-apply="{{ url_for('express_partner.consultant_apply') }}"
+        data-step-profile="{{ url_for('express_partner.consultant_profile') }}"
+        data-step-documents="{{ url_for('express_partner.consultant_documents') }}"
+        data-step-status="{{ url_for('express_partner.consultant_status') }}"
+        data-step-dashboard="{{ url_for('express_partner.consultant_dashboard') }}"
+        data-login-url="{{ url_for('express_partner.home', menu=1, login_next=request.path) }}">
+
+    <div class="mb-5 text-center">
+      <h2 class="text-lg font-bold text-white">می‌خواهم بازاریاب وینور شوم</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-zinc-500">با همین حساب همکار درخواست را شروع کنید. مرحله بعد نام، شهر و تخصص است.</p>
+    </div>
+
+    <p id="vnConsultError" hidden class="mb-4 rounded-xl border border-rose-500/30 bg-rose-950/40 px-4 py-3 text-sm text-rose-100"></p>
+
+    <form id="vnConsultForm" class="space-y-4" novalidate>
+      <section class="rounded-2xl border border-white/10 bg-[#12181f] p-4">
+        <p class="text-sm leading-7 text-zinc-300">درخواست روی همین حساب ثبت می‌شود. اگر قبلاً شروع کرده باشید، به همان مرحله برمی‌گردید.</p>
+      </section>
+      <button type="submit" id="vnConsultSubmit"
+              class="flex w-full min-h-[48px] items-center justify-center rounded-xl bg-emerald-600 py-4 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60">
+        شروع درخواست
+      </button>
+    </form>
+  </main>
+</div>
+{% set bottom_nav_active = 'profile' %}
+{% include 'express_partner/partials/partner_tab_footer.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ 'express-partner/consultant-onboarding.js'|static_version }}"></script>
+{% endblock %}

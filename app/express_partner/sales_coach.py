@@ -864,15 +864,31 @@ def build_limited_ai_quick_prompts(
             item["href"] = href
         out.append(item)
 
-    apply_url = "/express/partner/apply"
+    from app.express_partner.consultant_onboarding import consultant_api_enabled
+
+    if consultant_api_enabled():
+        apply_label = "می‌خواهم بازاریاب وینور شوم"
+        apply_prompt = (
+            "می‌خواهم بازاریاب وینور شوم. "
+            "اول شرایط همکاری و نحوه ارتقا به بازاریاب را توضیح بده، بعد ثبت‌نام را شروع کن."
+        )
+        apply_url = "/express/partner/consultant"
+        guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/consultant"
+        apply_endpoint = "express_partner.consultant_gate"
+    else:
+        # برچسب قبلی همین کارت، قبل از نام بازاریاب؛ فرم قدیمی apply است.
+        apply_label = "همکاری با وینور"
+        apply_prompt = "می‌خوام همکار شم؛ چطور شروع کنم؟"
+        apply_url = "/express/partner/apply"
+        guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/apply"
+        apply_endpoint = "express_partner.apply"
     thanks_url = "/express/partner/thanks"
     levels_url = "/express/partner/levels"
-    guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/apply"
     try:
         from flask import has_request_context, url_for
 
         if has_request_context():
-            apply_url = url_for("express_partner.apply")
+            apply_url = url_for(apply_endpoint)
             thanks_url = url_for("express_partner.thanks")
             levels_url = url_for("express_partner.coop_levels")
             guest_apply_url = url_for(
@@ -906,11 +922,8 @@ def build_limited_ai_quick_prompts(
     # مهمان / لاگین‌شدهٔ غیرتأیید — کارت اصلی مثل «ثبت مشتری» برای همکارها
     become_href = apply_url if (me_phone or "").strip() else guest_apply_url
     add(
-        "می‌خواهم بازاریاب وینور شوم",
-        prompt=(
-            "می‌خواهم بازاریاب وینور شوم. "
-            "اول شرایط همکاری و نحوه ارتقا به بازاریاب را توضیح بده، بعد ثبت‌نام را شروع کن."
-        ),
+        apply_label,
+        prompt=apply_prompt,
         intent="coop_apply",
         icon="handshake",
         subtitle="شروع همکاری فروش و دریافت پورسانت",
