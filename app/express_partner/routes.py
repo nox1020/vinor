@@ -5032,6 +5032,10 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'area': _home_ad_area_label(land),
         'facts': _home_ad_facts(land),
         'listed_label': _home_relative_label(land.get('updated_at') or land.get('created_at')),
+        'price_total': price_n if price_n > 0 else 0,
+        'price_toman': price_n if price_n > 0 else 0,
+        'size': land.get('size') if land.get('size') not in (None, '') else '',
+        'city': city,
     }
 
 
@@ -5078,7 +5082,7 @@ def _home_ads_for_api() -> tuple:
             commission_amount = int(ad.get('commission_amount') or 0)
         except Exception:
             commission_amount = 0
-        out.append({
+        row: Dict[str, Any] = {
             'title': str(ad.get('title') or '').strip(),
             'price': str(ad.get('price') or '').strip(),
             'location': str(ad.get('location') or '').strip(),
@@ -5091,7 +5095,22 @@ def _home_ads_for_api() -> tuple:
             'area': str(ad.get('area') or '').strip(),
             'facts': [str(x).strip() for x in (ad.get('facts') or []) if str(x).strip()][:3],
             'listed_label': str(ad.get('listed_label') or '').strip(),
-        })
+        }
+        if ad.get('price_total') not in (None, ''):
+            row['price_total'] = ad.get('price_total')
+        if ad.get('price_toman') not in (None, ''):
+            row['price_toman'] = ad.get('price_toman')
+        if ad.get('size') not in (None, ''):
+            row['size'] = ad.get('size')
+        if ad.get('area_m2') not in (None, ''):
+            row['area_m2'] = ad.get('area_m2')
+        city_name = str(ad.get('city') or '').strip()
+        if city_name:
+            row['city'] = city_name
+        district_name = str(ad.get('district') or '').strip()
+        if district_name:
+            row['district'] = district_name
+        out.append(row)
     return out, len(out)
 
 
@@ -5262,22 +5281,408 @@ def api_repost_remove():
     except Exception:
         return jsonify({'ok': False, 'error': 'persist_failed'}), 500
 
+_SEARCH_FA_DIGITS = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
+_SEARCH_EN_TO_FA = str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹')
+_SEARCH_CAP = 60
+_SEARCH_SORT_LABELS = {
+    'newest': 'جدیدترین',
+    'price_asc': 'ارزان‌ترین',
+    'price_desc': 'گران‌ترین',
+    'area_asc': 'کم‌متراژترین',
+    'area_desc': 'بیشترین متراژ',
+}
+
+
+def _search_latin_digits(value: Any) -> str:
+    return str(value if value is not None else '').translate(_SEARCH_FA_DIGITS)
+
+
+def _search_fa_number(value: Any) -> str:
+    return str(value if value is not None else '').translate(_SEARCH_EN_TO_FA)
+
+
+def _search_norm(value: Any) -> str:
+    text = _search_latin_digits(value)
+    text = text.replace('ي', 'ی').replace('ى', 'ی').replace('ك', 'ک')
+    return text.strip().lower()
+
+
+def _search_optional_int(raw: Any) -> Optional[int]:
+    """عدد صحیح نامنفی؛ مقدار نامعتبر None (نادیده گرفته می‌شود)."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw if raw >= 0 else None
+    if isinstance(raw, float):
+        if raw < 0:
+            return None
+        return int(raw)
+    text = _search_latin_digits(raw).strip()
+    if not text:
+        return None
+    compact = (
+        text.replace('٬', '')
+        .replace('،', '')
+        .replace(',', '')
+        .replace(' ', '')
+        .replace('_', '')
+    )
+    if not re.fullmatch(r'\d+', compact):
+        return None
+    try:
+        return int(compact)
+    except (TypeError, ValueError):
+        return None
+
+
+def _search_positive_amount(raw: Any) -> Optional[int]:
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return n if n > 0 else None
+    n = _search_optional_int(raw)
+    if n is None or n <= 0:
+        return None
+    return n
+
+
+def _search_area_m2_value(raw: Any) -> Optional[int]:
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            n = int(round(float(raw)))
+        except (TypeError, ValueError):
+            return None
+        return n if n > 0 else None
+    text = _search_latin_digits(raw).replace('٬', '').replace('،', '').replace(',', '')
+    match = re.search(r'(\d+(?:\.\d+)?)', text)
+    if not match:
+        return None
+    try:
+        n = int(round(float(match.group(1))))
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _search_ad_price_toman(ad: Dict[str, Any]) -> Optional[int]:
+    """تومان مثبت. صفر، خالی یا «توافقی» یعنی بدون قیمت."""
+    if not isinstance(ad, dict):
+        return None
+    source = str(ad.get('source') or '').strip().lower()
+    if source == 'vinor':
+        if ad.get('price_total') not in (None, ''):
+            return _search_positive_amount(ad.get('price_total'))
+        owned = _search_positive_amount(ad.get('price_toman'))
+        if owned:
+            return owned
+    text = str(ad.get('price') or '').strip()
+    if text:
+        try:
+            from .home_ads_config import parse_divar_price_toman
+
+            parsed = int(parse_divar_price_toman(text) or 0)
+        except Exception:
+            parsed = 0
+        return parsed or None
+    return _search_positive_amount(ad.get('price_toman'))
+
+
+def _search_ad_area_m2(ad: Dict[str, Any]) -> Optional[int]:
+    if not isinstance(ad, dict):
+        return None
+    source = str(ad.get('source') or '').strip().lower()
+    if source == 'vinor':
+        if ad.get('size') not in (None, ''):
+            return _search_area_m2_value(ad.get('size'))
+        return _search_area_m2_value(ad.get('area_m2'))
+    for key in ('area_m2', 'size', 'area'):
+        if ad.get(key) in (None, ''):
+            continue
+        n = _search_area_m2_value(ad.get(key))
+        if n:
+            return n
+    return None
+
+
+def _search_money_parts(toman: int) -> tuple[str, str]:
+    n = int(toman)
+    if n >= 1_000_000_000:
+        value = n / 1_000_000_000
+        unit = 'میلیارد'
+    else:
+        value = n / 1_000_000
+        unit = 'میلیون'
+    rounded = round(value, 1)
+    if abs(rounded - int(round(rounded))) < 1e-9:
+        num = str(int(round(rounded)))
+    else:
+        num = f'{rounded:.1f}'.replace('.', '٫')
+    return _search_fa_number(num), unit
+
+
+def _search_price_chip_label(price_min: Optional[int], price_max: Optional[int]) -> str:
+    if price_min is None and price_max is None:
+        return 'قیمت'
+    if price_min is not None and price_max is not None:
+        left_n, left_u = _search_money_parts(price_min)
+        right_n, right_u = _search_money_parts(price_max)
+        if left_u == right_u:
+            return f'{left_n}\u2013{right_n} {left_u}'
+        return f'{left_n} {left_u}\u2013{right_n} {right_u}'
+    if price_max is not None:
+        num, unit = _search_money_parts(price_max)
+        return f'تا {num} {unit}'
+    num, unit = _search_money_parts(int(price_min or 0))
+    return f'از {num} {unit}'
+
+
+def _search_area_chip_label(area_min: Optional[int], area_max: Optional[int]) -> str:
+    if area_min is None and area_max is None:
+        return 'متراژ'
+    if area_min is not None and area_max is not None:
+        return f'{_search_fa_number(area_min)}\u2013{_search_fa_number(area_max)} متر'
+    if area_max is not None:
+        return f'تا {_search_fa_number(area_max)} متر'
+    return f'از {_search_fa_number(area_min)} متر'
+
+
+def _search_district_chip_label(districts: List[str]) -> str:
+    if not districts:
+        return 'محله'
+    if len(districts) == 1:
+        return districts[0]
+    return f'{districts[0]} +{_search_fa_number(len(districts) - 1)}'
+
+
+def _search_price_aria(price_min: Optional[int], price_max: Optional[int], label: str) -> str:
+    if price_min is None and price_max is None:
+        return 'فیلتر قیمت'
+    spoken = label.replace('\u2013', ' تا ')
+    return f'فیلتر قیمت، انتخاب‌شده: {spoken}'
+
+
+def _search_clear_path(city: str) -> str:
+    from urllib.parse import quote
+
+    name = (city or '').strip()
+    if not name:
+        return '/express/partner/search'
+    return '/express/partner/search?city=' + quote(name, safe='')
+
+
+def _search_read_args() -> Dict[str, Any]:
+    q = str(request.args.get('q') or '').strip()[:80]
+    city = str(request.args.get('city') or '').strip()[:40]
+    districts: List[str] = []
+    seen: set[str] = set()
+    for part in str(request.args.get('district') or '').split(','):
+        name = part.strip()[:40]
+        key = _search_norm(name)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        districts.append(name)
+    price_min = _search_optional_int(request.args.get('price_min'))
+    price_max = _search_optional_int(request.args.get('price_max'))
+    area_min = _search_optional_int(request.args.get('area_min'))
+    area_max = _search_optional_int(request.args.get('area_max'))
+    if price_min is not None and price_max is not None and price_min > price_max:
+        price_min, price_max = price_max, price_min
+    if area_min is not None and area_max is not None and area_min > area_max:
+        area_min, area_max = area_max, area_min
+    sort = str(request.args.get('sort') or '').strip().lower()
+    if sort not in _SEARCH_SORT_LABELS:
+        sort = 'newest'
+    return {
+        'q': q,
+        'city': city,
+        'districts': districts,
+        'price_min': price_min,
+        'price_max': price_max,
+        'area_min': area_min,
+        'area_max': area_max,
+        'sort': sort,
+    }
+
+
+def _search_district_name(ad: Dict[str, Any]) -> str:
+    explicit = str(ad.get('district') or '').strip()
+    if explicit:
+        return explicit
+    loc = str(ad.get('location') or '').strip()
+    if not loc:
+        return ''
+    if ' در ' in loc:
+        tail = loc.rsplit(' در ', 1)[-1].strip().split('،')[0].strip()
+        if tail and 'پیش' not in tail:
+            return tail
+    if '،' in loc:
+        parts = [p.strip() for p in loc.split('،') if p.strip()]
+        if len(parts) >= 2:
+            return parts[-1]
+    return ''
+
+
+def _search_district_options(ads: List[Dict[str, Any]], city: str) -> List[str]:
+    out: List[str] = []
+    seen: set[str] = set()
+    city_n = _search_norm(city)
+    for ad in ads or []:
+        if not isinstance(ad, dict):
+            continue
+        if city_n:
+            blob = _search_norm(f"{ad.get('city') or ''} {ad.get('location') or ''}")
+            if city_n not in blob:
+                continue
+        name = _search_district_name(ad)
+        key = _search_norm(name)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+    return out[:80]
+
+
+def _search_ad_visible(ad: Dict[str, Any], flt: Dict[str, Any]) -> bool:
+    if not isinstance(ad, dict):
+        return False
+    if flt.get('q'):
+        hay = _search_norm(' '.join([
+            str(ad.get('title') or ''),
+            str(ad.get('price') or ''),
+            str(ad.get('location') or ''),
+            str(ad.get('district') or ''),
+            str(ad.get('city') or ''),
+        ]))
+        if _search_norm(flt['q']) not in hay:
+            return False
+    if flt.get('city'):
+        blob = _search_norm(f"{ad.get('city') or ''} {ad.get('location') or ''}")
+        if _search_norm(flt['city']) not in blob:
+            return False
+    districts = flt.get('districts') or []
+    if districts:
+        blob = _search_norm(' '.join([
+            str(ad.get('location') or ''),
+            str(ad.get('district') or ''),
+            str(ad.get('title') or ''),
+        ]))
+        if not any(_search_norm(name) in blob for name in districts):
+            return False
+    if flt.get('price_min') is not None or flt.get('price_max') is not None:
+        price = _search_ad_price_toman(ad)
+        if price is None:
+            return False
+        if flt.get('price_min') is not None and price < int(flt['price_min']):
+            return False
+        if flt.get('price_max') is not None and price > int(flt['price_max']):
+            return False
+    if flt.get('area_min') is not None or flt.get('area_max') is not None:
+        area = _search_ad_area_m2(ad)
+        if area is None:
+            return False
+        if flt.get('area_min') is not None and area < int(flt['area_min']):
+            return False
+        if flt.get('area_max') is not None and area > int(flt['area_max']):
+            return False
+    return True
+
+
+def _search_sort_ads(ads: List[Dict[str, Any]], sort: str) -> List[Dict[str, Any]]:
+    rows = [ad for ad in ads if isinstance(ad, dict)]
+    if sort == 'price_asc':
+        return sorted(rows, key=lambda ad: (_search_ad_price_toman(ad) is None, _search_ad_price_toman(ad) or 0))
+    if sort == 'price_desc':
+        return sorted(rows, key=lambda ad: (_search_ad_price_toman(ad) is None, -(_search_ad_price_toman(ad) or 0)))
+    if sort == 'area_asc':
+        return sorted(rows, key=lambda ad: (_search_ad_area_m2(ad) is None, _search_ad_area_m2(ad) or 0))
+    if sort == 'area_desc':
+        return sorted(rows, key=lambda ad: (_search_ad_area_m2(ad) is None, -(_search_ad_area_m2(ad) or 0)))
+    return rows
+
+
+def _search_view_state(flt: Dict[str, Any], count: int) -> Dict[str, Any]:
+    price_min = flt.get('price_min')
+    price_max = flt.get('price_max')
+    area_min = flt.get('area_min')
+    area_max = flt.get('area_max')
+    districts = list(flt.get('districts') or [])
+    sort = str(flt.get('sort') or 'newest')
+    price_on = price_min is not None or price_max is not None
+    area_on = area_min is not None or area_max is not None
+    district_on = bool(districts)
+    sort_on = sort != 'newest'
+    price_label = _search_price_chip_label(price_min, price_max)
+    return {
+        'q': flt.get('q') or '',
+        'city': flt.get('city') or '',
+        'districts': districts,
+        'price_min': price_min,
+        'price_max': price_max,
+        'area_min': area_min,
+        'area_max': area_max,
+        'sort': sort,
+        'sort_label': _SEARCH_SORT_LABELS.get(sort, 'جدیدترین'),
+        'price_label': price_label,
+        'price_aria': _search_price_aria(price_min, price_max, price_label),
+        'area_label': _search_area_chip_label(area_min, area_max),
+        'area_aria': (
+            'فیلتر متراژ'
+            if not area_on
+            else 'فیلتر متراژ، انتخاب‌شده: ' + _search_area_chip_label(area_min, area_max).replace('\u2013', ' تا ')
+        ),
+        'district_label': _search_district_chip_label(districts),
+        'price_on': price_on,
+        'area_on': area_on,
+        'district_on': district_on,
+        'sort_on': sort_on,
+        'has_filters': bool((flt.get('q') or '') or price_on or area_on or district_on or sort_on),
+        'count': int(count or 0),
+        'clear_href': _search_clear_path(str(flt.get('city') or '')),
+    }
+
+
 @express_partner_bp.get('/search', endpoint='search')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def search_page():
-    """جستجوی ملک — همان لیست آگهی‌های خانه، جدا از صفحهٔ آگهی‌ها."""
+    """جستجوی خرید ملک — فیلتر و مرتب‌سازی سمت سرور روی آگهی‌های خانه."""
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
+    search_error = False
     try:
-        search_ads, _ads_count = _home_ads_for_api()
+        raw_ads, _ads_count = _home_ads_for_api()
     except Exception:
-        search_ads = []
+        raw_ads = []
+        search_error = True
+    if not isinstance(raw_ads, list):
+        raw_ads = []
+    flt = _search_read_args()
+    district_options = _search_district_options(raw_ads, str(flt.get('city') or ''))
+    for name in flt.get('districts') or []:
+        if name not in district_options:
+            district_options.append(name)
+    shown = [ad for ad in raw_ads if _search_ad_visible(ad, flt)]
+    shown = _search_sort_ads(shown, str(flt.get('sort') or 'newest'))[:_SEARCH_CAP]
+    try:
+        cities = [str(c).strip() for c in (_active_cities_cached() or []) if str(c).strip()]
+    except Exception:
+        cities = []
     resp = make_response(render_template(
         'express_partner/search.html',
         me_phone=me_phone,
         is_approved=is_approved,
-        search_ads=search_ads or [],
+        search_ads=shown,
+        search_error=search_error,
+        search_query=_search_view_state(flt, len(shown)),
+        search_cities=cities,
+        search_districts=district_options,
         hide_header=True,
     ))
     _append_partner_tab_prefetch(resp)
