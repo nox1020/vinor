@@ -864,18 +864,21 @@ def build_limited_ai_quick_prompts(
             item["href"] = href
         out.append(item)
 
-    consultant_on = True
-    try:
-        from app.express_partner.consultant_onboarding import consultant_api_enabled
+    from app.express_partner.consultant_onboarding import consultant_api_enabled
 
-        consultant_on = consultant_api_enabled()
-    except Exception:
-        consultant_on = True
-    if consultant_on:
+    if consultant_api_enabled():
+        apply_label = "می‌خواهم بازاریاب وینور شوم"
+        apply_prompt = (
+            "می‌خواهم بازاریاب وینور شوم. "
+            "اول شرایط همکاری و نحوه ارتقا به بازاریاب را توضیح بده، بعد ثبت‌نام را شروع کن."
+        )
         apply_url = "/express/partner/consultant"
         guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/consultant"
         apply_endpoint = "express_partner.consultant_gate"
     else:
+        # برچسب قبلی همین کارت، قبل از نام بازاریاب؛ فرم قدیمی apply است.
+        apply_label = "همکاری با وینور"
+        apply_prompt = "می‌خوام همکار شم؛ چطور شروع کنم؟"
         apply_url = "/express/partner/apply"
         guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/apply"
         apply_endpoint = "express_partner.apply"
@@ -919,11 +922,8 @@ def build_limited_ai_quick_prompts(
     # مهمان / لاگین‌شدهٔ غیرتأیید — کارت اصلی مثل «ثبت مشتری» برای همکارها
     become_href = apply_url if (me_phone or "").strip() else guest_apply_url
     add(
-        "می‌خواهم بازاریاب وینور شوم",
-        prompt=(
-            "می‌خواهم بازاریاب وینور شوم. "
-            "اول شرایط همکاری و نحوه ارتقا به بازاریاب را توضیح بده، بعد ثبت‌نام را شروع کن."
-        ),
+        apply_label,
+        prompt=apply_prompt,
         intent="coop_apply",
         icon="handshake",
         subtitle="شروع همکاری فروش و دریافت پورسانت",
