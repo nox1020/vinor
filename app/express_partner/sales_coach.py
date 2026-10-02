@@ -864,15 +864,28 @@ def build_limited_ai_quick_prompts(
             item["href"] = href
         out.append(item)
 
-    apply_url = "/express/partner/consultant"
+    consultant_on = True
+    try:
+        from app.express_partner.consultant_onboarding import consultant_api_enabled
+
+        consultant_on = consultant_api_enabled()
+    except Exception:
+        consultant_on = True
+    if consultant_on:
+        apply_url = "/express/partner/consultant"
+        guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/consultant"
+        apply_endpoint = "express_partner.consultant_gate"
+    else:
+        apply_url = "/express/partner/apply"
+        guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/apply"
+        apply_endpoint = "express_partner.apply"
     thanks_url = "/express/partner/thanks"
     levels_url = "/express/partner/levels"
-    guest_apply_url = "/express/partner/home?menu=1&login_next=/express/partner/consultant"
     try:
         from flask import has_request_context, url_for
 
         if has_request_context():
-            apply_url = url_for("express_partner.consultant_gate")
+            apply_url = url_for(apply_endpoint)
             thanks_url = url_for("express_partner.thanks")
             levels_url = url_for("express_partner.coop_levels")
             guest_apply_url = url_for(
