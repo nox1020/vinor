@@ -4889,6 +4889,8 @@ def _public_lands_payload(limit=50):
 
 def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
     """فایل‌های عمومی کامل برای نوار کشویی خانه (مهمان / کاربر عادی)."""
+    from app.utils.public_listings import is_publicly_visible_listing
+
     sanitize_land_media = None
     try:
         from ..utils.images import sanitize_land_media as _sanitize_land_media
@@ -4904,32 +4906,9 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
     express_lands = _sort_by_created_at_desc(express_lands)
     out: List[Dict[str, Any]] = []
     for land in express_lands:
-        if not isinstance(land, dict):
+        if not is_publicly_visible_listing(land):
             continue
-        try:
-            from .special_listings import is_admin_created_express_listing
-
-            if is_admin_created_express_listing(land):
-                continue
-        except Exception:
-            pass
-        if land.get('public') is False:
-            continue
-        try:
-            from .special_listings import is_owner_home
-
-            if is_owner_home(land):
-                continue
-        except Exception:
-            if land.get('owner_home') and land.get('public') is not True:
-                continue
         code = str(land.get('code') or '').strip()
-        if not code:
-            continue
-        if _express_land_marked_sold(land):
-            continue
-        if str(land.get('express_status') or '').strip().lower() in ('closed', 'archived', 'hidden'):
-            continue
         try:
             from app.utils.iran_cities import land_in_service_focus
 
