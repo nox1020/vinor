@@ -271,15 +271,18 @@ def git_webhook():
         if _already_handled(sha, delivery):
             _log("webhook_duplicate", sha)
             return _ignored()
-        try:
-            _remember(sha, delivery)
-        except Exception:
-            _log("webhook_state", "unwritable")
 
     try:
         spawn_deploy(sha)
     except Exception:
+        # Do not record the delivery. A 500 lets GitHub retry.
         _log("spawn_failed", "deploy")
         return jsonify(ok=False, error="rejected"), 500
+
+    with _StateLock(_deploy_state_dir()):
+        try:
+            _remember(sha, delivery)
+        except Exception:
+            _log("webhook_state", "unwritable")
     _log("webhook_accepted", sha)
     return jsonify(ok=True, accepted=True), 202
