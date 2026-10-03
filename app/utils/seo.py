@@ -286,6 +286,62 @@ def _clean_text(val: Any, max_len: int = 320) -> str:
     return s
 
 
+def _positive_toman(raw: Any) -> Optional[int]:
+    """Parse a toman amount. None when blank, zero, negative, or not numeric."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw if raw > 0 else None
+    if isinstance(raw, float):
+        if raw != raw or raw in (float("inf"), float("-inf")) or raw <= 0:
+            return None
+        amount = int(raw)
+        return amount if amount > 0 else None
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        if any(ch in text for ch in ".eE"):
+            number = float(text)
+            if number != number or number in (float("inf"), float("-inf")) or number <= 0:
+                return None
+            amount = int(number)
+        else:
+            amount = int(text)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return amount if amount > 0 else None
+
+
+def _listing_price_toman(land: dict) -> Optional[int]:
+    """Toman price on a listing, or None when it should not be published.
+
+    Stored on ``price_total`` (and ``price``). Home-ad cards copy the same
+    integer to ``price_toman``. A non-numeric value is omitted rather than
+    replaced by a later field.
+    """
+    if not isinstance(land, dict):
+        return None
+    for key in ("price_total", "price", "price_toman"):
+        raw = land.get(key)
+        if raw is None or raw is False:
+            continue
+        if isinstance(raw, str) and not raw.strip():
+            continue
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw == 0:
+            continue
+        return _positive_toman(raw)
+    return None
+
+
+def _listing_price_irr(land: dict) -> Optional[int]:
+    """Schema.org / Open Graph price in rials (ISO 4217 IRR). Toman × 10."""
+    toman = _listing_price_toman(land)
+    if toman is None:
+        return None
+    return toman * 10
+
+
 def _format_price_short(land: dict) -> str:
     try:
         total = int(land.get("price_total") or land.get("price") or 0)
@@ -373,7 +429,7 @@ def build_land_seo(land: dict, *, canonical_url: str, site_root: str = SITE_ORIG
         "keywords": keywords,
         "og_type": "product",
         "og_image": og_image,
-        "price": land.get("price_total") or land.get("price"),
+        "price": _listing_price_irr(land),
         "currency": "IRR",
         "json_ld": json_ld,
         "is_thin_content": _is_thin_land(land),
@@ -454,15 +510,11 @@ def build_land_json_ld(
     except (TypeError, ValueError):
         pass
 
-    price = land.get("price_total") or land.get("price")
-    try:
-        price_num = int(price) if price else 0
-    except (TypeError, ValueError):
-        price_num = 0
-    if price_num > 0:
+    price_irr = _listing_price_irr(land)
+    if price_irr is not None:
         data["offers"] = {
             "@type": "Offer",
-            "price": price_num,
+            "price": price_irr,
             "priceCurrency": "IRR",
             "availability": "https://schema.org/InStock",
             "url": canonical_url,
@@ -633,8 +685,11 @@ def build_sitemap_entries(app) -> List[Dict[str, str]]:
 
         try:
             from ..utils.storage import load_express_lands_cached
+            from .public_listings import is_publicly_visible_listing
 
             for land in load_express_lands_cached(app) or []:
+                if not is_publicly_visible_listing(land):
+                    continue
                 code = str(land.get("code") or "").strip()
                 if not code:
                     continue
