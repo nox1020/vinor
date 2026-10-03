@@ -1472,6 +1472,19 @@ def require_partner_access(json_response: bool = False, allow_pending: bool = Fa
                     return fn(*args, **kwargs)
                 if json_response:
                     return jsonify({"success": False, "error": "unauthorized"}), 401
+                # مرورگر (text/html یا */* با کیفیت برابر) همان ۳۰۲ را می‌گیرد.
+                # کلاینت JSON (اپ، fetch، XHR) باید ۴۰۱ ببیند تا ریدایرکت HTML را دنبال نکند.
+                wants_json = (
+                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or request.is_json
+                    or request.accept_mimetypes["application/json"]
+                    > request.accept_mimetypes["text/html"]
+                )
+                if wants_json:
+                    resp = jsonify({"success": False, "error": "unauthorized"})
+                    resp.status_code = 401
+                    resp.headers["Cache-Control"] = "no-store"
+                    return resp
                 nxt = request.full_path.rstrip("?") if request.full_path else request.path
                 return redirect(url_for("express_partner.login", next=nxt))
 
@@ -8155,7 +8168,7 @@ def routine():
 
 
 @express_partner_bp.route('/routine/data', methods=['GET'], endpoint='routine_data')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def routine_data():
     """
     برگرداندن روزهای انجام‌شده روتین در ماه خواسته‌شده برای کاربر جاری.
@@ -8709,7 +8722,7 @@ def routine_steps():
 
 
 @express_partner_bp.get('/routine/steps/detail')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def routine_steps_detail():
     """برگرداندن لیست تیک‌های روز مشخص شده (detail) — ثبت خودکار."""
     phone = (session.get("user_phone") or "").strip()
@@ -10962,7 +10975,7 @@ def profile_edit_page():
 
 
 @express_partner_bp.get('/profile/edit/data', endpoint='profile_edit_data')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def profile_edit_data():
     """API JSON برای اپ اندروید: داده فرم ویرایش پروفایل."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')

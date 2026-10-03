@@ -10,7 +10,7 @@ import json
 import os
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -123,6 +123,31 @@ def test_partner_onboarding_locks(app, client):
 
     assert os.environ.get("VINOR_CONSULTANT_DRY_RUN") is None
     assert dry_run_enabled() is False
+
+    # مهمان: نشست نیست. CSRF مثل بقیهٔ همین تست روشن است؛
+    # register-customer در app/__init__.py از CSRF معاف است.
+    routine = client.get("/express/partner/routine/data")
+    assert routine.status_code == 401
+    assert routine.get_json() == {"success": False, "error": "unauthorized"}
+
+    register_json = client.post(
+        "/express/partner/home/register-customer",
+        headers={"Accept": "application/json"},
+    )
+    assert register_json.status_code == 401
+    assert register_json.get_json() == {"success": False, "error": "unauthorized"}
+    assert register_json.headers.get("Cache-Control") == "no-store"
+
+    register_html = client.post(
+        "/express/partner/home/register-customer",
+        headers={"Accept": "text/html"},
+    )
+    assert register_html.status_code == 302
+    login_loc = urlsplit(register_html.headers.get("Location") or "")
+    assert login_loc.path == "/express/partner/login"
+    assert parse_qs(login_loc.query).get("next") == [
+        "/express/partner/home/register-customer"
+    ]
 
     _login(client)
     _assert_redirect(client.get(GATE), APPLY_PAGE)
