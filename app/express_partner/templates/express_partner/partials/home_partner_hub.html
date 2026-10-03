@@ -150,7 +150,8 @@
 
 {% set _pipe = home_requests_pipeline_count|default(0)|int %}
 {% set _growth = home_month_growth_pct %}
-{% set _apply = url_for('express_partner.consultant_gate') %}
+{% set _consultant_on = consultant_api_enabled|default(true) %}
+{% set _apply = url_for('express_partner.consultant_gate') if _consultant_on else url_for('express_partner.apply') %}
 {% set _apply_href = _apply if me_phone else url_for('express_partner.home', menu=1, login_next=_apply) %}
 <div class="vn-hub">
   <div class="vn-hub__hello">
@@ -200,7 +201,7 @@
   </a>
   {% else %}
   <a class="vn-hub__hero" href="{{ _apply_href }}" data-vinor-express-nav>
-    <span class="vn-hub__hero-title">می‌خواهم بازاریاب وینور شوم</span>
+    <span class="vn-hub__hero-title">{% if _consultant_on %}می‌خواهم بازاریاب وینور شوم{% else %}همکاری با وینور{% endif %}</span>
     <span class="vn-hub__hero-sub">شروع همکاری فروش و دریافت پورسانت</span>
     <span class="vn-hub__start">شروع کنید</span>
   </a>
