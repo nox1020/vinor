@@ -261,9 +261,6 @@ def test_sales_coach_apply_link_follows_consultant_api_flag(app, client, monkeyp
     _login(client)
     _assert_redirect(client.get(GATE), HOME_PAGE)
 
-
-def test_git_webhook_fail_closed(client, monkeypatch):
-    """Empty secret and a bad signature fail closed. A signed non-deploy run does not spawn."""
     spawned = []
 
     def _record(sha):

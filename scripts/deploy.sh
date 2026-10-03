@@ -73,6 +73,40 @@ require_nonempty() {
   fi
 }
 
+# sqlite:////abs/file is absolute. sqlite:///relative is not. Never log the URL.
+require_sqlite_database() {
+  local url path create
+  url="$(printenv DATABASE_URL 2>/dev/null || true)"
+  case "$url" in
+    sqlite:*) ;;
+    *) return 0 ;;
+  esac
+  case "$url" in
+    sqlite:///*) path="${url#sqlite:///}" ;;
+    *)
+      log_json preflight_rejected db_url_relative
+      exit 1
+      ;;
+  esac
+  path="${path%%\?*}"
+  case "$path" in
+    /*) ;;
+    *)
+      log_json preflight_rejected db_url_relative
+      exit 1
+      ;;
+  esac
+  if [[ -f "$path" ]]; then
+    return 0
+  fi
+  create="$(printenv VINOR_DB_CREATE_ALL 2>/dev/null || true)"
+  if [[ "$create" == "1" ]]; then
+    return 0
+  fi
+  log_json preflight_rejected db_file_missing
+  exit 1
+}
+
 preflight() {
   local name digest bad consultant
   if ! [[ "$HEALTH_TRIES" =~ ^[0-9]+$ ]]; then
@@ -89,6 +123,8 @@ preflight() {
     log_json preflight_rejected VINOR_CONSULTANT_API_ENABLED
     exit 1
   fi
+  require_sqlite_database
+
   if ! command -v sha256sum >/dev/null 2>&1; then
     log_json preflight_missing sha256sum
     exit 1

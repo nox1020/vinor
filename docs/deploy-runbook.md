@@ -50,7 +50,11 @@ git log -1 --oneline
 
 ## متغیرهای محیطی
 
-در Setup Python App همین‌ها را بگذارید. `deploy.sh` قبل از هر `git fetch` / `reset` موارد اجباری را غیرخالی می‌خواهد. بعد از PR #10، `app/utils/secrets.py` با `REQUIRED_ENV_VARS` بدون همان شش متغیر بالا نمی‌آید. نام‌های داخل `app/keys.py` و `api_keys.py` دیگر مبنای preflight نیستند.
+`DATABASE_URL` و همهٔ متغیرهای اجباری باید در env خودِ اپ پایتون باشند (cPanel → Setup Python App → Environment variables). هم پروسهٔ اپ و هم `deploy.sh` که وب‌هوک جدا بالا می‌آورد از همان env به ارث می‌برند. گذاشتن آن‌ها فقط در شل یا فایل `.env` کافی نیست.
+
+`deploy.sh` قبل از هر `git fetch` / `reset` موارد اجباری را غیرخالی می‌خواهد. اگر `DATABASE_URL` با `sqlite:` شروع شود، فقط شکل مطلق `sqlite:////...` قبول است (مسیر بعد از سه اسلش باید با `/` شروع شود). مسیر نسبی رد می‌شود. فایل sqlite هم باید از قبل وجود داشته باشد، مگر `VINOR_DB_CREATE_ALL=1`. لاگ فقط کد دلیل است (`db_url_relative` یا `db_file_missing`) و خود URL یا مسیر را نمی‌نویسد. URL غیر sqlite فقط باید غیرخالی باشد.
+
+بعد از PR #10، `app/utils/secrets.py` با `REQUIRED_ENV_VARS` بدون همان شش متغیر بالا نمی‌آید. نام‌های داخل `app/keys.py` و `api_keys.py` دیگر مبنای preflight نیستند.
 
 اجباری:
 
