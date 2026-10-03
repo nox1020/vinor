@@ -74,8 +74,9 @@ require_nonempty() {
 }
 
 # sqlite:////abs/file is absolute. sqlite:///relative is not. Never log the URL.
+# A missing file is always rejected. VINOR_DB_CREATE_ALL must not be set.
 require_sqlite_database() {
-  local url path create
+  local url path
   url="$(printenv DATABASE_URL 2>/dev/null || true)"
   case "$url" in
     sqlite:*) ;;
@@ -99,10 +100,6 @@ require_sqlite_database() {
   if [[ -f "$path" ]]; then
     return 0
   fi
-  create="$(printenv VINOR_DB_CREATE_ALL 2>/dev/null || true)"
-  if [[ "$create" == "1" ]]; then
-    return 0
-  fi
   log_json preflight_rejected db_file_missing
   exit 1
 }
@@ -121,6 +118,10 @@ preflight() {
   consultant="$(printenv VINOR_CONSULTANT_API_ENABLED 2>/dev/null || true)"
   if [[ "$consultant" != "1" ]]; then
     log_json preflight_rejected VINOR_CONSULTANT_API_ENABLED
+    exit 1
+  fi
+  if [[ -n "$(printenv VINOR_DB_CREATE_ALL 2>/dev/null || true)" ]]; then
+    log_json preflight_rejected VINOR_DB_CREATE_ALL
     exit 1
   fi
   require_sqlite_database
