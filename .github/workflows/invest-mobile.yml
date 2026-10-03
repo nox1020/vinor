@@ -3,15 +3,28 @@ name: Invest Mobile Build
 # When Invest backend changes in vinor, stamp API version and trigger
 # Flutter APK build in https://github.com/nox1020/invest
 #
-# Required secret (vinor → Settings → Secrets → Actions):
+# Secret (vinor → Settings → Secrets → Actions), only needed when you
+# actually want a Flutter build:
 #   INVEST_REPO_DISPATCH_TOKEN — GitHub PAT with `repo` scope on nox1020/invest
 # (GITHUB_TOKEN cannot dispatch to another repository.)
+#
+# Automatic `push` runs were removed. All 8 runs since 2026-08-31 failed
+# because INVEST_REPO_DISPATCH_TOKEN was never set, and the version-stamp
+# step below pushes a commit straight to main (branch protection will
+# reject that). This workflow now runs only on workflow_dispatch, and the
+# dispatch step skips with a notice when the secret is empty.
+#
+# Re-enable a push trigger only after BOTH are true: the secret exists, and
+# the stamp no longer pushes onto protected main (open a PR, or push with a
+# bypass actor). Then restore:
+#   on:
+#     push:
+#       branches: [main, master]
+#       paths:
+#         - "invest/**"
+#     workflow_dispatch:
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - "invest/**"
   workflow_dispatch:
 
 concurrency:
@@ -55,8 +68,8 @@ jobs:
           COMMIT_MSG: ${{ github.event.head_commit.message || 'manual dispatch' }}
         run: |
           if [ -z "$DISPATCH_TOKEN" ]; then
-            echo "::error title=Missing secret::Add INVEST_REPO_DISPATCH_TOKEN to vinor repo secrets (PAT with repo scope on nox1020/invest)."
-            exit 1
+            echo "::notice title=Dispatch skipped::INVEST_REPO_DISPATCH_TOKEN is empty, so the Flutter build in nox1020/invest was not dispatched. Add a PAT with repo scope on nox1020/invest under vinor Settings → Secrets → Actions, then run this workflow_dispatch again."
+            exit 0
           fi
           SHORT="${VINOR_SHA:0:7}"
           PAYLOAD=$(jq -n \

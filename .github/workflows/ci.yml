@@ -1,0 +1,82 @@
+name: CI
+
+# Production is CPython 3.11 (cPanel venv /home/vinorir/virtualenv/vinor/3.11;
+# packages/ ships cp311 wheels). Fork pull requests use this workflow via
+# `pull_request` (not pull_request_target), so they receive no secrets.
+# Every value below is a throwaway CI dummy.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-only-not-secret
+      DATABASE_URL: sqlite:////tmp/vinor-ci/vinor.db
+      INSTANCE_PATH: /tmp/vinor-ci
+      SESSION_COOKIE_SECURE: "0"
+      FLASK_DEBUG: "0"
+      SMS_API_KEY: ci-only-not-secret
+      SMS_TEMPLATE_ID: "0"
+      SMS_LINE_NUMBER: "00000000000"
+      SMS_RETRIEVER_HASH: ci-only-not-secret
+      VAPID_PRIVATE_KEY: ci-only-not-secret
+      VAPID_PUBLIC_KEY: ci-only-not-secret
+      VAPID_SUB: mailto:ci@example.com
+      VINOR_WEBHOOK_SECRET: ci-only-not-secret
+      VINOR_CONSULTANT_API_ENABLED: "1"
+      DEEPSEEK_API_KEY: ci-only-not-secret
+      DEEPSEEK_BASE_URL: http://127.0.0.1:9
+      DEEPSEEK_MODEL: ci-dummy
+      VINOR_DISABLE_SALES_COACH_NUDGE: "1"
+      VINOR_DISABLE_REACH: "1"
+      VINOR_DISABLE_CELEBRATION_SMS: "1"
+      VINOR_DISABLE_SMS_SCHEDULER: "1"
+      VINOR_OPTIMIZATION_ENABLED: "0"
+      VINOR_OPTIMIZATION_SCHEDULER: "0"
+      VINOR_CELEBRATION_SMS_SCHEDULER: "0"
+      VINOR_SALES_COACH_SCHEDULER: "0"
+      VINOR_REACH_SCHEDULER: "0"
+      VINOR_ADMIN_SMS_SCHEDULER: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+
+      - name: Run gated tests
+        run: |
+          mkdir -p /tmp/vinor-ci
+          # Gated subset only. Append paths here once the backend fixes the
+          # known-failing suite (test_roles_phase5, test_visit_result_phase2,
+          # PlusSmsMessageTests). Do not run the full tests/ tree until then.
+          files=(
+            tests/test_consultant_main_locks.py
+            tests/test_search_page.py
+            tests/test_seo_listing_price_sitemap.py
+          )
+          python -m pytest -q "${files[@]}"
