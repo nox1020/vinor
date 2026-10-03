@@ -330,7 +330,7 @@ def _messages_context() -> dict[str, Any]:
         model_choice_options,
     )
     from app.ai.services import ai_config
-    from app.keys import get_deepseek_api_key
+    from app.utils.secrets import get_deepseek_api_key
 
     from .routes import _lands_path, counts_by_status, get_settings, load_json
 
@@ -374,6 +374,9 @@ def _messages_context() -> dict[str, Any]:
         "ai_model_options": model_choice_options(),
         "site_settings": get_settings(),
         "api_key_masked": mask_api_key(active_api_key),
+        # "file" is the existing template token for a key that is not stored in
+        # settings.json. The value now comes from DEEPSEEK_API_KEY, not a file.
+        # ai_model_form.html is left unchanged and still understands this token.
         "api_key_source": "settings"
         if stored_api_key
         else ("file" if active_api_key else "none"),

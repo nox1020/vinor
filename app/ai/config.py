@@ -1,8 +1,8 @@
 """تنظیمات DeepSeek برای Vinor AI — فقط حول هدف قفل‌شده."""
-from app.keys import (
-    DEEPSEEK_BASE_URL,
-    DEEPSEEK_MODEL,
+from app.utils.secrets import (
     get_deepseek_api_key,
+    get_deepseek_base_url,
+    get_deepseek_model,
 )
 
 from .audience import VOICE_ADMIN, VOICE_LAWYER, VOICE_PARTNER, VOICE_SPECIAL

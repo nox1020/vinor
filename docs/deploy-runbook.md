@@ -231,7 +231,7 @@ bash scripts/deploy.sh <40-hex-sha>
 
 ## کارهای بعدی
 
-- در PR کلیدها، fallback ‏`app.keys` را از `_resolve_secret` بردارید.
+- انجام شد: `_resolve_secret` فقط `VINOR_WEBHOOK_SECRET` را از env می‌خواند و دیگر از `app.keys` fallback نمی‌گیرد.
 - وقتی `workflow_run` رد می‌شود دلیل را لاگ کنید، به‌خصوص ناهمخوانی path.
 - اکشن‌های گیت‌هاب را به SHA پین کنید.
 - بعد از مرج، چک `pytest` را در branch protection شاخهٔ `main` اجباری کنید.

@@ -133,7 +133,7 @@ def _build_push_context(payload: Dict[str, Any]) -> Optional[_PushBatchContext]:
     return _PushBatchContext(
         data_str=json.dumps(payload, ensure_ascii=False, separators=(',', ':')),
         vapid_private=vapid_private,
-        vapid_claims={'sub': current_app.config.get('VAPID_CLAIMS_SUB', 'mailto:support@vinor.ir')},
+        vapid_claims={'sub': current_app.config.get('VAPID_SUB') or 'mailto:admin@vinor.ir'},
         http_session=_make_push_session(),
         timeout=_PUSH_TIMEOUT_SEC,
     )
@@ -166,7 +166,8 @@ def _send_one_fast(ctx: _PushBatchContext, subscription: Dict[str, Any]) -> Dict
         return {'ok': True}
     except WebPushException as e:
         status = getattr(getattr(e, 'response', None), 'status_code', None)
-        if status in (404, 410):
+        # 403 is the usual VAPID key-mismatch after a key rotation.
+        if status in (403, 404, 410):
             return {'ok': False, 'error': f'STATUS_{status}', 'remove': True}
         return {'ok': False, 'error': str(e), 'remove': False}
     except Exception as e:
