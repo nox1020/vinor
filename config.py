@@ -9,8 +9,8 @@ def _abs(*parts: str) -> str:
 
 class Config:
     # --- امنیت و سشن ---
-    # No fallback. create_app refuses to start when SECRET_KEY is missing.
-    SECRET_KEY = (os.environ.get("SECRET_KEY") or "").strip()
+    # Not read here. create_app loads .env first, then requires SECRET_KEY.
+    SECRET_KEY = ""
     SESSION_COOKIE_NAME = "vinor_session"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE = False         # چون روی HTTP محلی هستی؛ روی سرور HTTPS حتما True
@@ -44,10 +44,10 @@ class Config:
         MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200MB
 
     # --- VAPID (Web Push) ---
-    # Public/private keys have no fallback. VAPID_SUB is not a secret.
-    VAPID_PUBLIC_KEY = (os.environ.get("VAPID_PUBLIC_KEY") or "").strip()
-    VAPID_PRIVATE_KEY = (os.environ.get("VAPID_PRIVATE_KEY") or "").strip()
-    VAPID_SUB = (os.environ.get("VAPID_SUB") or "mailto:admin@vinor.ir").strip()
+    # Keys are applied in create_app after load_dotenv(). VAPID_SUB is not a secret.
+    VAPID_PUBLIC_KEY = ""
+    VAPID_PRIVATE_KEY = ""
+    VAPID_SUB = "mailto:admin@vinor.ir"
 
     # Firebase Cloud Messaging (APK) — مسیر JSON سرویس‌اکانت Firebase Admin
     FCM_SERVICE_ACCOUNT_FILE = os.environ.get("FCM_SERVICE_ACCOUNT_FILE", "")

@@ -204,14 +204,45 @@ def _flask_instance_path() -> str:
     )
 
 
-def create_app() -> Flask:
-    # اطمینان از MIME صحیح برای فونت‌ها (برخی سرورها پسوند woff2 را نمی‌شناسند)
-    try:
-        mimetypes.add_type('font/woff2', '.woff2')
-        mimetypes.add_type('font/woff', '.woff')
-    except Exception:
-        pass
+def _sqlite_file_path(db_url: str) -> str | None:
+    """Disk path for a file-backed sqlite URI. None for other databases and :memory:."""
+    raw = (db_url or "").strip()
+    if "sqlite" not in raw.lower():
+        return None
+    without_query = raw.split("?", 1)[0].strip()
+    if ":memory:" in without_query.lower():
+        return None
+    if "///" not in without_query:
+        return None
+    path = without_query.split("///", 1)[1]
+    if not path or path.lower() == ":memory:":
+        return None
+    return path
 
+
+def _require_sqlite_file(db_url: str) -> None:
+    """Refuse a relative sqlite path, then a missing absolute sqlite file.
+
+    Errors name DATABASE_URL only. They must not include the path or the URI.
+    In-memory URLs (sqlite:// and sqlite:///:memory:) are allowed.
+    A relative file (sqlite:///name.db) is refused even when VINOR_DB_CREATE_ALL=1.
+    """
+    path = _sqlite_file_path(db_url)
+    if path is None:
+        return
+    if not path.startswith("/"):
+        raise RuntimeError(
+            "DATABASE_URL must be an absolute sqlite path (sqlite:////abs/path)"
+        )
+    if os.path.isfile(path):
+        return
+    if (os.environ.get("VINOR_DB_CREATE_ALL") or "").strip() == "1":
+        return
+    raise RuntimeError("sqlite file missing: DATABASE_URL")
+
+
+def create_app() -> Flask:
+    # .env in the process CWD must be loaded before any required-variable read.
     try:
         from dotenv import load_dotenv  # type: ignore
         load_dotenv()
@@ -221,6 +252,13 @@ def create_app() -> Flask:
     from app.utils.secrets import get_vapid_sub, require_startup_env
 
     require_startup_env()
+
+    # اطمینان از MIME صحیح برای فونت‌ها (برخی سرورها پسوند woff2 را نمی‌شناسند)
+    try:
+        mimetypes.add_type('font/woff2', '.woff2')
+        mimetypes.add_type('font/woff', '.woff')
+    except Exception:
+        pass
 
     instance_folder = _flask_instance_path()
     os.makedirs(instance_folder, exist_ok=True)
@@ -250,6 +288,7 @@ def create_app() -> Flask:
     vapid_private = (os.environ.get("VAPID_PRIVATE_KEY") or "").strip()
     vapid_sub = get_vapid_sub()
     db_url = (os.environ.get("DATABASE_URL") or "").strip()
+    _require_sqlite_file(db_url)
 
     app.config.update(
         SESSION_COOKIE_NAME=SESSION_COOKIE_NAME,
