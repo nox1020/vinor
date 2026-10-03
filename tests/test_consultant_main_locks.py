@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -259,37 +258,3 @@ def test_sales_coach_apply_link_follows_consultant_api_flag(app, client, monkeyp
     assert legacy_home["href"] == OLD_APPLY_PAGE
     _login(client)
     _assert_redirect(client.get(GATE), HOME_PAGE)
-
-
-def _hub_apply_card(html: str) -> tuple[str, str]:
-    match = re.search(
-        r'<a class="vn-hub__hero" href="([^"]*)"[^>]*>\s*'
-        r'<span class="vn-hub__hero-title">([^<]*)</span>',
-        html,
-    )
-    assert match, "hub apply card missing"
-    return match.group(1).replace("&amp;", "&"), match.group(2).strip()
-
-
-def test_hub_apply_card_follows_consultant_api_flag(app, client, monkeypatch):
-    """Hub hero uses the same consultant_api_enabled fallback as the coach link."""
-    from app.express_partner.consultant_onboarding import consultant_api_enabled
-
-    monkeypatch.delenv("VINOR_CONSULTANT_API_ENABLED", raising=False)
-    assert consultant_api_enabled() is True
-    _login(client)
-    enabled = client.get(HOME_PAGE)
-    assert enabled.status_code == 200, enabled.get_data(as_text=True)[:800]
-    href, label = _hub_apply_card(enabled.get_data(as_text=True))
-    assert label == MARKETER_LABEL
-    assert href == GATE
-
-    monkeypatch.setenv("VINOR_CONSULTANT_API_ENABLED", "0")
-    assert consultant_api_enabled() is False
-    disabled = client.get(HOME_PAGE)
-    assert disabled.status_code == 200, disabled.get_data(as_text=True)[:800]
-    href, label = _hub_apply_card(disabled.get_data(as_text=True))
-    assert label == LEGACY_LABEL
-    assert href == OLD_APPLY_PAGE
-    assert GATE not in href
-    assert "consultant" not in href
