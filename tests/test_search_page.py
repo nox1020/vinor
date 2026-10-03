@@ -2,6 +2,9 @@
 """جستجوی فاز A — فیلتر قیمت سمت سرور و حالت خالی."""
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 import pytest
 
 _ADS = [
@@ -67,7 +70,7 @@ def search_ads(monkeypatch):
     )
 
 
-def test_price_range_keeps_only_matching_ad(client, search_ads):
+def test_price_range_keeps_only_matching_ad(client, search_ads, monkeypatch):
     resp = client.get(
         "/express/partner/search"
         "?price_min=2000000000&price_max=5000000000&sort=price_asc"
@@ -88,6 +91,25 @@ def test_price_range_keeps_only_matching_ad(client, search_ads):
     assert "آگهی‌ای با این فیلترها پیدا نشد" in empty_html
     assert "حذف فیلترها" in empty_html
     assert "آگهی سه میلیاردی" not in empty_html
+
+    # Public deploy probe: CI runs this module. Same contract as /healthz (204, empty).
+    monkeypatch.delenv("VINOR_DEPLOYED_SHA", raising=False)
+    health = client.get("/healthz", follow_redirects=False)
+    assert health.status_code == 204
+    assert health.get_data() == b""
+    ver = client.get("/version", follow_redirects=False)
+    assert ver.status_code == 200
+    assert ver.headers.get("Cache-Control") == "no-store"
+    body = ver.get_json()
+    assert isinstance(body, dict)
+    repo = Path(__file__).resolve().parents[1]
+    short = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--short=7", "HEAD"],
+        text=True,
+    ).strip()
+    assert body["sha"] == short
+    assert len(body["sha"]) == 7
+    assert str(body["version"]).isdigit()
 
 
 def test_invalid_query_is_ignored(client, search_ads):
