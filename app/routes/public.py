@@ -11,6 +11,7 @@ from flask import (
 from . import main_bp
 from ..utils.storage import data_dir, legacy_dir
 from ..utils.storage import load_express_partners_cached, load_landing_views, save_landing_views
+from ..utils.safe_redirect import safe_internal_path, safe_internal_path_or_home
 from ..utils.short_urls import apk_public_download_filename, public_apk_download_url
 from datetime import datetime
 from time import time as _now
@@ -140,9 +141,9 @@ def _guest_index_redirect_headers(resp):
 @main_bp.route("/", endpoint="index")
 def index():
     """صفحهٔ اصلی vinor.ir — مهمان: لندینگ دانلود APK؛ واردشده: داشبورد."""
-    nxt = request.args.get("next")
-    if nxt and nxt.startswith("/") and not nxt.startswith("//"):
-        return _guest_index_redirect_headers(redirect(nxt))
+    raw_next = request.args.get("next")
+    if raw_next:
+        return _guest_index_redirect_headers(redirect(safe_internal_path_or_home(raw_next)))
     if session.get("logged_in"):
         return _guest_index_redirect_headers(redirect(url_for("admin.dashboard")))
     if session.get("user_phone"):
@@ -208,9 +209,9 @@ def partners():
     )
     
     if session.get("user_phone") or session.get("user_id") or is_admin:
-        nxt = request.args.get('next')
-        if nxt and nxt.startswith('/'):
-            return redirect(nxt)
+        raw_next = request.args.get('next')
+        if raw_next:
+            return redirect(safe_internal_path_or_home(raw_next))
         if is_admin:
             return redirect(url_for("admin.dashboard"))
         if session.get("user_phone"):
@@ -680,7 +681,7 @@ def profile():
     """
     me_phone = (session.get("user_phone") or "").strip()
     if not me_phone:
-        nxt = request.args.get("next") or url_for("main.profile")
+        nxt = safe_internal_path(request.args.get("next")) or url_for("main.profile")
         return redirect(url_for("express_partner.login", next=nxt))
 
     # وضعیت همکاری
@@ -724,7 +725,7 @@ def my_offers_page():
     _commercial_buyer_ui_or_404()
     me_phone = (session.get("user_phone") or "").strip()
     if not me_phone:
-        nxt = request.args.get("next") or url_for("main.my_offers")
+        nxt = safe_internal_path(request.args.get("next")) or url_for("main.my_offers")
         return redirect(url_for("express_partner.login", next=nxt))
     from app.commercial.service import list_buyer_offers
 

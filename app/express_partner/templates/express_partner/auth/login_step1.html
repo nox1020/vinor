@@ -3,9 +3,11 @@
 {% block title %}تأیید شماره موبایل | وینور اکسپرس{% endblock %}
 {% block content %}
 
-{% set _login_next = request.args.get('next') %}
+{% set _raw_login_next = request.args.get('next') or '' %}
+{% set _login_next = safe_internal_path(_raw_login_next) %}
+{% set _reauth = (request.args.get('reauth') or '')|trim|lower in ['1', 'true', 'yes', 'on'] %}
 {% set login_close_href = url_for('express_partner.home') %}
-{% if session.get('user_phone') and _login_next and _login_next.startswith('/express/partner/') and not _login_next.startswith('/express/partner/login') %}
+{% if session.get('user_phone') and _login_next and _login_next.split('?')[0].startswith('/express/partner/') and not _login_next.split('?')[0].startswith('/express/partner/login') %}
 {% set login_close_href = _login_next %}
 {% endif %}
 
@@ -24,6 +26,9 @@
     <div class="vinor-auth-container">
       <h2 class="vinor-auth-heading">شماره موبایل خود را وارد کنید</h2>
       <p class="vinor-auth-lead">کد تأیید به این شماره پیامک می‌شود.</p>
+      {% if _reauth %}
+      <p class="vinor-auth-reauth">برای امنیت بیشتر، دوباره وارد شوید</p>
+      {% endif %}
 
       {% with messages = get_flashed_messages(with_categories=true, category_filter=auth_flash_categories) %}
       {% set stack_id = 'loginStep1Flash' %}
@@ -35,7 +40,7 @@
       <form method="POST" action="{{ url_for('express_partner.login') }}" class="vinor-auth-form" id="loginStep1Form"
             data-vinor-auth-ajax="1" data-auth-skip-submit-lock="1" novalidate>
         {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-        {% if request.args.get('next') %}<input type="hidden" name="next" value="{{ request.args.get('next') }}">{% endif %}
+        {% if _login_next %}<input type="hidden" name="next" value="{{ _login_next }}">{% endif %}
         <input type="hidden" name="accept_legal" value="1">
 
         <div class="vinor-auth-field">
@@ -52,11 +57,11 @@
 
         <p class="vinor-auth-legal">
           با ورود به وینور اکسپرس،
-          <a href="{{ url_for('express_partner.legal_terms', next=request.args.get('next')) }}"
+          <a href="{{ url_for('express_partner.legal_terms', next=_login_next) if _login_next else url_for('express_partner.legal_terms') }}"
              target="_blank" rel="noopener"
              class="{{ auth_link() }}">شرایط و قوانین استفاده</a>
           و
-          <a href="{{ url_for('main.privacy', next=request.args.get('next')) }}"
+          <a href="{{ url_for('main.privacy', next=_login_next) if _login_next else url_for('main.privacy') }}"
              target="_blank" rel="noopener"
              class="{{ auth_link() }}">سیاست‌نامه حریم خصوصی</a>
           را می‌پذیرم.

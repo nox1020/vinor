@@ -225,6 +225,31 @@ def test_partner_onboarding_locks(app, client):
     assert still_blocked["error"] == "not_approved"
     assert _body(client.get("/api/consultant/status"), 200)["status"] == "rejected"
 
+    # Open redirects: hostile next stays on this site; a relative path is kept.
+    _login(client)
+    hostile = (
+        "//evil.com",
+        "/\\evil.com",
+        "https://evil.com",
+        "/%2F%2Fevil.com",
+        "/%5Cevil.com",
+    )
+    for nxt in hostile:
+        for path in ("/partners", "/"):
+            resp = client.get(path, query_string={"next": nxt})
+            assert resp.status_code in (301, 302, 303, 307, 308), (path, nxt, resp.status_code)
+            loc = resp.headers.get("Location") or ""
+            parts = urlsplit(loc)
+            assert parts.scheme == "" and parts.netloc == "", loc
+            assert (parts.path or "/") == "/", loc
+            assert "evil.com" not in loc.lower()
+            assert "\\" not in loc
+    kept = client.get("/partners", query_string={"next": "/some/path"})
+    assert kept.status_code in (301, 302, 303, 307, 308)
+    kept_parts = urlsplit(kept.headers.get("Location") or "")
+    assert kept_parts.scheme == "" and kept_parts.netloc == ""
+    assert kept_parts.path == "/some/path"
+
 
 def test_sales_coach_apply_link_follows_consultant_api_flag(app, client, monkeypatch):
     from app.express_partner.consultant_onboarding import consultant_api_enabled

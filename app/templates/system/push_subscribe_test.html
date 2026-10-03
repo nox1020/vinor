@@ -22,9 +22,6 @@
   if (!('serviceWorker' in navigator)) { log('ServiceWorker پشتیبانی نمی‌شود.'); return; }
   if (!('PushManager' in window)) { log('PushManager پشتیبانی نمی‌شود.'); return; }
 
-  const vapidKeyB64 = "{{ config.get('VAPID_PUBLIC_KEY','') }}";
-  if (!vapidKeyB64) { log('VAPID_PUBLIC_KEY تنظیم نشده.'); return; }
-
   const b64ToUint8 = (b64) => {
     const pad = '='.repeat((4 - b64.length % 4) % 4);
     const base64 = (b64 + pad).replace(/\-/g, '+').replace(/_/g, '/');
@@ -44,6 +41,12 @@
       const perm = await Notification.requestPermission();
       log('وضعیت مجوز: ' + perm);
       if (perm !== 'granted') { log('مجوز داده نشد.'); return; }
+
+      log('خواندن کلید عمومی از سرور...');
+      const cfg = await fetch('/api/push/config', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const cfgData = await cfg.json().catch(function () { return {}; });
+      const vapidKeyB64 = (cfgData && cfgData.publicKey) ? String(cfgData.publicKey).trim() : '';
+      if (!vapidKeyB64) { log('کلید عمومی اعلان از سرور خوانده نشد.'); return; }
 
       log('در حال Subscribe...');
       const sub = await reg.pushManager.subscribe({

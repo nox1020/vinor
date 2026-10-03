@@ -139,7 +139,6 @@
       enableScroll();
     };
     const loginUrlFallback = "{{ url_for('express_partner.home', menu=1) }}";
-    const logoutApiUrl = "{{ url_for('express_partner.api_logout') }}";
     let logoutBusy = false;
     window.confirmLogout = async function() {
       if (!modal || logoutBusy) return;
@@ -158,13 +157,6 @@
             return k.indexOf('express-partner-') === 0;
           }).map(function (k) { return window.caches.delete(k); }));
         }
-      } catch (_) {}
-      try {
-        await fetch(logoutApiUrl, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        });
       } catch (_) {}
       try {
         if (form) form.submit();

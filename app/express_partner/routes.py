@@ -890,15 +890,14 @@ _APPLY_LOGIN_NEXT_ALIASES = frozenset({'apply', 'coop', 'cooperation'})
 
 
 def _resolve_login_next_url(raw: str) -> str | None:
-    """alias مثل apply → مسیر واقعی فرم همکاری؛ فقط مسیر داخلی همکار."""
-    nxt = (raw or '').strip()
-    if not nxt:
+    """alias مثل apply → مسیر واقعی فرم همکاری؛ هر مسیر دیگر از هلپر مشترک."""
+    from app.utils.safe_redirect import safe_internal_path_or_home
+
+    if not isinstance(raw, str) or raw == "":
         return None
-    if nxt.lower() in _APPLY_LOGIN_NEXT_ALIASES:
+    if not any(ch.isspace() for ch in raw) and raw.lower() in _APPLY_LOGIN_NEXT_ALIASES:
         return url_for('express_partner.apply')
-    if nxt.startswith('/') and not nxt.startswith('//'):
-        return nxt
-    return None
+    return safe_internal_path_or_home(raw)
 
 
 def _login_next_preserve():
@@ -1472,8 +1471,8 @@ def require_partner_access(json_response: bool = False, allow_pending: bool = Fa
                     return fn(*args, **kwargs)
                 if json_response:
                     return jsonify({"success": False, "error": "unauthorized"}), 401
-                nxt = request.full_path.rstrip("?") if request.full_path else request.path
-                return redirect(url_for("express_partner.login", next=nxt))
+                from app.utils.safe_redirect import safe_request_target
+                return redirect(url_for("express_partner.login", next=safe_request_target()))
 
             me_phone = (session.get("user_phone") or "").strip()
             _ensure_session_partner_on_g()
@@ -1575,13 +1574,6 @@ def inject_role_flags():
             is_express_partner = _is_partner_approved(getattr(g, 'express_partner_profile', None))
             session['VINOR_IS_EXPRESS_PARTNER'] = is_express_partner
     
-    # دریافت VAPID_PUBLIC_KEY از config
-    try:
-        from flask import current_app
-        vapid_public = current_app.config.get("VAPID_PUBLIC_KEY", "")
-    except Exception:
-        vapid_public = ""
-    
     from ..utils.apk_version import is_vinor_apk_request
 
     is_vinor_apk = False
@@ -1680,7 +1672,6 @@ def inject_role_flags():
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
         "vinor_express_auth_segment": vinor_express_auth_segment,
-        "VAPID_PUBLIC_KEY": vapid_public,
         "is_vinor_apk": is_vinor_apk,
         "android_apk_url": android_apk_url,
         "android_apk_version": android_apk_version,
@@ -7965,9 +7956,12 @@ def verify():
 
     verified_phone = _verify_otp_for_phone(code, form_phone)
     if verified_phone:
-        form_next = (request.form.get('next') or '').strip()
-        if form_next and form_next.startswith('/') and not form_next.startswith('//'):
-            session['next'] = form_next
+        form_next = request.form.get('next') or ''
+        if form_next:
+            from app.utils.safe_redirect import safe_internal_path_or_home
+
+            resolved = _resolve_login_next_url(form_next)
+            session['next'] = resolved or safe_internal_path_or_home(form_next)
         try:
             from .referrals import capture_ref_on_login
             capture_ref_on_login()
@@ -8030,11 +8024,11 @@ def legal_terms():
 
 def _redirect_login_next(fallback_endpoint: str = 'express_partner.home'):
     """هدایت امن بعد از ورود؛ فقط مسیر نسبی داخلی."""
+    from app.utils.safe_redirect import safe_internal_path_or_home
+
     nxt = session.pop('next', None)
-    if isinstance(nxt, str):
-        nxt = nxt.strip()
-        if nxt.startswith('/') and not nxt.startswith('//'):
-            return redirect(nxt)
+    if isinstance(nxt, str) and nxt != "":
+        return redirect(safe_internal_path_or_home(nxt))
     return redirect(url_for(fallback_endpoint))
 
 
@@ -8056,9 +8050,12 @@ def cooperation_terms():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile) if me_phone else False
-    next_url = (request.args.get('next') or '').strip()
+    from app.utils.safe_redirect import safe_internal_path
+
+    next_url = safe_internal_path(request.args.get('next') or '')
     back_url = url_for('express_partner.home')
-    if next_url.startswith('/express/partner'):
+    next_path = (next_url or '').split('?', 1)[0]
+    if next_url and (next_path == '/express/partner' or next_path.startswith('/express/partner/')):
         back_url = next_url
     return render_template(
         'express_partner/cooperation_terms.html',
@@ -9780,13 +9777,15 @@ def mark_in_transaction(code: str):
 
 @express_partner_bp.route('/logout', methods=['GET', 'POST'], endpoint='logout')
 def logout():
-    """خروج با POST؛ GET فقط برای جلوگیری از 405 اگر URL روی /logout مانده باشد."""
+    """POST clears the session. GET only redirects home and does not log out.
+
+    The endpoint stays CSRF-exempt (stale tokens in long-open tabs and old PWAs).
+    Destination is always ``_logout_dest_url()``; ``next`` is ignored.
+    """
     from ..utils.flash_messages import FLASH_AUTH_INFO
 
     dest = _logout_dest_url()
     if request.method == 'GET':
-        if session.get('user_phone'):
-            _clear_express_partner_auth_session()
         r = redirect(dest)
         r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
         r.headers['Pragma'] = 'no-cache'
@@ -11129,17 +11128,27 @@ def profile_avatar_upload():
     """
     آپلود و تنظیم آواتار پروفایل همکار
     """
+    from app.utils.safe_redirect import safe_internal_path
+
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
-    next_url = (request.form.get('next') or request.args.get('next') or '').strip()
+    next_url = safe_internal_path(request.form.get('next') or request.args.get('next') or '')
+    next_path = (next_url or '').split('?', 1)[0]
+    partner_next = bool(
+        next_url and (next_path == '/express/partner' or next_path.startswith('/express/partner/'))
+    )
+
+    def _avatar_next(fallback: str):
+        return redirect(next_url if partner_next else fallback)
+
     f = request.files.get('avatar')
     if not f or not f.filename:
-        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.home', menu=1))
+        return _avatar_next(url_for('express_partner.home', menu=1))
     rel_path = _save_partner_avatar_upload(me_phone, f)
     if not rel_path:
         flash('خطا در ذخیره تصویر پروفایل.', 'profile')
-        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
+        return _avatar_next(url_for('express_partner.profile_edit'))
     flash('عکس پروفایل به‌روز شد.', 'profile')
-    return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
+    return _avatar_next(url_for('express_partner.profile_edit'))
 
 
 @express_partner_bp.post('/files/<int:fid>/delete')

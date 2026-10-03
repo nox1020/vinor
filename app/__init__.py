@@ -283,6 +283,8 @@ def create_app() -> Flask:
     _setup_logging(app)
     _register_jinja_filters(app)
     _register_land_spec_globals(app)
+    from .utils.safe_redirect import safe_internal_path as _safe_internal_path
+    app.jinja_env.globals["safe_internal_path"] = _safe_internal_path
 
     if trust_proxy:
         try:
@@ -379,7 +381,6 @@ def create_app() -> Flask:
             "express_partner.home",
         )
         return {
-            "VAPID_PUBLIC_KEY": app.config.get("VAPID_PUBLIC_KEY", ""),
             "VINOR_IS_LOGGED_IN": is_logged,
             "APP_BRAND_NAME": app.config.get("APP_BRAND_NAME", "Vinor Express"),
             "csrf_token": generate_csrf,
@@ -537,6 +538,10 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"Admin blueprint registration failed: {e}", exc_info=True)
 
+    # Invalid/expired session cookies (SECRET_KEY rotation) → login, before CSRF.
+    from .utils.session_guard import INVALID_SESSION_ENV, install_session_guard, invalid_session_response
+    install_session_guard(app)
+
     # ---------- CSRF ----------
     if CSRFProtect is not None:
         csrf = CSRFProtect()
@@ -693,6 +698,10 @@ def create_app() -> Flask:
             def handle_csrf_error(e):
                 from flask import flash
                 from app.utils.flash_messages import FLASH_AUTH_WARNING
+                from app.utils.safe_redirect import safe_internal_path
+
+                if request.environ.get(INVALID_SESSION_ENV) == "1":
+                    return invalid_session_response()
 
                 form = dict(request.form)
                 for key in list(form):
@@ -768,7 +777,19 @@ def create_app() -> Flask:
                     return resp
                 flash("لطفاً صفحه را تازه کنید و دوباره تلاش کنید.", "warning")
                 try:
-                    return redirect(request.referrer or url_for("lands.add_land"))
+                    referrer_target = None
+                    referrer = request.referrer or ""
+                    if referrer.startswith("/"):
+                        referrer_target = safe_internal_path(referrer)
+                    elif referrer:
+                        from urllib.parse import urlsplit
+                        parts = urlsplit(referrer)
+                        if parts.netloc == (request.host or "") and parts.scheme in ("http", "https"):
+                            raw_ref = parts.path or "/"
+                            if parts.query:
+                                raw_ref = f"{raw_ref}?{parts.query}"
+                            referrer_target = safe_internal_path(raw_ref)
+                    return redirect(referrer_target or url_for("express_partner.home"))
                 except Exception:
                     return redirect(url_for("express_partner.home"))
 
