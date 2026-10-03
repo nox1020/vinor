@@ -6,6 +6,8 @@ Does not call external services.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 from io import BytesIO
@@ -258,3 +260,90 @@ def test_sales_coach_apply_link_follows_consultant_api_flag(app, client, monkeyp
     assert legacy_home["href"] == OLD_APPLY_PAGE
     _login(client)
     _assert_redirect(client.get(GATE), HOME_PAGE)
+
+
+def test_git_webhook_fail_closed(client, monkeypatch):
+    """Empty secret and a bad signature fail closed. A signed non-deploy run does not spawn."""
+    spawned = []
+
+    def _record(sha):
+        spawned.append(sha)
+
+    def _popen_forbidden(*_args, **_kwargs):
+        raise AssertionError("deploy.sh must not start")
+
+    monkeypatch.setattr("app.routes.webhook.spawn_deploy", _record)
+    monkeypatch.setattr("app.routes.webhook.subprocess.Popen", _popen_forbidden)
+
+    secret = "ci-only-not-secret"
+    monkeypatch.setenv("VINOR_WEBHOOK_SECRET", "")
+    empty = client.post(
+        "/git-webhook",
+        data=b"{}",
+        headers={"X-GitHub-Event": "workflow_run"},
+        content_type="application/json",
+    )
+    assert empty.status_code == 403
+    assert spawned == []
+
+    monkeypatch.setenv("VINOR_WEBHOOK_SECRET", secret)
+    missing = client.post(
+        "/git-webhook",
+        data=b"{}",
+        headers={"X-GitHub-Event": "workflow_run"},
+        content_type="application/json",
+    )
+    assert missing.status_code == 403
+    wrong = client.post(
+        "/git-webhook",
+        data=b"{}",
+        headers={
+            "X-GitHub-Event": "workflow_run",
+            "X-Hub-Signature-256": "sha256=" + ("0" * 64),
+        },
+        content_type="application/json",
+    )
+    assert wrong.status_code == 403
+    assert spawned == []
+
+    def _post(payload):
+        raw = json.dumps(payload).encode()
+        mac = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+        return client.post(
+            "/git-webhook",
+            data=raw,
+            headers={
+                "X-GitHub-Event": "workflow_run",
+                "X-Hub-Signature-256": "sha256=" + mac,
+                "X-GitHub-Delivery": "fail-closed-" + payload["workflow_run"]["conclusion"],
+            },
+            content_type="application/json",
+        )
+
+    base = {
+        "action": "completed",
+        "workflow_run": {
+            "head_branch": "main",
+            "head_sha": "a" * 40,
+            "event": "push",
+            "conclusion": "failure",
+            "path": ".github/workflows/ci.yml",
+        },
+        "repository": {"full_name": "nox1020/vinor"},
+    }
+    failed = _post(base)
+    assert failed.status_code == 200
+    assert failed.get_json()["result"] == "ignored"
+
+    other = dict(base)
+    other["workflow_run"] = dict(base["workflow_run"], conclusion="success", head_branch="feature")
+    branched = _post(other)
+    assert branched.status_code == 200
+    assert branched.get_json()["result"] == "ignored"
+    assert spawned == []
+
+    log_path = os.path.join(os.environ["INSTANCE_PATH"], "logs", "deploy.log")
+    logged = open(log_path, encoding="utf-8").read()
+    assert '"detail": "not_success"' in logged
+    assert '"detail": "wrong_branch"' in logged
+    assert secret not in logged

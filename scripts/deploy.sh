@@ -5,7 +5,7 @@
 #   scripts/deploy.sh --sha <40-hex-sha>
 #   scripts/deploy.sh --rollback
 #
-# Preflight (env, hard-coded SECRET_KEY digests, key files) finishes before
+# Preflight (required env and hard-coded SECRET_KEY digests) finishes before
 # any git fetch, reset, or checkout. Never git-clean. Never rsync --delete.
 # Logs are JSON lines in instance/logs/deploy.log and must not contain secrets.
 set -euo pipefail
@@ -33,6 +33,9 @@ BAD_SECRET_SHA256=(
   af39a485ea82ec87b6db7a83885d29bd4678642e4ad94d819356f6080d47a4dc
 )
 
+# Six names match REQUIRED_ENV_VARS in app/utils/secrets.py after PR #10.
+# VINOR_CONSULTANT_API_ENABLED must be exactly 1. DEEPSEEK_* and SMS settings
+# that have defaults are not required, so removing api_keys.py does not block.
 ALWAYS_REQUIRED=(
   SECRET_KEY
   SMS_API_KEY
@@ -204,85 +207,6 @@ sha_on_main() {
   fi
 }
 
-blob_exists() {
-  local sha="$1"
-  local path="$2"
-  git cat-file -e "${sha}:${path}" >/dev/null 2>&1
-}
-
-key_names_from_worktree() {
-  "$VENV_PY" - "$ROOT" <<'PY'
-import ast
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1])
-names = []
-seen = set()
-for rel in ("api_keys.py", "app/keys.py"):
-    path = root / rel
-    if not path.is_file():
-        continue
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except SyntaxError:
-        print("", end="")
-        raise SystemExit(2)
-    for node in tree.body:
-        found = []
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    found.append(target.id)
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            found.append(node.target.id)
-        elif isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                if alias.name and alias.name != "*":
-                    found.append(alias.asname or alias.name)
-        for name in found:
-            if not name.isupper() or name.startswith("_"):
-                continue
-            if name not in seen:
-                seen.add(name)
-                names.append(name)
-sys.stdout.write("\n".join(names))
-PY
-}
-
-require_keys_if_target_drops_files() {
-  local sha="$1"
-  local missing=0
-  local names="" name=""
-  if ! blob_exists "$sha" "app/keys.py"; then
-    missing=1
-  fi
-  if ! blob_exists "$sha" "api_keys.py"; then
-    missing=1
-  fi
-  if [[ "$missing" -eq 0 ]]; then
-    return 0
-  fi
-  log_json keys_files_absent "$sha"
-  if [[ ! -f "$ROOT/api_keys.py" && ! -f "$ROOT/app/keys.py" ]]; then
-    # Already removed on the server; names were required on that earlier deploy.
-    log_json keys_files_already_gone worktree
-    return 0
-  fi
-  if ! names="$(key_names_from_worktree)"; then
-    log_json preflight_missing key_names
-    exit 1
-  fi
-  if [[ -z "$names" ]]; then
-    log_json preflight_missing key_names
-    exit 1
-  fi
-  while IFS= read -r name; do
-    [[ -z "$name" ]] && continue
-    require_nonempty "$name"
-  done <<<"$names"
-}
-
 snapshot_protected() {
   local rel path
   EXISTED=()
@@ -369,7 +293,7 @@ rollback_to() {
 main() {
   parse_args "$@"
   # Env checks first. Nothing below this line may fetch or touch the worktree
-  # until preflight, the rollback-sha read, and (after fetch) the keys check pass.
+  # until preflight and the rollback-sha read have passed.
   preflight
   mkdir -p "$DEPLOY_DIR"
   resolve_target
@@ -389,7 +313,6 @@ main() {
       exit 2
     fi
   fi
-  require_keys_if_target_drops_files "$TARGET"
   SAVED_PREV="$(git rev-parse HEAD)"
   if [[ "$MODE" != "rollback" ]]; then
     printf '%s\n' "$SAVED_PREV" >"$PREV_FILE"
