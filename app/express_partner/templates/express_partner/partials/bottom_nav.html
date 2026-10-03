@@ -39,7 +39,7 @@
     justify-content: flex-end;
     gap: 0.15rem;
     text-decoration: none;
-    color: #a3a3a3;
+    color: #8E8E93;
     background: transparent;
     border: 0;
     padding: 0.1rem 0.05rem 0;
@@ -70,7 +70,7 @@
     white-space: nowrap;
   }
   .vn-divar-tab.is-active {
-    color: #4ade80;
+    color: #FFFFFF;
   }
   .vn-divar-tab.is-active .vn-divar-tab__label {
     font-weight: 700;
@@ -184,8 +184,9 @@
   {% set _p = request.path or '' %}
   {% set _tab_ads = (_p.endswith('/home') or _p.rstrip('/').endswith('/partner') or _p.endswith('/express/partner')) and not (request.args.get('thread') or request.args.get('ai')) %}
   {% set _tab_search = '/search' in _p %}
-  {% set _tab_post = '/listings/new' in _p or '/my-property' in _p or request.args.get('register') == '1' %}
-  {% set _tab_me = '/profile' in _p and '/profile/edit' not in _p %}
+  {% set _register = request.args.get('register') == '1' %}
+  {% set _tab_post = '/listings/new' in _p or _register %}
+  {% set _tab_me = (('/profile' in _p and '/profile/edit' not in _p) or ('/settings' in _p) or ('/favorites' in _p) or ('/notifications' in _p) or ('/my-property' in _p and not _register)) %}
   {% set _post_href = url_for('express_partner.my_property', register=1) %}
   <div class="vn-divar-tabbar" role="navigation">
     <a class="vn-divar-tab{% if _tab_ads and not _tab_post %} is-active{% endif %}" href="{{ url_for('express_partner.home') }}" data-divar-tab="ads" aria-label="آگهی‌ها">

@@ -23,6 +23,14 @@ def _avatar_initials_filter(value: str | None) -> str:
     return partner_avatar_initials(value)
 
 
+@express_partner_bp.app_template_filter("quote_next")
+def _quote_next_filter(value: str | None) -> str:
+    """Encode an internal next path so / becomes %2F."""
+    from urllib.parse import quote
+
+    return quote(str(value or ""), safe="")
+
+
 @express_partner_bp.app_template_filter("image_thumb_url")
 def _image_thumb_url_filter(value: str | None) -> str:
     from ..utils.images import gallery_display_url
@@ -4476,8 +4484,19 @@ def my_property_page():
         return redirect(url_for('express_partner.my_property'))
 
     payload = page_payload(me_phone)
-    if request.args.get('register') == '1' or not payload.get('has_property'):
+    if request.args.get('register') == '1':
         return _render_owner_home_form(me_phone, is_special=is_special)
+    if not payload.get('has_property'):
+        return render_template(
+            'express_partner/my_property.html',
+            has_property=False,
+            show_register_form=False,
+            is_special=is_special,
+            property={},
+            items=[],
+            listings=[],
+            hide_header=True,
+        )
     return render_template(
         'express_partner/my_property.html',
         property=payload.get('property') or {},
@@ -4502,7 +4521,7 @@ def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
         form_values={'vinor_contact': phone} if phone else {},
         listing_code='',
         listing_form_action=url_for('express_partner.my_property'),
-        listing_back_url=url_for('express_partner.home'),
+        listing_back_url=url_for('express_partner.profile'),
         listing_upload_image_url=url_for('express_partner.my_property_upload_image'),
         listing_upload_video_url=url_for('express_partner.my_property_upload_video'),
         listing_upload_document_url=url_for('express_partner.my_property_upload_document'),
@@ -4520,6 +4539,7 @@ def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
         hide_header=True,
         listing_submit_label='ثبت ملک من',
         has_property=False,
+        show_register_form=True,
         property={},
         is_special=is_special,
     )
@@ -9781,9 +9801,8 @@ def logout():
 
     The endpoint stays CSRF-exempt (stale tokens in long-open tabs and old PWAs).
     Destination is always ``_logout_dest_url()``; ``next`` is ignored.
+    No flash and no toast — the confirm sheet is the only logout UI.
     """
-    from ..utils.flash_messages import FLASH_AUTH_INFO
-
     dest = _logout_dest_url()
     if request.method == 'GET':
         r = redirect(dest)
@@ -9792,7 +9811,6 @@ def logout():
         return r
 
     _clear_express_partner_auth_session()
-    flash('از حساب خارج شدید.', FLASH_AUTH_INFO)
     r = redirect(dest)
     r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     r.headers['Pragma'] = 'no-cache'
@@ -9903,20 +9921,52 @@ def otp_resend():
         return jsonify({'ok': False, 'error': 'خطا در ارسال مجدد کد.'}), 502
 
 
+_PHONE_DIGIT_TRANSLATION = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+    "01234567890123456789",
+)
+
+
+def mask_canonical_phone(phone: str) -> str:
+    """۰۹۱۲•••۴۵۶۷ فقط برای شمارهٔ canonical یازده‌رقمی ۰۹؛ وگرنه «•••».
+
+    نرمال‌سازی: ارقام فارسی/عربی به لاتین، حذف فاصله، +98 و 0098 به 0.
+    خروجی لاتین است تا قالب با فیلتر fa_digits رقم‌ها را فارسی کند.
+    """
+    raw = str(phone or "").translate(_PHONE_DIGIT_TRANSLATION)
+    raw = "".join(ch for ch in raw if not ch.isspace())
+    if raw.startswith("+"):
+        raw = raw[1:]
+    if raw.startswith("0098"):
+        raw = "0" + raw[4:]
+    elif raw.startswith("98"):
+        raw = "0" + raw[2:]
+    if len(raw) == 11 and raw.isdigit() and raw.startswith("09"):
+        return raw[:4] + "•••" + raw[-4:]
+    return "•••"
+
+
+def _private_nostore(resp):
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
+
+
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
-    """وینور من — همه گزینه‌های منوی ساید، بدون کشوی کناری."""
+    """وینور من — مهمان یا واردشده. شمارهٔ خام هرگز در بدنهٔ پاسخ نیست."""
+    from flask import make_response
+
     me_phone = (session.get('user_phone') or '').strip()
+    logged_in = bool(me_phone)
     profile = getattr(g, 'express_partner_profile', None) or {}
     try:
-        is_approved = _is_partner_approved(profile)
+        is_approved = _is_partner_approved(profile) if logged_in else False
     except Exception:
         is_approved = False
-    is_special = _is_partner_special(profile) if is_approved else False
-    me_name = (profile.get('name') or '').strip() or 'همکار وینور'
-    has_pending_app = _partner_has_pending_app(me_phone) if me_phone and not is_approved else False
-    withdrawable = _partner_withdrawable_balance(me_phone) if me_phone else 0
+    is_special = _is_partner_special(profile) if logged_in and is_approved else False
+    me_name = ((profile.get('name') or '').strip() or 'همکار وینور') if logged_in else ''
+    has_pending_app = _partner_has_pending_app(me_phone) if logged_in and not is_approved else False
     lawyer_feature_on = False
     try:
         from app.lawyer.config import lawyer_enabled as _lawyer_enabled
@@ -9924,21 +9974,51 @@ def profile_page():
         lawyer_feature_on = bool(_lawyer_enabled())
     except Exception:
         lawyer_feature_on = False
-    return render_template(
-        'express_partner/profile.html',
-        profile=profile,
-        me_phone=me_phone,
-        me_name=me_name,
-        partner_name=me_name,
-        is_approved=is_approved,
-        is_special=is_special,
-        has_pending_app=has_pending_app,
-        withdrawable_balance=withdrawable,
-        lawyer_feature_on=lawyer_feature_on,
-        hide_header=True,
-        bottom_nav_active='profile',
-        seo_title='وینور من | وینور اکسپرس',
-    )
+    avatar_url = ''
+    if logged_in:
+        avatar = (profile.get('avatar') or '').strip()
+        if avatar:
+            try:
+                from ..utils.images import display_avatar_url
+
+                avatar_url = display_avatar_url(avatar, profile.get('avatar_updated_at')) or ''
+            except Exception:
+                avatar_url = ''
+    ctx = {
+        'me_logged_in': logged_in,
+        'me_name': me_name,
+        'me_initial': (me_name[:1] if me_name else ''),
+        'me_phone_masked': mask_canonical_phone(me_phone) if logged_in else '',
+        'avatar_url': avatar_url,
+        'is_approved': is_approved,
+        'is_special': is_special,
+        'has_pending_app': has_pending_app,
+        'lawyer_feature_on': lawyer_feature_on,
+        'hide_header': True,
+        'bottom_nav_active': 'profile',
+        'seo_title': 'وینور من | وینور اکسپرس',
+    }
+    if logged_in:
+        withdrawable = 0
+        if is_approved:
+            try:
+                withdrawable = _partner_withdrawable_balance(me_phone)
+            except Exception:
+                withdrawable = 0
+        ctx['withdrawable_balance'] = withdrawable
+        try:
+            from app.crm.config import crm_ui_enabled as _crm_ui_enabled
+
+            ctx['crm_ui_enabled'] = bool(_crm_ui_enabled() and is_approved)
+        except Exception:
+            ctx['crm_ui_enabled'] = False
+        try:
+            from app.services.notifications import unread_count as _unread_count
+
+            ctx['unread_count'] = int(_unread_count(me_phone) or 0)
+        except Exception:
+            ctx['unread_count'] = 0
+    return _private_nostore(make_response(render_template('express_partner/profile.html', **ctx)))
 
 
 @express_partner_bp.route('/listings', methods=['GET'], endpoint='special_listings')
@@ -10508,7 +10588,7 @@ def profile_data():
         lawyer_feature_on = bool(_lawyer_enabled())
     except Exception:
         lawyer_feature_on = False
-    return jsonify({
+    return _private_nostore(jsonify({
         'success': True,
         'me_phone': me_phone,
         'me_name': me_name or 'همکار وینور',
@@ -10524,7 +10604,7 @@ def profile_data():
         'csrf_token': csrf_token,
         'plus_system_enabled': plus_system_on,
         'lawyer_feature_on': lawyer_feature_on,
-    })
+    }))
 
 
 def _normalize_profile_birth_date(birth_date: str, prev_birth: str = '') -> str:

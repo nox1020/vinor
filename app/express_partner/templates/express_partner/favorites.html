@@ -6,10 +6,10 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='profileFavoritesHeader') }}
-  {% call ep_header_row('نشان‌شده‌ها', url_for('express_partner.home')) %}{% endcall %}
+  {% call ep_header_row('نشان‌شده‌ها', url_for('express_partner.profile')) %}{% endcall %}
   {{ ep_header_end() }}
 
-  <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16" data-vinor-favorites-page>
+  <div class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] lg:pb-16" data-vinor-favorites-page style="background:#000000;color:#ECECEC">
     <div class="mx-auto max-w-lg">
 
       <div id="favoritesStatusBar" class="hidden flex items-center justify-between gap-3 border-b border-white/10 px-4 py-2.5 text-xs sm:px-6">
@@ -46,20 +46,29 @@
       <div id="favoritesCardsRoot" class="hidden w-full divide-y divide-white/10"></div>
 
       <template id="vinorFavoritesEmptyTpl">
-        <div class="px-4 py-16 text-center sm:px-6">
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-zinc-600">
-            <i class="far fa-bookmark text-2xl" aria-hidden="true"></i>
+        <div class="vn-empty">
+          <div class="vn-empty__icon" aria-hidden="true">
+            <i class="far fa-bookmark"></i>
           </div>
-          <p class="text-sm font-medium text-zinc-400">نشان‌شده‌ای ثبت نشده</p>
-          <p class="mt-1 text-xs leading-relaxed text-zinc-600">در صفحهٔ جزئیات هر آگهی روی آیکن نشان بزنید تا اینجا ذخیره شود.</p>
-          <a href="{{ url_for('express_partner.home') }}"
-             data-vinor-express-nav
-             class="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 transition hover:text-emerald-300">
-            <span>رفتن به داشبورد</span>
-            <i class="fas fa-chevron-left text-[10px] opacity-80" aria-hidden="true"></i>
-          </a>
+          <p class="vn-empty__text">هنوز آگهی‌ای نشان نکرده‌اید</p>
+          <a class="vn-empty__cta" href="{{ url_for('express_partner.search') }}" data-vinor-express-nav>جستجوی آگهی‌ها</a>
         </div>
       </template>
+      <style>
+        .vn-empty { padding: 48px 16px; text-align: center; }
+        .vn-empty__icon {
+          width: 48px; height: 48px; margin: 0 auto 12px;
+          display: flex; align-items: center; justify-content: center;
+          color: #8E8E93; font-size: 28px;
+        }
+        .vn-empty__text { margin: 0; font-size: 15px; color: #ECECEC; }
+        .vn-empty__cta {
+          display: flex; align-items: center; justify-content: center;
+          height: 48px; margin: 16px auto 0; max-width: 28rem;
+          border-radius: 12px; background: #E22828; color: #FFFFFF;
+          text-decoration: none; font-size: 15px; font-weight: 700;
+        }
+      </style>
     </div>
 
     {% set bottom_nav_active = 'profile' %}
