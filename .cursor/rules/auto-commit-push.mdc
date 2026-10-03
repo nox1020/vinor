@@ -1,30 +1,36 @@
 ---
-description: بعد از هر تغییر کد، commit/push و رفع شکست GitHub Actions
+description: کار روی برنچ و PR به main؛ هرگز پوش مستقیم به main
 alwaysApply: true
 ---
 
-# Commit، Push و رفع CI خودکار
+# برنچ، PR، و CI — بدون پوش مستقیم به main
 
-بعد از هر تغییر کد در این ریپو، **بدون پرسیدن** commit کن، به `origin` پوش کن، و اگر ورک‌فلو شکست، لاگ را بخوان و درست کن.
+به `main` یا `master` مستقیم پوش نکن. کار را روی برنچ انجام بده، PR به `main` باز کن، و فقط با CI سبز و تأیید ناظر مرج کن.
 
-## Commit و Push
+## برنچ و PR
 
-1. وقتی کار روی فایل‌ها تمام شد (قبل از پاسخ نهایی)، `git add` / `git commit` / `git push origin HEAD` را اجرا کن.
-2. تأیید نپرس — خودت انجام بده.
-3. پیام commit کوتاه و متمرکز بر «چرا» باشد.
-4. Force-push به `main`/`master` نکن.
-5. سکرت‌ها را commit نکن: `.env`، کلید، keystore، `credentials.json`، `google-services.json`، `key.properties`.
-6. اگر هوک `stop` هم push کرد، همان commit را دوباره نساز.
+1. اگر روی `main`/`master` هستی، قبل از هر ویرایش `git checkout -b` بزن. کامیت را روی همان برنچ بگذار.
+2. وقتی کار روی فایل‌ها تمام شد، `git add` / `git commit` / `git push -u origin HEAD` را بدون پرسیدن اجرا کن. مقصد پوش همین برنچ است، نه `main`.
+3. PR را به `main` باز کن (یا به‌روز کن). خودت مرج نکن.
+4. پیام commit کوتاه و متمرکز بر «چرا» باشد.
+5. Force-push به `main`/`master` نکن. تاریخچهٔ `main` را بازنویسی نکن.
+6. سکرت‌ها را commit نکن: `.env`، کلید، keystore، `credentials.json`، `google-services.json`، `key.properties`.
+7. اگر هوک `stop` هم push کرد، همان commit را دوباره نساز.
+
+مرج فقط وقتی مجاز است که هر دو برقرار باشد:
+
+- چک `pytest` ورک‌فلو CI روی آن PR سبز است.
+- ناظر (انسان) همان PR را تأیید کرده است.
 
 اگر push به‌خاطر auth شکست، در پاسخ نهایی بگو و همان‌جا متوقف شو.
 
-## GitHub Actions (مثل اپ اینوست)
+## GitHub Actions
 
 بعد از هر push که ممکن است ورک‌فلو را راه بیندازد:
 
 1. اجرا کن: `python .cursor/hooks/ci_watch.py --wait` (اگر `gh` بود: `gh run list` / `gh run view --log-failed`).
 2. اگر `CI_STATE` برابر `failure` بود، فایل لاگ `FAILED_JOB` را بخوان، علت ریشه را در کد یا ورک‌فلو درست کن.
-3. ورک‌فلو را فقط برای مخفی‌کردن شکست ضعیف/skip نکن.
-4. فیکس را commit و push کن — منتظر درخواست کاربر نمان.
+3. ورک‌فلو را فقط برای مخفی‌کردن شکست ضعیف/skip نکن. `continue-on-error` و `|| true` روی تست ممنوع است.
+4. فیکس را روی همان برنچ commit و push کن — منتظر درخواست کاربر نمان و به `main` پوش نکن.
 5. تا وقتی run آخر روی همین branch سبز شود تکرار کن. اگر راز/auth کم است یا مشکل خارجی غیرقابل‌رفع است، گزارش بده و بایست.
 6. اگر `CI_STATE` برابر `none` بود، برای این commit ورک‌فلو اجرا نشده (مثلاً فقط فایل‌های `.cursor`) — تمام.

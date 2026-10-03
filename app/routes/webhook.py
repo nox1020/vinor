@@ -1,245 +1,288 @@
 # -*- coding: utf-8 -*-
-import os, hmac, hashlib, shlex, subprocess, time, json, platform
-from typing import List, Dict, Any, Optional
-from flask import Blueprint, request, jsonify
+"""GitHub webhook: deploy only after CI succeeds on main.
 
-# ───────── وابسته به پلتفرم: fcntl/msvcrt ─────────
+Signature is checked before any event is acted on. The HTTP response never
+includes command output, filesystem paths, or secrets. Git runs in
+scripts/deploy.sh, detached, not in this request.
+"""
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import os
+import platform
+import subprocess
+import time
+from typing import Any, Optional
+
+from flask import Blueprint, jsonify, request
+
 IS_WINDOWS = platform.system() == "Windows"
 try:
     if not IS_WINDOWS:
-        import fcntl  # فقط لینوکس/یونیکس
+        import fcntl
+    else:
+        fcntl = None  # type: ignore
 except Exception:
-    fcntl = None  # احتیاط
+    fcntl = None  # type: ignore
 
-try:
-    if IS_WINDOWS:
-        import msvcrt  # فقط ویندوز
-except Exception:
-    msvcrt = None  # احتیاط
-
-# ───────── کانفیگ از Env (ایمن‌تر) ─────────
-# Derive default from this file: app/routes/webhook.py → project root
 _DEFAULT_PROJECT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-# Prefer explicit env; else on-disk path (production: /home/vinorir/public_html/vinor)
 PROJECT_PATH = os.getenv("VINOR_PROJECT_PATH") or (
     _DEFAULT_PROJECT
     if os.path.isdir(os.path.join(_DEFAULT_PROJECT, "app"))
     else "/home/vinorir/public_html/vinor"
 )
-ALLOWED_BRANCHES = set(os.getenv("VINOR_ALLOWED_BRANCHES", "main").split(","))
-try:
-    from app.keys import VINOR_WEBHOOK_SECRET as SECRET
-except Exception:
-    SECRET = os.getenv("VINOR_WEBHOOK_SECRET", "")
-ALLOWED_REPO = os.getenv(
-    "VINOR_ALLOWED_REPO",
-    "nox1020/vinor,asman-trader/garmabsard-flask",
-)  # owner/repo (comma-separated)
-DEPLOY_LOG = os.getenv("VINOR_DEPLOY_LOG", f"{PROJECT_PATH}/deploy.log")
-LOCK_FILE = os.getenv("VINOR_DEPLOY_LOCK", "/tmp/vinor_deploy.lock" if not IS_WINDOWS else os.path.join(os.getenv("TEMP", "."), "vinor_deploy.lock"))
-TIMEOUT = int(os.getenv("VINOR_CMD_TIMEOUT", "300"))
-
-# دستورات پسادیپلوی (Passenger/venv) — روی ویندوز برای توسعه محلی غیرفعال می‌کنیم
-_DEFAULT_VENV = os.path.join(os.path.dirname(PROJECT_PATH.rstrip("/")), "virtualenv", "vinor", "3.11", "bin", "activate")
-# common cPanel layout: /home/USER/virtualenv/APPNAME/3.11/bin/activate
-_CPANEL_VENV = "/home/vinorir/virtualenv/vinor/3.11/bin/activate"
-VENV_ACTIVATE = os.getenv(
-    "VINOR_VENV_ACTIVATE",
-    _CPANEL_VENV if os.path.isfile(_CPANEL_VENV) else (
-        _DEFAULT_VENV if os.path.isfile(_DEFAULT_VENV) else _CPANEL_VENV
-    ),
-)
-DEFAULT_POST_DEPLOY_COMMANDS: List[str] = [
-    # نصب وابستگی‌ها اگر وجود داشت
-    f"bash -lc 'source {shlex.quote(VENV_ACTIVATE)} && pip install --upgrade pip && "
-    f"[ -f requirements.txt ] && pip install -r requirements.txt || true'",
-    # Passenger restart
-    "bash -lc 'mkdir -p tmp && touch tmp/restart.txt'",
-]
-POST_DEPLOY_COMMANDS: List[str] = [] if IS_WINDOWS else DEFAULT_POST_DEPLOY_COMMANDS
+_SHA_LEN = 40
 
 webhook_bp = Blueprint("webhook", __name__)
 
-# ───────── Utilities ─────────
-def log_line(msg: str, extra: Optional[Dict[str, Any]] = None) -> None:
+
+def _instance_dir() -> str:
+    configured = (os.environ.get("INSTANCE_PATH") or "").strip()
+    if configured:
+        return configured
+    return os.path.join(PROJECT_PATH, "instance")
+
+
+def _deploy_state_dir() -> str:
+    return os.path.join(_instance_dir(), "deploy")
+
+
+def _log(event: str, detail: str = "") -> None:
+    """JSON line for operators. Never pass secret values as detail."""
     try:
-        rec = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "msg": msg}
-        if extra: rec.update(extra)
-        os.makedirs(os.path.dirname(DEPLOY_LOG), exist_ok=True)
-        with open(DEPLOY_LOG, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        path = os.path.join(_instance_dir(), "logs", "deploy.log")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        rec = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "event": event,
+            "detail": detail,
+        }
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
         pass
 
-def run(cmd: str, cwd: Optional[str] = None, timeout: int = TIMEOUT) -> Dict[str, Any]:
-    """
-    اجرای امن دستور. توجه: روی ویندوز، دستورات bash کار نمی‌کنند؛
-    ما از قبل POST_DEPLOY_COMMANDS را روی ویندوز خالی کرده‌ایم.
-    """
+
+def _resolve_secret() -> str:
+    """Env wins. app.keys is only a fallback and an empty value is never valid."""
+    env_secret = (os.environ.get("VINOR_WEBHOOK_SECRET") or "").strip()
+    if env_secret:
+        return env_secret
     try:
-        # shlex.split برای سازگاری لینوکس/یونیکس
-        # اگر cmd شامل space در مسیر باشد، shlex.split درست مدیریت می‌کند.
-        proc = subprocess.run(
-            shlex.split(cmd),
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
-        out = {
-            "cmd": cmd,
-            "rc": proc.returncode,
-            "stdout": (proc.stdout or "").strip(),
-            "stderr": (proc.stderr or "").strip()
-        }
-        log_line("run", out)
-        return out
-    except Exception as e:
-        out = {"cmd": cmd, "rc": -1, "stdout": "", "stderr": f"{type(e).__name__}: {e}"}
-        log_line("run_exception", out)
-        return out
+        from app.keys import VINOR_WEBHOOK_SECRET as fallback
+    except Exception:
+        return ""
+    return (str(fallback) if fallback else "").strip()
 
-def verify_signature(secret: str, raw_body: bytes) -> bool:
-    sig = request.headers.get("X-Hub-Signature-256", "")
-    if not secret:  # برای تست/استیجینگ
-        return True
-    if not sig.startswith("sha256="):
+
+def _signature_ok(secret: str, raw_body: bytes) -> bool:
+    if not secret:
         return False
-    sent = sig.split("=", 1)[1].strip()
+    header = request.headers.get("X-Hub-Signature-256", "") or ""
+    if not header.startswith("sha256="):
+        return False
+    sent = header.split("=", 1)[1].strip().lower()
     mac = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(mac, sent)
+    try:
+        return hmac.compare_digest(mac, sent)
+    except Exception:
+        return False
 
-def extract_branch(ref: str) -> str:
-    return ref.split("/", 2)[-1] if ref and ref.startswith("refs/heads/") else ""
 
-# ───────── Cross-platform file lock ─────────
-class FileLock:
-    """
-    لاک فایل کراس‌پلتفرم:
-      - روی لینوکس/یونیکس از fcntl.flock با LOCK_EX | LOCK_NB
-      - روی ویندوز از msvcrt.locking با LK_NBLCK روی 1 بایت
-    """
-    def __init__(self, path: str):
-        self.path = path
-        self.fh = None
+def _allowed_repo() -> str:
+    return (os.environ.get("VINOR_DEPLOY_REPO") or "nox1020/vinor").strip()
 
-    def acquire(self) -> None:
-        os.makedirs(os.path.dirname(self.path), exist_ok=True) if os.path.dirname(self.path) else None
-        self.fh = open(self.path, "a+b")
+
+def _workflow_path_expected() -> str:
+    raw = (os.environ.get("VINOR_CI_WORKFLOW_PATH") or ".github/workflows/ci.yml").strip()
+    return raw.lstrip("./")
+
+
+def _payload_workflow_path(payload: dict) -> str:
+    for key in ("workflow_run", "workflow"):
+        block = payload.get(key) or {}
+        if isinstance(block, dict):
+            path = str(block.get("path") or "").strip().lstrip("./")
+            if path:
+                return path
+    return ""
+
+
+def _repo_full_name(payload: dict) -> str:
+    repo = payload.get("repository") or {}
+    if isinstance(repo, dict):
+        return str(repo.get("full_name") or "").strip()
+    return ""
+
+
+def _normalize_sha(value: Any) -> str:
+    sha = str(value or "").strip().lower()
+    if len(sha) != _SHA_LEN:
+        return ""
+    if any(ch not in "0123456789abcdef" for ch in sha):
+        return ""
+    return sha
+
+
+def _eligible_sha(payload: dict) -> str:
+    """SHA to deploy, or empty when this delivery must be ignored."""
+    if str(payload.get("action") or "") != "completed":
+        return ""
+    run = payload.get("workflow_run") or {}
+    if not isinstance(run, dict):
+        return ""
+    if str(run.get("conclusion") or "") != "success":
+        return ""
+    if str(run.get("event") or "") != "push":
+        return ""
+    if str(run.get("head_branch") or "") != "main":
+        return ""
+    if _repo_full_name(payload) != _allowed_repo():
+        return ""
+    if _payload_workflow_path(payload) != _workflow_path_expected():
+        return ""
+    return _normalize_sha(run.get("head_sha"))
+
+
+def _read_lines(path: str) -> set[str]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return {line.strip().lower() for line in handle if line.strip()}
+    except Exception:
+        return set()
+
+
+def _append_line(path: str, value: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(value.strip().lower() + "\n")
+
+
+class _StateLock:
+    def __init__(self, directory: str):
+        self._fh = None
+        self._directory = directory
+
+    def __enter__(self) -> "_StateLock":
         try:
-            if not IS_WINDOWS and fcntl:
-                fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            elif IS_WINDOWS and msvcrt:
-                # از ابتدای فایل یک بایت را قفل می‌کنیم
-                self.fh.seek(0)
-                msvcrt.locking(self.fh.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                # اگر هیچ‌کدام در دسترس نبود، با ایجاد فایل به‌صورت best-effort ادامه می‌دهیم
-                pass
-            # نوشتن مهر زمان برای مشاهده دیباگ
-            self.fh.seek(0)
-            self.fh.write(str(time.time()).encode("utf-8"))
-            self.fh.flush()
-            os.fsync(self.fh.fileno())
-        except (BlockingIOError, OSError) as e:
-            # آزادسازی هندل در صورت عدم موفقیت
-            try:
-                self.fh.close()
-            except Exception:
-                pass
-            self.fh = None
-            raise BlockingIOError(str(e))
+            os.makedirs(self._directory, exist_ok=True)
+            self._fh = open(os.path.join(self._directory, "state.lock"), "a+b")
+            if fcntl is not None:
+                fcntl.flock(self._fh, fcntl.LOCK_EX)
+        except Exception:
+            self._fh = None
+        return self
 
-    def release(self) -> None:
-        if not self.fh:
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._fh is None:
             return
         try:
-            if not IS_WINDOWS and fcntl:
-                fcntl.flock(self.fh, fcntl.LOCK_UN)
-            elif IS_WINDOWS and msvcrt:
-                self.fh.seek(0)
-                msvcrt.locking(self.fh.fileno(), msvcrt.LK_UNLCK, 1)
-        finally:
-            try:
-                self.fh.close()
-            except Exception:
-                pass
-            self.fh = None
-
-def acquire_lock() -> FileLock:
-    lock = FileLock(LOCK_FILE)
-    lock.acquire()
-    return lock
-
-# ───────── Route ─────────
-@webhook_bp.route("/git-webhook", methods=["POST"])
-def git_webhook():
-    event = request.headers.get("X-GitHub-Event", "")
-    delivery_id = request.headers.get("X-GitHub-Delivery", "")
-    if event == "ping":
-        return jsonify(ok=True, pong=True), 200
-    if event != "push":
-        return jsonify(ok=False, error="Unsupported event", event=event), 400
-
-    raw = request.get_data()
-    if not verify_signature(SECRET, raw):
-        log_line("invalid_signature", {"delivery": delivery_id})
-        return jsonify(ok=False, error="Invalid signature"), 403
-
-    payload = request.get_json(silent=True) or {}
-    repo_full = (payload.get("repository") or {}).get("full_name", "")
-    allowed_repos = {r.strip() for r in str(ALLOWED_REPO or "").split(",") if r.strip()}
-    if allowed_repos and repo_full not in allowed_repos:
-        log_line("repo_not_allowed", {"got": repo_full, "want": sorted(allowed_repos)})
-        return jsonify(ok=True, skipped=True, reason="Repo not allowed", repo=repo_full), 200
-
-    ref = payload.get("ref", "")
-    branch = extract_branch(ref)
-    if not branch:
-        return jsonify(ok=False, error="Invalid ref", ref=ref), 400
-    if branch not in ALLOWED_BRANCHES:
-        return jsonify(ok=True, skipped=True, reason="Branch not allowed", ref=ref), 200
-
-    if not PROJECT_PATH or not os.path.isdir(PROJECT_PATH):
-        return jsonify(ok=False, error="Project path not found", path=PROJECT_PATH), 500
-
-    # جلوگیری از دیپلوی هم‌زمان
-    try:
-        lock_handle = acquire_lock()
-    except BlockingIOError:
-        log_line("deploy_locked", {"delivery": delivery_id})
-        return jsonify(ok=True, skipped=True, reason="Another deploy in progress"), 200
-
-    steps: List[Dict[str, Any]] = []
-    try:
-        # اطمینان از گیت
-        steps.append(run("git rev-parse --is-inside-work-tree", cwd=PROJECT_PATH))
-        if steps[-1]["rc"] != 0 or steps[-1]["stdout"] != "true":
-            return jsonify(ok=False, step="check-git", results=steps), 500
-
-        # همگام‌سازی با ریموت
-        git_cmds = [
-            "git config --global --add safe.directory " + PROJECT_PATH,
-            "git fetch --all --prune",
-            f"git reset --hard origin/{branch}",
-            "git clean -fd -e instance -e instance/*",
-        ]
-        for cmd in git_cmds:
-            steps.append(run(cmd, cwd=PROJECT_PATH))
-            if steps[-1]["rc"] != 0:
-                return jsonify(ok=False, step="git", results=steps), 500
-
-        # دستورات پسادیپلوی (فقط لینوکس/سرور)
-        for cmd in POST_DEPLOY_COMMANDS:
-            steps.append(run(cmd, cwd=PROJECT_PATH))
-            if steps[-1]["rc"] != 0:
-                return jsonify(ok=False, step="post_deploy", results=steps), 500
-
-        log_line("deploy_ok", {"branch": branch, "delivery": delivery_id})
-        return jsonify(ok=True, branch=branch, results=steps), 200
-
-    finally:
-        try:
-            lock_handle.release()
+            if fcntl is not None:
+                fcntl.flock(self._fh, fcntl.LOCK_UN)
         except Exception:
             pass
+        try:
+            self._fh.close()
+        except Exception:
+            pass
+        self._fh = None
+
+
+def _already_handled(sha: str, delivery: str) -> bool:
+    base = _deploy_state_dir()
+    current = _read_lines(os.path.join(base, "current_sha"))
+    if sha and sha in current:
+        return True
+    accepted = _read_lines(os.path.join(base, "accepted_shas"))
+    if sha and sha in accepted:
+        return True
+    if delivery:
+        seen = _read_lines(os.path.join(base, "delivery_ids"))
+        if delivery.strip().lower() in seen:
+            return True
+    return False
+
+
+def _remember(sha: str, delivery: str) -> None:
+    base = _deploy_state_dir()
+    if delivery:
+        _append_line(os.path.join(base, "delivery_ids"), delivery)
+    if sha:
+        _append_line(os.path.join(base, "accepted_shas"), sha)
+
+
+def spawn_deploy(sha: str) -> None:
+    """Start scripts/deploy.sh in a new session. Stdout goes to the deploy log."""
+    script = os.path.join(PROJECT_PATH, "scripts", "deploy.sh")
+    log_path = os.path.join(_instance_dir(), "logs", "deploy.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    log_fh = open(log_path, "ab", buffering=0)
+    try:
+        subprocess.Popen(
+            ["bash", script, sha],
+            cwd=PROJECT_PATH,
+            stdin=subprocess.DEVNULL,
+            stdout=log_fh,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
+        )
+    finally:
+        log_fh.close()
+
+
+def _ignored():
+    return jsonify(ok=True, result="ignored"), 200
+
+
+@webhook_bp.route("/git-webhook", methods=["POST"])
+def git_webhook():
+    raw = request.get_data(cache=True) or b""
+    secret = _resolve_secret()
+    if not secret:
+        _log("webhook_rejected", "secret")
+        return jsonify(ok=False, error="rejected"), 403
+    if not _signature_ok(secret, raw):
+        _log("webhook_rejected", "signature")
+        return jsonify(ok=False, error="invalid_signature"), 403
+
+    event = (request.headers.get("X-GitHub-Event") or "").strip()
+    if event == "ping":
+        return jsonify(ok=True, result="pong"), 200
+    if event == "push":
+        return _ignored()
+    if event != "workflow_run":
+        return _ignored()
+
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return _ignored()
+    sha = _eligible_sha(payload)
+    if not sha:
+        return _ignored()
+    if IS_WINDOWS:
+        _log("webhook_skipped", "windows")
+        return _ignored()
+
+    delivery = (request.headers.get("X-GitHub-Delivery") or "").strip()
+    with _StateLock(_deploy_state_dir()):
+        if _already_handled(sha, delivery):
+            _log("webhook_duplicate", sha)
+            return _ignored()
+
+    try:
+        spawn_deploy(sha)
+    except Exception:
+        # Do not record the delivery. A 500 lets GitHub retry.
+        _log("spawn_failed", "deploy")
+        return jsonify(ok=False, error="rejected"), 500
+
+    with _StateLock(_deploy_state_dir()):
+        try:
+            _remember(sha, delivery)
+        except Exception:
+            _log("webhook_state", "unwritable")
+    _log("webhook_accepted", sha)
+    return jsonify(ok=True, accepted=True), 202
