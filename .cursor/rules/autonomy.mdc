@@ -8,5 +8,6 @@ alwaysApply: true
 - Never ask the user for permission, confirmation, or “should I…?”.
 - Choose the best reasonable approach yourself and execute it.
 - Prefer acting (fix, commit, push, CI loop) over waiting or clarifying when intent is clear.
+- Work on a `cursor/*` branch, open a PR, and never commit or push directly to main.
 - Only stop to report when blocked by missing secrets, auth, or an unblockable external failure.
 - Do not present multiple options and wait; pick one and proceed.
