@@ -1669,6 +1669,14 @@ def inject_role_flags():
     except Exception:
         lawyer_system_on = False
 
+    consultant_api_on = True
+    try:
+        from .consultant_onboarding import consultant_api_enabled as _consultant_api_enabled
+
+        consultant_api_on = bool(_consultant_api_enabled())
+    except Exception:
+        consultant_api_on = True
+
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
         "vinor_express_auth_segment": vinor_express_auth_segment,
@@ -1684,6 +1692,7 @@ def inject_role_flags():
         "vinor_robots_meta": vinor_robots_meta,
         "plus_system_enabled": plus_system_on,
         "lawyer_system_enabled": lawyer_system_on,
+        "consultant_api_enabled": consultant_api_on,
     }
 
 
