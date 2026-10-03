@@ -56,6 +56,8 @@ git log -1 --oneline
 
 `VINOR_DB_CREATE_ALL` نباید در env پروداکشن وجود داشته باشد؛ اگر هر مقدار غیرخالی داشته باشد دیپلوی اجرا نمی‌شود.
 
+`INSTANCE_PATH` را خالی بگذارید یا به پوشهٔ instance فعلی اشاره دهید. اگر `lands.json` یا `users.json` نباشد یا خالی باشد، preflight دیپلوی را رد می‌کند.
+
 بعد از PR #10، `app/utils/secrets.py` با `REQUIRED_ENV_VARS` بدون همان شش متغیر بالا نمی‌آید. نام‌های داخل `app/keys.py` و `api_keys.py` دیگر مبنای preflight نیستند.
 
 اجباری:

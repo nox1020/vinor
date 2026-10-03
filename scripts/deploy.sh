@@ -104,6 +104,41 @@ require_sqlite_database() {
   exit 1
 }
 
+# passenger_wsgi.py setdefault and app/__init__.py both use the project
+# instance dir when INSTANCE_PATH is unset. On this host that is the path
+# below. Listings and users are JSON files; a missing one is created empty
+# at boot and /healthz still returns 204. Never log the path or contents.
+require_instance_data() {
+  local raw base name f size stripped
+  raw="$(printenv INSTANCE_PATH 2>/dev/null || true)"
+  raw="${raw#"${raw%%[![:space:]]*}"}"
+  raw="${raw%"${raw##*[![:space:]]}"}"
+  if [[ -z "$raw" ]]; then
+    base="/home/vinorir/public_html/vinor/instance"
+  else
+    base="$raw"
+  fi
+  for name in lands.json users.json; do
+    f="$base/data/$name"
+    if [[ ! -f "$f" ]]; then
+      log_json preflight_rejected instance_data_missing
+      exit 1
+    fi
+    size="$(wc -c <"$f" | tr -d '[:space:]')"
+    if [[ -z "$size" || "$size" -lt 16 ]]; then
+      log_json preflight_rejected instance_data_empty
+      exit 1
+    fi
+    stripped="$(tr -d '[:space:]' <"$f")"
+    case "$stripped" in
+      "" | "[]" | "{}")
+        log_json preflight_rejected instance_data_empty
+        exit 1
+        ;;
+    esac
+  done
+}
+
 preflight() {
   local name digest bad consultant
   if ! [[ "$HEALTH_TRIES" =~ ^[0-9]+$ ]]; then
@@ -125,6 +160,7 @@ preflight() {
     exit 1
   fi
   require_sqlite_database
+  require_instance_data
 
   if ! command -v sha256sum >/dev/null 2>&1; then
     log_json preflight_missing sha256sum
