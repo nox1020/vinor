@@ -763,7 +763,7 @@
 
       async function saveSubscription(sub) {
         const payload = typeof sub.toJSON === 'function' ? sub.toJSON() : Object.assign({}, sub);
-        {% if session.get('user_phone') %}
+        {% if session.get('user_phone') and request.endpoint != 'express_partner.profile' %}
         payload.user_phone = "{{ session.get('user_phone') }}";
         {% endif %}
         const res = await fetch("/api/push/subscribe", {
@@ -796,7 +796,7 @@
         if (!shouldSyncPushToServer()) return false;
         try {
           const payload = Object.assign({}, subObj);
-          {% if session.get('user_phone') %}
+          {% if session.get('user_phone') and request.endpoint != 'express_partner.profile' %}
           payload.user_phone = "{{ session.get('user_phone') }}";
           {% endif %}
           const res = await fetch('/api/push/subscribe', {

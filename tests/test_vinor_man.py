@@ -1,0 +1,165 @@
+# -*- coding: utf-8 -*-
+"""Locks for the Vinor Man tab (phase A). One test, same fixtures as consultant locks."""
+from __future__ import annotations
+
+import re
+from urllib.parse import parse_qs, unquote, urlsplit
+
+import pytest
+
+PHONE = "09124000071"
+MASK = "۰۹۱۲•••۰۰۷۱"
+RAW_FA = "۰۹۱۲۴۰۰۰۰۷۱"
+PROFILE = "/express/partner/profile"
+PALETTE = {
+    "#000000",
+    "#1C1C1E",
+    "#2F2F2F",
+    "#ECECEC",
+    "#8E8E93",
+    "#14FFFFFF",
+    "#29FFFFFF",
+    "#E22828",
+    "#C91F1F",
+    "#FFFFFF",
+    "#10B981",
+    "#FB7185",
+}
+
+
+@pytest.fixture
+def app(tmp_path, monkeypatch):
+    monkeypatch.setenv("INSTANCE_PATH", str(tmp_path))
+    monkeypatch.setenv("SECRET_KEY", "unit-test-consultant-locks")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "0")
+    monkeypatch.setenv("VINOR_DISABLE_SALES_COACH_NUDGE", "1")
+    monkeypatch.setenv("VINOR_DISABLE_REACH", "1")
+    monkeypatch.setenv("VINOR_DISABLE_CELEBRATION_SMS", "1")
+    monkeypatch.setenv("VINOR_DISABLE_SMS_SCHEDULER", "1")
+    monkeypatch.setenv("VINOR_OPTIMIZATION_ENABLED", "0")
+    monkeypatch.setenv("VINOR_OPTIMIZATION_SCHEDULER", "0")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'vinor.db'}")
+    monkeypatch.delenv("VINOR_CONSULTANT_DRY_RUN", raising=False)
+    monkeypatch.delenv("VINOR_CONSULTANT_SIMULATE", raising=False)
+    monkeypatch.delenv("VINOR_CONSULTANT_API_ENABLED", raising=False)
+
+    from app import create_app
+
+    application = create_app()
+    application.config.update(TESTING=True, WTF_CSRF_ENABLED=True)
+    return application
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+def _login(client, phone: str = PHONE) -> None:
+    with client.session_transaction() as sess:
+        sess["user_phone"] = phone
+        sess.pop("logged_in", None)
+        sess.pop("admin_phone", None)
+
+
+def _chunk(html: str) -> str:
+    start = html.find('id="vinorMePage"')
+    assert start != -1
+    main = html.rfind("<main", 0, start)
+    end = html.find("</main>", start)
+    assert main != -1 and end != -1
+    return html[main:end]
+
+
+def _internal_hrefs(chunk: str) -> list[str]:
+    found = []
+    for href in re.findall(r'href="([^"]*)"', chunk):
+        path = urlsplit(href).path or ""
+        if path.startswith("/logout") or path.startswith("/api/logout"):
+            continue
+        if href.startswith("/") and not href.startswith("//"):
+            found.append(href)
+    return found
+
+
+def _assert_next_safe(href: str) -> None:
+    for val in parse_qs(urlsplit(href).query).get("next", []):
+        decoded = unquote(val)
+        assert decoded.startswith("/"), decoded
+        assert not decoded.startswith("//"), decoded
+        assert not decoded.startswith("/\\"), decoded
+
+
+def _crawl(client, html: str) -> None:
+    for href in _internal_hrefs(_chunk(html)):
+        _assert_next_safe(href)
+        resp = client.get(href, follow_redirects=True)
+        assert resp.status_code < 400, (href, resp.status_code)
+
+
+def _style_hexes(html: str) -> set[str]:
+    found = set()
+    for block in re.findall(r"<style\b[^>]*>(.*?)</style>", html, flags=re.I | re.S):
+        if "#vinorMePage" not in block:
+            continue
+        for item in re.findall(r"#[0-9a-fA-F]{3,8}\b", block):
+            found.add(item.upper())
+    return found
+
+
+def test_vinor_man_menu_locks(client, monkeypatch):
+    guest = client.get(PROFILE)
+    assert guest.status_code == 200
+    guest_cc = guest.headers.get("Cache-Control") or ""
+    assert "no-store" in guest_cc
+    guest_body = guest.get_data(as_text=True)
+    guest_page = _chunk(guest_body)
+    assert "وینور من" in guest_body
+    assert "ورود به حساب" in guest_body
+    assert "next=%2Fexpress%2Fpartner%2Fprofile" in guest_body
+    assert "خروج" not in guest_page
+    assert "تنظیمات" not in guest_page or "تنظیمات و پشتیبانی" in guest_page
+    assert 'href="/express/partner/settings"' not in guest_page
+    assert "کیف پول" not in guest_page
+    assert "vn-me-badge" not in guest_page
+    assert "vn-me-profile" not in guest_page
+    assert "همکار وینور" not in guest_page
+    _crawl(client, guest_body)
+
+    _login(client)
+    logged = client.get(PROFILE)
+    assert logged.status_code == 200
+    logged_cc = logged.headers.get("Cache-Control") or ""
+    assert "private" in logged_cc
+    assert "no-store" in logged_cc
+    body = logged.get_data(as_text=True)
+    assert MASK in body
+    assert PHONE not in body
+    assert RAW_FA not in body
+    assert "آگهی‌های من" in body
+    assert "نشان‌شده‌ها" in body
+    assert "data-vinor-logout" in body
+    assert 'role="dialog"' in body
+    assert "خروج از حساب؟" in body
+    assert "انصراف" in body
+    assert 'href="/express/partner/consultant"' in body
+    _crawl(client, body)
+    assert _style_hexes(body) <= PALETTE
+    page = _chunk(body)
+    assert "#2563eb" not in page.lower()
+    assert "#4ade80" not in page.lower()
+    for block in re.findall(r"<style\b[^>]*>(.*?)</style>", body, flags=re.I | re.S):
+        if ".vn-divar-tab" not in block:
+            continue
+        low = block.lower()
+        assert "#2563eb" not in low
+        assert "#4ade80" not in low
+
+    monkeypatch.setenv("VINOR_CONSULTANT_API_ENABLED", "0")
+    off = client.get(PROFILE)
+    off_body = off.get_data(as_text=True)
+    assert off.status_code == 200
+    assert "همکاری با وینور" in off_body
+    assert 'href="/express/partner/apply"' in off_body
+    assert 'href="/express/partner/consultant"' not in off_body
+    _crawl(client, off_body)
