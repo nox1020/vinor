@@ -688,6 +688,7 @@ def create_app() -> Flask:
             "ai.chat",
             "admin.login",
             "admin.logout",
+            "main.version",
         ):
             try:
                 f = app.view_functions.get(endpoint)
@@ -954,7 +955,7 @@ def create_app() -> Flask:
             "/favicon.ico", "/robots.txt", "/sitemap.xml",
             "/site.webmanifest", "/manifest.webmanifest", "/sw.js",
             "/git-webhook", "/git-webhook/",
-            "/healthz", "/diag", "/connection",
+            "/healthz", "/version", "/diag", "/connection",
             "/d", "/d/",  # belt-and-suspenders با چک بالا
             # Public help pages (accessible بدون لاگین)
             "/help", "/راهنما",

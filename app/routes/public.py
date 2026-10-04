@@ -501,6 +501,19 @@ def healthz():
     return resp
 
 
+@main_bp.route("/version", methods=("GET",), endpoint="version")
+def deployed_version():
+    """SHA در حال اجرا برای مانیتور دیپلوی. بدون احراز هویت.
+
+    ``sha`` همیشه ۷ کاراکتر اول است (یا ``unknown``). ``/healthz`` جدا می‌ماند.
+    """
+    from ..utils.deploy_meta import release_payload
+
+    resp = jsonify(release_payload(current_app.instance_path))
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @main_bp.route("/connection", endpoint="connection_check")
 def connection_check():
     """صفحهٔ بررسی اتصال اینترنت."""

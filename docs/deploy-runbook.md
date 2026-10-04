@@ -251,3 +251,16 @@ bash scripts/deploy.sh <40-hex-sha>
 - اکشن‌های گیت‌هاب را به SHA پین کنید.
 - بعد از مرج، چک `pytest` را در branch protection شاخهٔ `main` اجباری کنید.
 - اولین تست نشست بعد: fail-closed بودن وب‌هوک.
+
+## نسخهٔ در حال اجرا
+
+`GET /version` بدون ورود است و JSON با `Cache-Control: no-store` می‌دهد. `sha` هفت کاراکتر اول کامیت است؛ `full_sha` فقط وقتی SHA بلندتر از ۷ باشد می‌آید. `version` تعداد کامیت‌های `HEAD` است (`git rev-list --count HEAD`) و روی کلون کامل با هر کامیت جدید بالا می‌رود. اگر git این شمارش را ندهد، همان یک خط `version.txt` است. فایل‌های استاتیک همچنان با mtime کش‌باست می‌شوند؛ نسخهٔ APK از تنظیمات ادمین است و این عدد را نمی‌خواند.
+
+SHA به این ترتیب خوانده می‌شود و اگر mtime فایل `current_sha` عوض شود دوباره خوانده می‌شود: `instance/deploy/current_sha` (۷ تا ۴۰ رقم hex)، بعد `VINOR_DEPLOYED_SHA`، بعد `.git` (HEAD / refs / packed-refs)، وگرنه `unknown`.
+
+```bash
+curl -s https://vinor.ir/version
+git rev-parse --short=7 origin/main
+```
+
+`sha` باید با خروجی git یکی باشد. `GET /healthz` همچنان 204 بدون بدنه است.
