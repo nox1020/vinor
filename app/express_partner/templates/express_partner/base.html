@@ -686,9 +686,6 @@
   {# ===== Push Notifications Auto-Subscribe ===== #}
   <script>
     (function(){
-      // VAPID Public Key از context processor
-      const VAPID_PUBLIC_KEY = "{{ VAPID_PUBLIC_KEY|default('', true) }}";
-
       function urlBase64ToUint8Array(base64String) {
         const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
         const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -696,6 +693,38 @@
         const outputArray = new Uint8Array(rawData.length);
         for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
         return outputArray;
+      }
+
+      let vapidKeyPromise = null;
+      function loadVapidPublicKey() {
+        if (!vapidKeyPromise) {
+          vapidKeyPromise = fetch('/api/push/config', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+          }).then(function (res) {
+            if (!res.ok) return '';
+            return res.json();
+          }).then(function (data) {
+            return (data && data.publicKey) ? String(data.publicKey).trim() : '';
+          }).catch(function () { return ''; });
+        }
+        return vapidKeyPromise;
+      }
+
+      function pushKeyDiffers(subscription, publicKey) {
+        try {
+          const current = subscription && subscription.options && subscription.options.applicationServerKey;
+          if (!current || !publicKey) return false;
+          const expected = urlBase64ToUint8Array(publicKey);
+          const actual = new Uint8Array(current);
+          if (actual.length !== expected.length) return true;
+          for (let i = 0; i < actual.length; i++) {
+            if (actual[i] !== expected[i]) return true;
+          }
+          return false;
+        } catch (_) {
+          return false;
+        }
       }
 
       async function requestPermission() {
@@ -712,19 +741,29 @@
         return await navigator.serviceWorker.register('{{ url_for("express_partner.service_worker") }}', { scope: '/express/partner/' });
       }
 
+      async function subscribeWithKey(reg, publicKey) {
+        return await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+      }
+
       async function subscribePush() {
         await requestPermission();
         const reg = await getRegistration();
+        const publicKey = await loadVapidPublicKey();
+        if (!publicKey) throw new Error("کلید اعلان از سرور خوانده نشد.");
         const existing = await reg.pushManager.getSubscription();
-        if (existing) return existing;
-        if (!VAPID_PUBLIC_KEY) throw new Error("VAPID_PUBLIC_KEY تنظیم نشده است.");
-        const appServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-        return await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appServerKey });
+        if (existing && !pushKeyDiffers(existing, publicKey)) return existing;
+        if (existing) {
+          try { await existing.unsubscribe(); } catch (_) {}
+        }
+        return await subscribeWithKey(reg, publicKey);
       }
 
       async function saveSubscription(sub) {
         const payload = typeof sub.toJSON === 'function' ? sub.toJSON() : Object.assign({}, sub);
-        {% if session.get('user_phone') %}
+        {% if session.get('user_phone') and request.endpoint != 'express_partner.profile' %}
         payload.user_phone = "{{ session.get('user_phone') }}";
         {% endif %}
         const res = await fetch("/api/push/subscribe", {
@@ -757,7 +796,7 @@
         if (!shouldSyncPushToServer()) return false;
         try {
           const payload = Object.assign({}, subObj);
-          {% if session.get('user_phone') %}
+          {% if session.get('user_phone') and request.endpoint != 'express_partner.profile' %}
           payload.user_phone = "{{ session.get('user_phone') }}";
           {% endif %}
           const res = await fetch('/api/push/subscribe', {
@@ -791,66 +830,50 @@
           const isLoggedIn = {{ 'true' if session.get('user_phone') else 'false' }};
           if (!isLoggedIn) return;
 
-          if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
-          if (!VAPID_PUBLIC_KEY) return;
+          if (!('serviceWorker' in navigator) || !('Notification' in window) || !('PushManager' in window)) return;
 
           const NOTIFICATION_AUTO_ENABLED_FLAG = 'vinor_express_notifications_auto_enabled';
-          const AUTO_PROMPT_DISMISSED = 'vinor_express_notifications_auto_prompt_dismissed';
-          const lastPromptTime = localStorage.getItem('vinor_express_notifications_last_prompt');
-          const dismissed = localStorage.getItem(AUTO_PROMPT_DISMISSED);
-
-          // اگر کاربر قبلاً رد کرده یا کمتر از 24 ساعت پیش درخواست داده‌ایم، صبر کن
-          if (dismissed === '1') return;
-          if (lastPromptTime) {
-            const hoursSinceLastPrompt = (Date.now() - parseInt(lastPromptTime)) / (1000 * 60 * 60);
-            if (hoursSinceLastPrompt < 24) return;
-          }
-
           const currentPerm = Notification.permission;
 
-          // اگر اجازه داده نشده، در پس‌زمینه درخواست بده
-          if (currentPerm === 'default') {
-            try { localStorage.setItem('vinor_express_notifications_last_prompt', String(Date.now())); } catch(_) {}
-            const perm = await Notification.requestPermission().catch(() => 'default');
-            if (perm !== 'granted') {
-              try { localStorage.setItem(AUTO_PROMPT_DISMISSED, '1'); } catch(_) {}
-              return;
-            }
-          }
-
-          // اگر اجازه داده شد، ادامه بده
-          if (currentPerm === 'granted' || Notification.permission === 'granted') {
+          // چرخش کلید: فقط وقتی اجازه از قبل داده شده. بدون پرامپت، بنر یا پیام.
+          if (currentPerm === 'granted') {
+            const publicKey = await loadVapidPublicKey();
+            if (!publicKey) return;
             let reg = await navigator.serviceWorker.getRegistration('{{ url_for("express_partner.service_worker") }}');
             if (!reg) {
               reg = await navigator.serviceWorker.register('{{ url_for("express_partner.service_worker") }}', { scope: '/express/partner/' }).catch(() => null);
             }
             if (!reg) return;
-
-            // بررسی subscription موجود
             const existing = await reg.pushManager.getSubscription().catch(() => null);
+            if (existing && pushKeyDiffers(existing, publicKey)) {
+              try { await existing.unsubscribe(); } catch (_) {}
+              const rotated = await subscribeWithKey(reg, publicKey);
+              await saveSubscription(rotated);
+              markPushSyncedToServer();
+              try { localStorage.setItem(NOTIFICATION_AUTO_ENABLED_FLAG, '1'); } catch (_) {}
+              return;
+            }
             if (existing) {
               try {
                 if (await syncPushSubscriptionToServer(existing.toJSON())) {
-                  try { localStorage.setItem(NOTIFICATION_AUTO_ENABLED_FLAG, '1'); } catch(_) {}
+                  try { localStorage.setItem(NOTIFICATION_AUTO_ENABLED_FLAG, '1'); } catch (_) {}
                 }
-              } catch(_) {}
+              } catch (_) {}
               return;
             }
-
-            // ایجاد subscription جدید
             try {
-              const sub = await subscribePush();
+              const sub = await subscribeWithKey(reg, publicKey);
               if (sub) {
                 await saveSubscription(sub);
-                try { localStorage.setItem(NOTIFICATION_AUTO_ENABLED_FLAG, '1'); } catch(_) {}
-                try {
-                  window.dispatchEvent(new CustomEvent('vinor:express-notifications-auto-enabled', { detail: { success: true } }));
-                } catch(_) {}
+                try { localStorage.setItem(NOTIFICATION_AUTO_ENABLED_FLAG, '1'); } catch (_) {}
               }
-            } catch(err) {
+            } catch (err) {
               console.debug('Auto-enable notifications failed:', err);
             }
+            return;
           }
+
+          // default یا denied: بدون پرامپت و بدون اشتراک دوباره.
         } catch(err) {
           console.debug('Auto-enable notifications error:', err);
         }

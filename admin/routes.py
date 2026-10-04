@@ -1021,6 +1021,11 @@ def login():
 
 @admin_bp.route('/logout', methods=['POST', 'GET'])
 def logout():
+    # GET فقط برمی‌گرداند؛ پاک کردن سشن فقط با POST. next پذیرفته نمی‌شود.
+    if request.method != 'POST':
+        if session.get('logged_in'):
+            return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('admin.login'))
     # فقط کلیدهای ادمین؛ ورود همکار (user_phone) روی همان مرورگر حفظ می‌ماند
     for k in (
         'logged_in',
