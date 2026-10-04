@@ -101,7 +101,21 @@
   {{ super() }}
   <script>
   (function () {
-    var VAPID_PUBLIC_KEY = {{ VAPID_PUBLIC_KEY|default('', true)|tojson }};
+    var vapidKeyPromise = null;
+    function loadVapidPublicKey() {
+      if (!vapidKeyPromise) {
+        vapidKeyPromise = fetch('/api/push/config', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' }
+        }).then(function (res) {
+          if (!res.ok) return '';
+          return res.json();
+        }).then(function (data) {
+          return (data && data.publicKey) ? String(data.publicKey).trim() : '';
+        }).catch(function () { return ''; });
+      }
+      return vapidKeyPromise;
+    }
 
     function urlBase64ToUint8Array(base64String) {
       var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -110,6 +124,22 @@
       var outputArray = new Uint8Array(rawData.length);
       for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
       return outputArray;
+    }
+
+    function pushKeyDiffers(subscription, publicKey) {
+      try {
+        var current = subscription && subscription.options && subscription.options.applicationServerKey;
+        if (!current || !publicKey) return false;
+        var expected = urlBase64ToUint8Array(publicKey);
+        var actual = new Uint8Array(current);
+        if (actual.length !== expected.length) return true;
+        for (var i = 0; i < actual.length; i++) {
+          if (actual[i] !== expected[i]) return true;
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
     }
 
     async function getServiceWorkerRegistration() {
@@ -144,13 +174,13 @@
                 this.showPrompt = false;
                 return;
               }
-              if (!('Notification' in window) || !('serviceWorker' in navigator) || !VAPID_PUBLIC_KEY) {
+              if (!('Notification' in window) || !('serviceWorker' in navigator)) {
                 this.showPrompt = false;
                 return;
               }
               var permission = Notification.permission;
-              if (permission === 'denied') {
-                this.showPrompt = false;
+              if (permission === 'denied' || permission === 'default') {
+                this.showPrompt = permission === 'default' && localStorage.getItem('vinor_express_push_prompt_dismissed') !== '1';
                 return;
               }
               var reg = await getServiceWorkerRegistration();
@@ -160,7 +190,25 @@
                 }
                 return;
               }
+              var publicKey = await loadVapidPublicKey();
               var subscription = await reg.pushManager.getSubscription().catch(function () { return null; });
+              if (subscription && publicKey && pushKeyDiffers(subscription, publicKey)) {
+                try { await subscription.unsubscribe(); } catch (_) {}
+                subscription = await reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlBase64ToUint8Array(publicKey)
+                });
+                try {
+                  await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(subscription.toJSON())
+                  });
+                } catch (_) {}
+                this.showPrompt = false;
+                return;
+              }
               if (subscription) {
                 try {
                   await fetch('/api/push/subscribe', {
@@ -200,6 +248,11 @@
                 return;
               }
               var subscription = await reg.pushManager.getSubscription().catch(function () { return null; });
+              var publicKey = await loadVapidPublicKey();
+              if (subscription && publicKey && pushKeyDiffers(subscription, publicKey)) {
+                try { await subscription.unsubscribe(); } catch (_) {}
+                subscription = null;
+              }
               if (subscription) {
                 var res = await fetch('/api/push/subscribe', {
                   method: 'POST',
@@ -214,13 +267,13 @@
                 }
                 return;
               }
-              if (!VAPID_PUBLIC_KEY) {
+              if (!publicKey) {
                 alert('خطا در تنظیمات اعلان‌ها. لطفاً با پشتیبانی تماس بگیرید.');
                 return;
               }
               subscription = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                applicationServerKey: urlBase64ToUint8Array(publicKey)
               });
               var subRes = await fetch('/api/push/subscribe', {
                 method: 'POST',

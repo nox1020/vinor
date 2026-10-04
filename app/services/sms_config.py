@@ -1,5 +1,5 @@
-"""تنظیمات sms.ir — از api_keys.py در ریشه پروژه."""
-from app.keys import (
+"""تنظیمات sms.ir — فقط از متغیرهای محیطی."""
+from app.utils.secrets import (
     get_sms_api_key,
     get_sms_line_number,
     get_sms_retriever_hash,

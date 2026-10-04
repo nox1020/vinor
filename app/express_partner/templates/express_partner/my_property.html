@@ -1,10 +1,10 @@
 {% extends 'express_partner/base.html' %}
-{% block title %}ملک من | وینور{% endblock %}
+{% block title %}آگهی‌های من | وینور{% endblock %}
 
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 {{ ep_header_start(id='myPropertyHeader') }}
-{% call ep_header_row('ملک من', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
+{% call ep_header_row('آگهی‌های من', url_for('express_partner.profile'), inner_class='max-w-lg mx-auto w-full') %}
   <a href="{{ url_for('express_partner.my_property', register=1) }}"
      data-vinor-express-nav
      class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
@@ -91,20 +91,36 @@
   {% endif %}
 </div>
 {% include 'express_partner/partials/partner_tab_footer.html' %}
-{% else %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="mx-auto w-full max-w-lg px-3 sm:px-4 pt-2 space-y-2">
-      {% for category, message in messages %}
-      <div class="rounded-xl border px-4 py-3 text-sm {% if category in ['error', 'danger'] %}border-rose-500/30 bg-rose-950/30 text-rose-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">
-        {{ message }}
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-  {% endwith %}
-  <div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] text-zinc-100" data-mp-form="1">
+{% elif show_register_form|default(false) %}
+  <div class="partner-page-scroll-pad min-h-[100dvh]" data-mp-form="1" style="background:#000000;color:#ECECEC">
     {% include 'admin/partials/_express_listing_form.html' %}
   </div>
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
+{% else %}
+  <div class="partner-page-scroll-pad min-h-[100dvh]" style="background:#000000;color:#ECECEC">
+    <div class="vn-empty">
+      <div class="vn-empty__icon" aria-hidden="true">
+        <i class="far fa-house"></i>
+      </div>
+      <p class="vn-empty__text">هنوز آگهی‌ای ثبت نکرده‌اید</p>
+      <a class="vn-empty__cta" href="{{ url_for('express_partner.my_property', register=1) }}" data-vinor-express-nav>ثبت آگهی</a>
+    </div>
+    <style>
+      .vn-empty { max-width: 28rem; margin: 0 auto; padding: 48px 16px; text-align: center; }
+      .vn-empty__icon {
+        width: 48px; height: 48px; margin: 0 auto 12px;
+        display: flex; align-items: center; justify-content: center;
+        color: #8E8E93; font-size: 28px;
+      }
+      .vn-empty__text { margin: 0; font-size: 15px; color: #ECECEC; }
+      .vn-empty__cta {
+        display: flex; align-items: center; justify-content: center;
+        height: 48px; margin-top: 16px;
+        border-radius: 12px; background: #E22828; color: #FFFFFF;
+        text-decoration: none; font-size: 15px; font-weight: 700;
+      }
+    </style>
+  </div>
+  {% include 'express_partner/partials/partner_tab_footer.html' %}
 {% endif %}
 {% endblock %}

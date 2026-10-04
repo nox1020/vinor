@@ -1,0 +1,176 @@
+<form id="vinorManLogoutForm" method="post" action="{{ url_for('express_partner.logout') }}" hidden>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+<div id="vinorManLogoutSheet" class="vn-logout-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="vinorLogoutSheetTitle">
+  <div class="vn-logout-sheet__scrim" data-vinor-logout-cancel></div>
+  <div class="vn-logout-sheet__panel">
+    <h2 id="vinorLogoutSheetTitle" class="vn-logout-sheet__title">خروج از حساب؟</h2>
+    <div class="vn-logout-sheet__actions">
+      <button type="button" class="vn-logout-sheet__btn vn-logout-sheet__btn--danger" data-vinor-logout-confirm>
+        <span class="vn-logout-sheet__label">خروج</span>
+      </button>
+      <button type="button" class="vn-logout-sheet__btn vn-logout-sheet__btn--ghost" data-vinor-logout-cancel>انصراف</button>
+    </div>
+  </div>
+</div>
+<style id="vinor-logout-sheet-styles">
+  #vinorMePage .vn-me-logout-anchor { display: block; }
+  .vn-logout-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .vn-logout-sheet[hidden] { display: none !important; }
+  .vn-logout-sheet__scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+  }
+  .vn-logout-sheet__panel {
+    position: relative;
+    width: 100%;
+    max-width: 28rem;
+    background: #1C1C1E;
+    color: #ECECEC;
+    border-radius: 16px 16px 0 0;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .vn-logout-sheet__title {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #ECECEC;
+  }
+  .vn-logout-sheet__actions { display: flex; flex-direction: column; gap: 8px; }
+  .vn-logout-sheet__btn {
+    height: 48px;
+    width: 100%;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .vn-logout-sheet__btn--danger {
+    border: 0;
+    background: #E22828;
+    color: #FFFFFF;
+  }
+  .vn-logout-sheet__btn--danger:active { background: #C91F1F; }
+  .vn-logout-sheet__btn--ghost {
+    background: transparent;
+    color: #ECECEC;
+    border: 1px solid rgba(255,255,255,.16);
+  }
+  .vn-logout-sheet__btn.is-busy { position: relative; color: transparent; }
+  .vn-logout-sheet__btn.is-busy::after {
+    content: "";
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    inset: 0;
+    margin: auto;
+    border-radius: 50%;
+    border: 2px solid #FFFFFF;
+    border-top-color: transparent;
+    animation: vn-logout-spin .7s linear infinite;
+  }
+  @keyframes vn-logout-spin { to { transform: rotate(360deg); } }
+</style>
+<script>
+(function () {
+  var sheet = document.getElementById('vinorManLogoutSheet');
+  if (!sheet || sheet.dataset.bound === '1') return;
+  sheet.dataset.bound = '1';
+  var opener = null;
+  var pushed = false;
+
+  function focusables() {
+    return Array.prototype.filter.call(
+      sheet.querySelectorAll('button'),
+      function (btn) { return !btn.disabled; }
+    );
+  }
+
+  function openSheet(from) {
+    opener = from || null;
+    sheet.hidden = false;
+    var cancel = sheet.querySelector('button[data-vinor-logout-cancel]');
+    if (cancel && cancel.focus) cancel.focus();
+    try {
+      history.pushState({ vinorLogoutSheet: 1 }, '');
+      pushed = true;
+    } catch (e) { pushed = false; }
+  }
+
+  function closeSheet(fromPop) {
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    if (!fromPop && pushed) {
+      pushed = false;
+      try { history.back(); } catch (e) {}
+    } else {
+      pushed = false;
+    }
+    if (opener && opener.focus) {
+      try { opener.focus(); } catch (e) {}
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    var confirmBtn = e.target.closest && e.target.closest('[data-vinor-logout-confirm]');
+    if (confirmBtn && sheet.contains(confirmBtn)) {
+      e.preventDefault();
+      if (confirmBtn.disabled) return;
+      confirmBtn.disabled = true;
+      confirmBtn.classList.add('is-busy');
+      confirmBtn.setAttribute('aria-busy', 'true');
+      if (typeof window.vinorExpressLogout === 'function') {
+        window.vinorExpressLogout();
+      } else {
+        var form = document.getElementById('vinorManLogoutForm');
+        if (form) form.submit();
+      }
+      return;
+    }
+    var cancel = e.target.closest && e.target.closest('[data-vinor-logout-cancel]');
+    if (cancel && sheet.contains(cancel)) {
+      e.preventDefault();
+      closeSheet(false);
+      return;
+    }
+    var openBtn = e.target.closest && e.target.closest('[data-vinor-logout]');
+    if (!openBtn || (sheet.contains(openBtn))) return;
+    e.preventDefault();
+    openSheet(openBtn);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (sheet.hidden) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSheet(false);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var nodes = focusables();
+    if (!nodes.length) return;
+    var first = nodes[0];
+    var last = nodes[nodes.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+
+  window.addEventListener('popstate', function () {
+    if (!sheet.hidden) closeSheet(true);
+  });
+})();
+</script>

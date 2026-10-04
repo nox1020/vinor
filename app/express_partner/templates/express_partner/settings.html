@@ -7,17 +7,17 @@
 <style>
   html:has(#partnerSettingsPage),
   body:has(#partnerSettingsPage) {
-    background: #000 !important;
+    background: #000000 !important;
   }
   #partnerSettingsHeader.ep-partner-header,
   #partnerSettingsHeader .ep-partner-header-bar {
-    background: #000 !important;
+    background: #000000 !important;
     border-color: transparent !important;
     box-shadow: none !important;
   }
   #partnerSettingsHeader .ep-header-title-pill,
   #partnerSettingsHeader .vinor-dash-glass-pill {
-    background: #1a1a1a !important;
+    background: #1C1C1E !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -26,15 +26,15 @@
   #partnerSettingsHeader .ep-partner-header-title,
   #partnerSettingsHeader .ep-partner-header-btn,
   #partnerSettingsHeader .ep-partner-header-btn-icon {
-    color: #fff !important;
+    color: #FFFFFF !important;
   }
 
   #partnerSettingsPage {
-    --ps-bg: #000;
-    --ps-surface: #1a1a1a;
+    --ps-bg: #000000;
+    --ps-surface: #1C1C1E;
     --ps-hover: rgba(255, 255, 255, 0.06);
     --ps-line: rgba(255, 255, 255, 0.1);
-    --ps-text: #fff;
+    --ps-text: #ECECEC;
     --ps-muted: rgba(255, 255, 255, 0.55);
     background: var(--ps-bg);
     color: var(--ps-text);
@@ -48,8 +48,8 @@
     margin: 0 0.15rem 0.55rem;
     font-size: 0.78rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-    text-align: right;
+    color: #8E8E93;
+    text-align: start;
   }
   #partnerSettingsPage .ps-actions {
     border-radius: 1.15rem;
@@ -65,9 +65,9 @@
     padding: 0.95rem 1.05rem;
     border: 0;
     background: transparent;
-    color: #fff;
+    color: #ECECEC;
     text-decoration: none;
-    text-align: right;
+    text-align: start;
     font: inherit;
     font-size: 0.925rem;
     font-weight: 500;
@@ -92,7 +92,7 @@
     opacity: 0.85;
   }
   #partnerSettingsPage .ps-action--danger,
-  #partnerSettingsPage .ps-action--danger i { color: #ff6b7a; }
+  #partnerSettingsPage .ps-action--danger i { color: #E22828; }
   #partnerSettingsPage .ps-action__grow { flex: 1; min-width: 0; }
   #partnerSettingsPage .ps-action__meta {
     font-size: 0.78rem;
@@ -105,7 +105,7 @@
 </style>
 
 {{ ep_header_start(id='partnerSettingsHeader') }}
-{% call ep_header_row('تنظیمات', url_for('express_partner.home'), show_title=true, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{% call ep_header_row('تنظیمات', url_for('express_partner.profile'), show_title=true, inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
 {{ ep_header_end() }}
 
 <main id="partnerSettingsPage"
@@ -120,39 +120,14 @@
         <span class="ps-action__grow">ویرایش پروفایل</span>
         <i class="fas fa-chevron-left ps-action__chev" aria-hidden="true"></i>
       </a>
-      <form id="settingsLogoutForm" method="post" action="{{ url_for('express_partner.logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="ps-action ps-action--danger" data-vinor-logout>
-          <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
-          <span class="ps-action__grow">خروج</span>
-        </button>
-      </form>
+      <button type="button" class="ps-action ps-action--danger" data-vinor-logout>
+        <span class="ps-action__grow">خروج</span>
+      </button>
     </div>
   </div>
 </main>
 
+{% include 'express_partner/partials/vinor_man_logout_sheet.html' %}
 {% set bottom_nav_active = 'profile' %}
 {% include 'express_partner/partials/partner_tab_footer.html' %}
-{% endblock %}
-
-{% block scripts %}
-<script>
-(function () {
-  var page = document.getElementById('partnerSettingsPage');
-  if (!page) return;
-
-  page.addEventListener('click', function (e) {
-    var logoutBtn = e.target.closest && e.target.closest('[data-vinor-logout]');
-    if (!logoutBtn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (typeof window.vinorExpressLogout === 'function') {
-      window.vinorExpressLogout();
-    } else {
-      var form = document.getElementById('settingsLogoutForm');
-      if (form) form.submit();
-    }
-  });
-})();
-</script>
 {% endblock %}
