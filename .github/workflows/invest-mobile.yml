@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Stamp API version
         run: echo "${GITHUB_SHA::7}" > invest/backend/VERSION
@@ -90,3 +90,4 @@ jobs:
             exit 1
           fi
           echo "Dispatched vinor-backend-updated (api_version=$SHORT)"
+
