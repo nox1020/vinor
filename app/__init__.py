@@ -204,7 +204,55 @@ def _flask_instance_path() -> str:
     )
 
 
+def _sqlite_file_path(db_url: str) -> str | None:
+    """Disk path for a file-backed sqlite URI. None for other databases and :memory:."""
+    raw = (db_url or "").strip()
+    if "sqlite" not in raw.lower():
+        return None
+    without_query = raw.split("?", 1)[0].strip()
+    if ":memory:" in without_query.lower():
+        return None
+    if "///" not in without_query:
+        return None
+    path = without_query.split("///", 1)[1]
+    if not path or path.lower() == ":memory:":
+        return None
+    return path
+
+
+def _require_sqlite_file(db_url: str) -> None:
+    """Refuse a relative sqlite path, then a missing absolute sqlite file.
+
+    Errors name DATABASE_URL only. They must not include the path or the URI.
+    In-memory URLs (sqlite:// and sqlite:///:memory:) are allowed.
+    A relative file (sqlite:///name.db) is refused even when VINOR_DB_CREATE_ALL=1.
+    """
+    path = _sqlite_file_path(db_url)
+    if path is None:
+        return
+    if not path.startswith("/"):
+        raise RuntimeError(
+            "DATABASE_URL must be an absolute sqlite path (sqlite:////abs/path)"
+        )
+    if os.path.isfile(path):
+        return
+    if (os.environ.get("VINOR_DB_CREATE_ALL") or "").strip() == "1":
+        return
+    raise RuntimeError("sqlite file missing: DATABASE_URL")
+
+
 def create_app() -> Flask:
+    # .env in the process CWD must be loaded before any required-variable read.
+    try:
+        from dotenv import load_dotenv  # type: ignore
+        load_dotenv()
+    except Exception:
+        pass
+
+    from app.utils.secrets import get_vapid_sub, require_startup_env
+
+    require_startup_env()
+
     # اطمینان از MIME صحیح برای فونت‌ها (برخی سرورها پسوند woff2 را نمی‌شناسند)
     try:
         mimetypes.add_type('font/woff2', '.woff2')
@@ -217,7 +265,7 @@ def create_app() -> Flask:
     app = Flask(__name__, instance_path=instance_folder, instance_relative_config=False)
 
     # ---------- پایه‌های امنیت/پیکربندی ----------
-    app.secret_key = os.environ.get("SECRET_KEY") or "super-secret-key-change-this"
+    app.secret_key = (os.environ.get("SECRET_KEY") or "").strip()
 
     default_upload_folder = os.path.join(app.root_path, "data", "uploads")
     os.makedirs(default_upload_folder, exist_ok=True)
@@ -235,19 +283,12 @@ def create_app() -> Flask:
     else:
         cookie_secure = trust_proxy
     
-    # کلیدهای VAPID: اول از environment variables، سپس از config
     from config import Config
-    vapid_public = os.environ.get("VAPID_PUBLIC_KEY") or getattr(Config, "VAPID_PUBLIC_KEY", "")
-    vapid_private = os.environ.get("VAPID_PRIVATE_KEY") or getattr(Config, "VAPID_PRIVATE_KEY", "")
-    vapid_sub = os.environ.get("VAPID_SUB") or getattr(Config, "VAPID_SUB", "mailto:admin@vinor.ir")
-
-    # Database URL (env first, then default to SQLite in instance folder)
-    try:
-        from dotenv import load_dotenv  # type: ignore
-        load_dotenv()
-    except Exception:
-        pass
-    db_url = os.environ.get("DATABASE_URL") or f"sqlite:///{os.path.join(app.instance_path, 'vinor.db')}"
+    vapid_public = (os.environ.get("VAPID_PUBLIC_KEY") or "").strip()
+    vapid_private = (os.environ.get("VAPID_PRIVATE_KEY") or "").strip()
+    vapid_sub = get_vapid_sub()
+    db_url = (os.environ.get("DATABASE_URL") or "").strip()
+    _require_sqlite_file(db_url)
 
     app.config.update(
         SESSION_COOKIE_NAME=SESSION_COOKIE_NAME,
@@ -265,7 +306,7 @@ def create_app() -> Flask:
         MAX_CONTENT_LENGTH=getattr(Config, "MAX_CONTENT_LENGTH", 200 * 1024 * 1024),
         VAPID_PUBLIC_KEY=vapid_public,
         VAPID_PRIVATE_KEY=vapid_private,
-        # هر دو کلید برای سازگاری: dict و زیرکلید متنی
+        VAPID_SUB=vapid_sub,
         VAPID_CLAIMS={"sub": vapid_sub},
         VAPID_CLAIMS_SUB=vapid_sub,
         PUSH_STORE_PATH=os.environ.get("PUSH_STORE_PATH", default_push_store),

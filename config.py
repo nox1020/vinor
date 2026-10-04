@@ -9,7 +9,8 @@ def _abs(*parts: str) -> str:
 
 class Config:
     # --- امنیت و سشن ---
-    SECRET_KEY = "vinor-dev-keep-it-constant-and-change-in-prod"  # در پروداکشن از متغیر محیطی بگیر
+    # Not read here. create_app loads .env first, then requires SECRET_KEY.
+    SECRET_KEY = ""
     SESSION_COOKIE_NAME = "vinor_session"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE = False         # چون روی HTTP محلی هستی؛ روی سرور HTTPS حتما True
@@ -42,11 +43,10 @@ class Config:
     except Exception:
         MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200MB
 
-    # --- VAPID Keys برای Web Push Notifications ---
-    # کلیدهای ثابت برای تست و توسعه (در پروداکشن باید از environment variables استفاده شود)
-    # این کلیدها به فرمت base64url هستند و معتبر هستند
-    VAPID_PUBLIC_KEY = "BCEikptArx4_523jsZ1e0RedsGx34NonMWYkMSlsUU5vBqseQfHq0mZdI2sdL0h9nTcQQGO_jKMAXjdl1Q15jHQ"
-    VAPID_PRIVATE_KEY = "dhvthKpfzxwl73td79EM41VuA6CSpvlg6zjTNQQv__A"
+    # --- VAPID (Web Push) ---
+    # Keys are applied in create_app after load_dotenv(). VAPID_SUB is not a secret.
+    VAPID_PUBLIC_KEY = ""
+    VAPID_PRIVATE_KEY = ""
     VAPID_SUB = "mailto:admin@vinor.ir"
 
     # Firebase Cloud Messaging (APK) — مسیر JSON سرویس‌اکانت Firebase Admin
@@ -60,7 +60,6 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     SESSION_COOKIE_SECURE = True          # روی HTTPS
-    # SECRET_KEY = os.environ.get("SECRET_KEY")  # حتماً از محیط بگیر
 
 # helper: در app factory بعد از ساخت app، با این اسنیپت پوشه‌ها را مطمئن بساز:
 # os.makedirs(app.config["DATA_DIR"], exist_ok=True)

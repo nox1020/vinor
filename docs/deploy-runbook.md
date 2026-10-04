@@ -74,6 +74,21 @@ git log -1 --oneline
 
 عوض کردن `SECRET_KEY` همهٔ نشست‌های فعلی را خارج می‌کند.
 
+## قوانین env اپ روی cPanel
+
+اپ بدون این شش نام بالا نمی‌آید. در Setup Python App این نام‌ها را بگذارید. مقدار را در این سند یا در git ننویسید.
+
+- `SECRET_KEY`
+- `SMS_API_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_PUBLIC_KEY`
+- `DATABASE_URL`
+- `VINOR_WEBHOOK_SECRET`
+
+- `DATABASE_URL` باید مسیر sqlite مطلق باشد (`sqlite:////home/...`) و به فایل دیتابیس موجود پروداکشن اشاره کند.
+- `VINOR_DB_CREATE_ALL` هرگز در env پروداکشن ست نشود. این فلگ محافظ «فایل دیتابیس نیست» را دور می‌زند.
+- `VINOR_OTP_HMAC_SECRET` پیشنهادی است. بدون آن، چرخش `SECRET_KEY` کدهای OTP در جریان را بی‌اعتبار می‌کند.
+
 ## اولین دیپلوی دستی
 
 ### ۱. بکاپ، بیرون از public_html
@@ -114,7 +129,7 @@ openssl rand -hex 32
 
 یک بار برای `VINOR_WEBHOOK_SECRET`، یک بار جدا برای `SECRET_KEY`. در Setup Python App ذخیره کنید، بعد Restart تا پروسه env جدید را ببیند.
 
-`DATABASE_URL` باید همان دیتابیس فعلی باشد تا داده نپرد. پیش‌فرض کد وقتی env خالی است `instance/vinor.db` است، ولی دیپلوی بدون env صریح جلو نمی‌رود:
+`DATABASE_URL` باید همان فایل دیتابیس فعلی باشد تا داده نپرد. اگر این نام خالی باشد اپ بالا نمی‌آید و به sqlite خالی داخل instance سقوط نمی‌کند:
 
 ```bash
 ls -lh /home/vinorir/public_html/vinor/instance/*.db
@@ -155,7 +170,7 @@ test -d app/static/uploads
 
 مهاجرت جدا لازم نیست. Flask-Migrate و Alembic در این ریپو نیست و `scripts/deploy.sh` دستور migrate ندارد.
 
-- sqlite: `db.create_all()` در استارتاپ فقط اگر فایل دیتابیس نباشد، یا `VINOR_DB_CREATE_ALL=1`. دیتابیس موجود دوباره ساخته یا پاک نمی‌شود. `VINOR_DB_CREATE_ALL` را روی پروداکشن روشن نکنید.
+- sqlite: اگر فایل مطلق نباشد اپ بالا نمی‌آید، مگر `VINOR_DB_CREATE_ALL=1` که این محافظ را دور می‌زند. این فلگ را در env پروداکشن ست نکنید. دیتابیس موجود دوباره ساخته یا پاک نمی‌شود.
 - `init_schema()` مربوط به OTP موقع بالا آمدن، جدول غایب را می‌سازد.
 - `migrate_legacy` یک‌بار فایل قدیمی `data/` را به instance کپی می‌کند اگر مارکر نباشد؛ فایل موجود را بازنویسی نمی‌کند.
 - اینوست مهاجرت غیرمخرب خودش را در `invest/invest_app/database/migrations.py` موقع استارت همان سرویس اعمال می‌کند، نه به‌صورت دستور دیپلوی.
@@ -231,7 +246,7 @@ bash scripts/deploy.sh <40-hex-sha>
 
 ## کارهای بعدی
 
-- در PR کلیدها، fallback ‏`app.keys` را از `_resolve_secret` بردارید.
+- انجام شد: `_resolve_secret` فقط `VINOR_WEBHOOK_SECRET` را از env می‌خواند و دیگر از `app.keys` fallback نمی‌گیرد.
 - وقتی `workflow_run` رد می‌شود دلیل را لاگ کنید، به‌خصوص ناهمخوانی path.
 - اکشن‌های گیت‌هاب را به SHA پین کنید.
 - بعد از مرج، چک `pytest` را در branch protection شاخهٔ `main` اجباری کنید.

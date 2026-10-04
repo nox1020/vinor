@@ -80,7 +80,11 @@ def hmac_secret_bytes() -> bytes:
     dedicated = (os.environ.get("VINOR_OTP_HMAC_SECRET") or "").strip()
     if dedicated:
         return dedicated.encode("utf-8")
-    session_secret = (os.environ.get("SECRET_KEY") or "super-secret-key-change-this").strip()
+    session_secret = (os.environ.get("SECRET_KEY") or "").strip()
+    if not session_secret:
+        raise RuntimeError(
+            "Refusing to derive OTP HMAC: missing required environment variable(s): SECRET_KEY"
+        )
     return hmac.new(
         session_secret.encode("utf-8"),
         b"vinor-otp-hmac-v1",
@@ -90,7 +94,7 @@ def hmac_secret_bytes() -> bytes:
 
 def sms_otp_configured() -> bool:
     try:
-        from app.keys import get_sms_api_key
+        from app.utils.secrets import get_sms_api_key
 
         return bool((get_sms_api_key() or "").strip())
     except Exception:

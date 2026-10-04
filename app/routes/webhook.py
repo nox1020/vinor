@@ -66,15 +66,8 @@ def _log(event: str, detail: str = "") -> None:
 
 
 def _resolve_secret() -> str:
-    """Env wins. app.keys is only a fallback and an empty value is never valid."""
-    env_secret = (os.environ.get("VINOR_WEBHOOK_SECRET") or "").strip()
-    if env_secret:
-        return env_secret
-    try:
-        from app.keys import VINOR_WEBHOOK_SECRET as fallback
-    except Exception:
-        return ""
-    return (str(fallback) if fallback else "").strip()
+    """VINOR_WEBHOOK_SECRET from the environment only. Empty is never valid."""
+    return (os.environ.get("VINOR_WEBHOOK_SECRET") or "").strip()
 
 
 def _signature_ok(secret: str, raw_body: bytes) -> bool:
