@@ -109,8 +109,11 @@
   </nav>
 
   <div class="border-t border-line pt-3 px-1">
-    <a href="{{ url_for('admin.logout') }}" class="vc-nav-link text-[#F87171]">
-      <i class="fa-solid fa-right-from-bracket"></i><span data-i18n="common.logout">خروج</span>
-    </a>
+    <form method="post" action="{{ url_for('admin.logout') }}" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="vc-nav-link text-[#F87171] w-full cursor-pointer border-0 bg-transparent text-start font-inherit">
+        <i class="fa-solid fa-right-from-bracket"></i><span data-i18n="common.logout">خروج</span>
+      </button>
+    </form>
   </div>
 </div>

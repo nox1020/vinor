@@ -11,7 +11,8 @@
   {{ super() }}
 {% endblock %}
 {% block content %}
-{% set _back = back_href if back_href is defined else (request.args.get('next') or url_for('express_partner.login')) %}
+{% set _safe_next = safe_internal_path(request.args.get('next')) %}
+{% set _back = back_href if back_href is defined else (_safe_next or url_for('express_partner.login')) %}
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col">
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link, ep_header_spacer %}
   {{ ep_header_start(sticky=true) }}
@@ -34,12 +35,12 @@
       </article>
 
       <div class="mt-8 flex flex-col gap-2 sm:flex-row">
-        <a href="{{ url_for('main.privacy', next=request.args.get('next')) }}"
+        <a href="{{ url_for('main.privacy', next=_safe_next) if _safe_next else url_for('main.privacy') }}"
            class="flex-1 rounded-xl border px-4 py-3 text-center text-xs font-semibold transition
                   {% if doc_tab == 'privacy' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-300{% else %}border-white/10 bg-white/[0.03] text-zinc-200 hover:border-emerald-500/30{% endif %}">
           حریم خصوصی
         </a>
-        <a href="{{ url_for('express_partner.legal_terms', next=request.args.get('next')) }}"
+        <a href="{{ url_for('express_partner.legal_terms', next=_safe_next) if _safe_next else url_for('express_partner.legal_terms') }}"
            class="flex-1 rounded-xl border px-4 py-3 text-center text-xs font-semibold transition
                   {% if doc_tab == 'terms' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-300{% else %}border-white/10 bg-white/[0.03] text-zinc-200 hover:border-emerald-500/30{% endif %}">
           قوانین استفاده

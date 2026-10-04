@@ -172,14 +172,14 @@ def require_portal_role(role: str) -> Callable[[F], F]:
                 abort(404)
             phone = str(session.get("user_phone") or "").strip()
             if role != PORTAL_SUPER_ADMIN and not phone:
-                nxt = None
+                nxt = "/"
                 try:
-                    from flask import request
+                    from app.utils.safe_redirect import safe_request_target
 
-                    nxt = request.path
+                    nxt = safe_request_target()
                 except Exception:
-                    nxt = None
-                return redirect(url_for("express_partner.login", next=nxt or "/"))
+                    nxt = "/"
+                return redirect(url_for("express_partner.login", next=nxt))
             resolved = resolve_portals(phone, session=session)
             if not portal_allowed(role, resolved):
                 abort(404)
