@@ -5,9 +5,13 @@ name: Auto PR merge
 # با GITHUB_TOKEN مرج یا push نمی‌کند؛ آن توکن CI روی main را خاموش می‌کند.
 # push و مرج فقط با سکرت VINOR_AUTOMERGE_TOKEN انجام می‌شود.
 
+# هر Pull Request فقط ورک‌فلو CI را شروع می‌کند.
+# این تصمیم بعد از موفقیت pytest، یک بار، و فقط برای همان Pull Request اجرا می‌شود.
+# شکست تست، پوش main، و فورک رانر نمی‌گیرند.
+# آماده شدن پیش‌نویس، اگر تست قبلاً سبز باشد، بدون ساخت دوباره تصمیم می‌گیرد.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [ready_for_review]
     branches: [main]
   workflow_run:
     workflows: ["CI"]
@@ -28,8 +32,8 @@ jobs:
   decide:
     name: Decide merge
     if: >-
-      github.event_name == 'workflow_run' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
