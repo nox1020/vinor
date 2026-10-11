@@ -10644,6 +10644,7 @@ def profile_data():
             visit_inbox_count = 0
     plus_system_on = False
     lawyer_feature_on = False
+    crm_ui_on = False
     try:
         from .zarinpal_config import plus_system_enabled as _plus_system_enabled
 
@@ -10656,6 +10657,12 @@ def profile_data():
         lawyer_feature_on = bool(_lawyer_enabled())
     except Exception:
         lawyer_feature_on = False
+    try:
+        from app.crm.config import crm_ui_enabled as _crm_ui_enabled
+
+        crm_ui_on = bool(_crm_ui_enabled() and is_approved)
+    except Exception:
+        crm_ui_on = False
     return _private_nostore(jsonify({
         'success': True,
         'me_phone': me_phone,
@@ -10672,6 +10679,7 @@ def profile_data():
         'csrf_token': csrf_token,
         'plus_system_enabled': plus_system_on,
         'lawyer_feature_on': lawyer_feature_on,
+        'crm_ui_enabled': crm_ui_on,
     }))
 
 

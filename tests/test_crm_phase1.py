@@ -275,5 +275,67 @@ class CrmPartnerUiSmokeTests(unittest.TestCase):
         self.assertNotIn("settings", (resp.headers.get("Location") or "").lower())
 
 
+class CrmProfileDataTests(unittest.TestCase):
+    """GET /profile/data carries crm_ui_enabled so the app menu does not wait on home."""
+
+    def _client(self):
+        from app import create_app
+
+        app = create_app()
+        app.config["TESTING"] = True
+        return app.test_client()
+
+    def _session(self, client, phone: str) -> None:
+        with client.session_transaction() as sess:
+            sess["user_phone"] = phone
+            sess["logged_in"] = True
+            sess["VINOR_IS_EXPRESS_PARTNER"] = True
+
+    def test_approved_profile_includes_crm_flag(self) -> None:
+        phone = "09121111111"
+        client = self._client()
+        self._session(client, phone)
+        with mock.patch(
+            "app.express_partner.partner_roles.partner_is_approved", return_value=True
+        ), mock.patch(
+            "app.utils.storage.load_express_partners",
+            return_value=[{"phone": phone, "status": "approved", "name": "علی"}],
+        ), mock.patch.dict(
+            os.environ,
+            {"VINOR_CRM_ENABLED": "1", "VINOR_CRM_UI_ENABLED": "1"},
+            clear=False,
+        ):
+            resp = client.get("/express/partner/profile/data")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["is_approved"])
+        self.assertTrue(data["crm_ui_enabled"])
+
+    def test_guest_and_disabled_flag_hide_customers(self) -> None:
+        client = self._client()
+        resp = client.get("/express/partner/profile/data")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.get_json()["crm_ui_enabled"])
+
+        phone = "09123333333"
+        client = self._client()
+        self._session(client, phone)
+        with mock.patch(
+            "app.express_partner.partner_roles.partner_is_approved", return_value=True
+        ), mock.patch(
+            "app.utils.storage.load_express_partners",
+            return_value=[{"phone": phone, "status": "approved"}],
+        ), mock.patch.dict(
+            os.environ,
+            {"VINOR_CRM_ENABLED": "0"},
+            clear=False,
+        ):
+            resp = client.get("/express/partner/profile/data")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["is_approved"])
+        self.assertFalse(data["crm_ui_enabled"])
+
+
 if __name__ == "__main__":
     unittest.main()
