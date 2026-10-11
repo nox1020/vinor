@@ -1,0 +1,53 @@
+name: Auto PR merge
+
+# مرج فقط وقتی بررسی‌های الزامی موفق باشند.
+# تست، Branch Protection و مجوزها را تغییر نمی‌دهد.
+# با GITHUB_TOKEN مرج یا push نمی‌کند؛ آن توکن CI روی main را خاموش می‌کند.
+# push و مرج فقط با سکرت VINOR_AUTOMERGE_TOKEN انجام می‌شود.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+  statuses: read
+
+concurrency:
+  group: auto-pr-merge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  decide:
+    name: Decide merge
+    if: >-
+      github.event_name == 'workflow_run' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout trusted script on main, or this pull request in-repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.sha || github.event.pull_request.head.sha }}
+
+      - name: Classifier self-test
+        run: bash .github/workflows/auto-pr-merge.sh --self-test
+
+      - name: Resolve, or report why merge stopped
+        env:
+          REPO_KIND: web
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          VINOR_AUTOMERGE_TOKEN: ${{ secrets.VINOR_AUTOMERGE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/workflows/auto-pr-merge.sh
