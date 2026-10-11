@@ -19,6 +19,51 @@ def _norm_phone(phone: str) -> str:
     return re.sub(r"[^\d]", "", str(phone or "").strip())
 
 
+_FA_AR_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _canonical_mobile(phone: str) -> str:
+    """شماره را به 09xxxxxxxxx برگردان. 98 و ارقام فارسی با 09 یکی‌اند."""
+    s = str(phone or "").strip().translate(_FA_AR_DIGITS)
+    s = re.sub(r"[^\d]", "", s)
+    if not s:
+        return ""
+    if s.startswith("0098") and len(s) >= 14 and s[4:].startswith("9"):
+        s = "0" + s[4:]
+    elif s.startswith("98") and len(s) >= 12 and s[2:].startswith("9"):
+        s = "0" + s[2:]
+    elif len(s) == 10 and s.startswith("9"):
+        s = "0" + s
+    if len(s) > 11 and s.startswith("09"):
+        s = s[:11]
+    return s
+
+
+def _owner_phone(land: Dict[str, Any]) -> str:
+    return str(land.get("owner") or land.get("user_phone") or "")
+
+
+def _same_phone(a: str, b: str) -> bool:
+    left = _canonical_mobile(a)
+    right = _canonical_mobile(b)
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    return len(left) >= 10 and len(right) >= 10 and left[-10:] == right[-10:]
+
+
+def _rows_for_code(lands: Any, code: str) -> List[Dict[str, Any]]:
+    want = str(code or "").strip()
+    if not want:
+        return []
+    out: List[Dict[str, Any]] = []
+    for land in lands or []:
+        if isinstance(land, dict) and str(land.get("code") or "").strip() == want:
+            out.append(land)
+    return out
+
+
 def _uploads_folder() -> str:
     folder = current_app.config.get("UPLOAD_FOLDER") or os.path.join(
         current_app.static_folder or current_app.root_path, "static", "uploads"
@@ -191,9 +236,19 @@ def is_owner_home(land: Dict[str, Any] | None) -> bool:
     return not is_published_for_sale(land)
 
 
+def detail_sale_flag(land: Dict[str, Any] | None) -> bool:
+    """پرچمی که صفحهٔ جزئیات به اپ می‌دهد.
+
+    ملک من باید وضعیت واقعی را بگوید. آگهی عادی اکسپرس برای بقیه روشن می‌ماند
+    تا اپ آن را به‌خاطر نبودن پرچم پنهان نکند.
+    """
+    if is_my_property_record(land):
+        return is_published_for_sale(land)
+    return True
+
+
 def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
-    ph = _norm_phone(phone)
-    if not ph:
+    if not _canonical_mobile(phone):
         return []
     lands = load_ads_cached() or []
     out: List[Dict[str, Any]] = []
@@ -204,8 +259,7 @@ def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
             continue
         if not land.get("is_express"):
             continue
-        owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
-        if owner == ph:
+        if _same_phone(_owner_phone(land), phone):
             out.append(land)
     try:
         out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
@@ -216,16 +270,14 @@ def listings_owned_by(phone: str) -> List[Dict[str, Any]]:
 
 def listings_owned_home(phone: str) -> List[Dict[str, Any]]:
     """ملک‌های «ملک من» متعلق به این شماره — شامل منتشرشده برای فروش."""
-    ph = _norm_phone(phone)
-    if not ph:
+    if not _canonical_mobile(phone):
         return []
     lands = load_ads_cached() or []
     out: List[Dict[str, Any]] = []
     for land in lands if isinstance(lands, list) else []:
         if not isinstance(land, dict) or not is_my_property_record(land):
             continue
-        owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
-        if owner == ph:
+        if _same_phone(_owner_phone(land), phone):
             out.append(land)
     try:
         out.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
@@ -347,7 +399,7 @@ def plus_listing_owner_by_code() -> Dict[str, Dict[str, str]]:
 def land_owned_by_special(land: Dict[str, Any] | None, phone: str) -> bool:
     if not isinstance(land, dict):
         return False
-    return _norm_phone(str(land.get("owner") or "")) == _norm_phone(phone)
+    return _same_phone(_owner_phone(land), phone)
 
 
 def find_owned_land(phone: str, code: str) -> Optional[Dict[str, Any]]:
@@ -823,6 +875,79 @@ def publish_owner_home(
     return target, None
 
 
+def resolve_listing_for_viewer(
+    lands: Any,
+    code: str,
+    phone: str,
+) -> Tuple[Optional[Dict[str, Any]], str]:
+    """ردیف قابل‌نمایش برای بیننده.
+
+    مالک، ردیف «ملک من» خودش را می‌بیند — اگر هنوز نسخه‌ای منتشر باشد همان را —
+    تا یک کپی اکسپرسِ جا مانده جزئیات را منتشر نشان ندهد. بقیه فقط آگهی عمومی
+    را می‌بینند.
+    """
+    matches = _rows_for_code(lands, code)
+    if not matches:
+        return None, "missing"
+    owned = [
+        land
+        for land in matches
+        if is_my_property_record(land) and _same_phone(_owner_phone(land), phone)
+    ]
+    if owned:
+        for land in owned:
+            if is_published_for_sale(land):
+                return land, "owner"
+        return owned[0], "owner"
+    for land in matches:
+        if land.get("is_express") and not is_owner_home(land):
+            return land, "public"
+    return None, "missing"
+
+
+def unpublished_owner_home_only(lands: Any, code: str) -> bool:
+    """کد فقط به ملک خصوصی «ملک من» می‌خورد؛ آگهی عمومی با این کد نمانده."""
+    matches = _rows_for_code(lands, code)
+    if not matches:
+        return False
+    saw_private = False
+    for land in matches:
+        if is_published_for_sale(land):
+            return False
+        if land.get("is_express") and not is_owner_home(land):
+            return False
+        if is_my_property_record(land):
+            saw_private = True
+    return saw_private
+
+
+def apply_owner_unpublish(
+    items: Any,
+    phone: str,
+    land_code: str,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
+    """هر ردیف ملک منِ این کد را خصوصی کن. خروجی: رکورد، خطا، و آیا فایلی عوض شد."""
+    owned = [
+        item
+        for item in _rows_for_code(items, land_code)
+        if is_my_property_record(item) and _same_phone(_owner_phone(item), phone)
+    ]
+    if not owned:
+        return None, "not_found", False
+    changed = False
+    for target in owned:
+        still_public = (
+            is_published_for_sale(target)
+            or bool(target.get("is_express"))
+            or target.get("public") is True
+            or str(target.get("source") or "").strip().lower() == "my_property_published"
+        )
+        if still_public:
+            _restore_private_owner_home(target)
+            changed = True
+    return owned[0], None, changed
+
+
 def unpublish_owner_home(
     phone: str,
     *,
@@ -833,38 +958,24 @@ def unpublish_owner_home(
     نحوهٔ پرداخت و پورسانت اینجا بررسی نمی‌شوند؛ همان مسیر انتشار این فیلدها را
     قبل از پرچم توقف اجباری می‌کرد و توقف را به خطای «نحوه پرداخت» یا
     «قبلاً منتشر شده» تبدیل می‌کرد و آگهی روشن می‌ماند.
+    همهٔ ردیف‌های همین کد عوض می‌شوند؛ جزئیات، اولین ردیف اکسپرس را نشان می‌دهد
+    و اگر فقط ردیف اول خصوصی شود اپ همچنان آگهی را منتشر می‌بیند.
     """
     want = str(land_code or "").strip()
     if not want:
         return None, "not_found"
-    homes = listings_owned_home(phone)
-    land = None
-    for home in homes:
-        if str(home.get("code") or "").strip() == want:
-            land = home
-            break
-    if land is None:
-        return None, "not_found"
-
-    code = str(land.get("code") or "").strip()
     items = load_ads() or []
     if not isinstance(items, list):
         items = []
-    target = None
-    for item in items:
-        if isinstance(item, dict) and str(item.get("code") or "").strip() == code:
-            target = item
-            break
-    if target is None:
-        return None, "not_found"
-    if not is_published_for_sale(target):
+    target, err, changed = apply_owner_unpublish(items, phone, want)
+    if err:
+        return None, err
+    if not changed:
         return target, None
-
-    _restore_private_owner_home(target)
     try:
         save_ads(items)
     except Exception:
-        current_app.logger.exception("unpublish owner home save failed code=%s", code)
+        current_app.logger.exception("unpublish owner home save failed code=%s", want)
         return None, "save_failed"
     return target, None
 

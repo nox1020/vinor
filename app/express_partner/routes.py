@@ -4621,6 +4621,30 @@ def apk_my_property_submit():
     })
 
 
+def _mark_payload_unpublished(payload: Dict[str, Any], code: str) -> None:
+    """کارت همین کد در پاسخ توقف باید خصوصی باشد تا اپ پیام موفقیت را دور نریزد."""
+    want = str(code or "").strip()
+    if not want or not isinstance(payload, dict):
+        return
+    for key in ("items", "listings"):
+        rows = payload.get(key)
+        if not isinstance(rows, list):
+            continue
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            row_code = str(item.get("code") or item.get("id") or "").strip()
+            if row_code != want:
+                continue
+            item["published_for_sale"] = False
+            item["badge_label"] = "خصوصی"
+            item["_status_label"] = "خصوصی"
+    prop = payload.get("property")
+    if isinstance(prop, dict) and str(prop.get("code") or "").strip() == want:
+        prop["published_for_sale"] = False
+        payload["published_for_sale"] = False
+
+
 def _publish_request_wants_unpublish(body: Any = None) -> bool:
     """توقف را قبل از اعتبارسنجی انتشار تشخیص بده؛ کوئری، فرم و JSON هر سه ملاک‌اند."""
     from .special_listings import wants_unpublish
@@ -4724,6 +4748,8 @@ def apk_my_property_publish():
     else:
         message = f'ملک شما با کد {code} برای فروش منتشر شد.'
     payload = page_payload(phone)
+    if stopped and code:
+        _mark_payload_unpublished(payload, code)
     payload.update({
         'ok': True,
         'code': code,
@@ -4822,7 +4848,7 @@ def apk_legal_data():
 def apk_land_detail_data(code: str):
     from .land_chat_detail import native_listing_detail_payload
 
-    payload = native_listing_detail_payload(code)
+    payload = native_listing_detail_payload(code, confirm_unpublish=True)
     if not payload:
         return _apk_json({"ok": False, "error": "آگهی پیدا نشد."}, 404)
     return _apk_json(payload)
