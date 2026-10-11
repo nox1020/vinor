@@ -18,6 +18,7 @@ permissions:
   pull-requests: write
   checks: read
   statuses: read
+  actions: read
 
 concurrency:
   group: auto-pr-merge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}

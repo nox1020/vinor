@@ -210,8 +210,19 @@ load_pr() {
   HEAD_SHA=$(printf '%s' "$PR_JSON" | jq -r '.headRefOid')
   HEAD_REPO=$(printf '%s' "$PR_JSON" | jq -r '.headRepository.nameWithOwner // ""')
   FILES=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --jq '.[].filename')
-  CHECKS=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json statusCheckRollup \
-    --jq '.statusCheckRollup[]? | "\(.name)\t\(.status)\t\(.conclusion // "")"')
+  CHECKS=$(fetch_checks "$HEAD_SHA")
+}
+
+# GraphQL statusCheckRollup asks for workflowRun and the integration token gets 403.
+# REST check-runs stays inside checks:read. This job is omitted so it cannot wait on itself.
+fetch_checks() {
+  local sha="$1"
+  {
+    gh api --paginate "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs" \
+      --jq '.check_runs[] | "\(.name)\t\(.status | ascii_upcase)\t\((.conclusion // "") | ascii_upcase)"'
+    gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/statuses" \
+      --jq '.[]? | "\(.context)\t\(if .state == "pending" then "PENDING" else "COMPLETED" end)\t\(if .state == "success" then "SUCCESS" elif .state == "pending" then "" else (.state | ascii_upcase) end)"'
+  } | awk -F '\t' 'NF && $1 != "Decide merge"'
 }
 
 decide_once() {
