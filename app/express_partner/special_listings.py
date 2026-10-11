@@ -358,6 +358,76 @@ def find_owned_land(phone: str, code: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _flag_on(raw: Any) -> bool:
+    if raw is True or raw == 1:
+        return True
+    if raw is None or raw is False:
+        return False
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _flag_off(raw: Any) -> bool:
+    if raw is False or raw == 0:
+        return True
+    if raw is None or raw is True:
+        return False
+    return str(raw).strip().lower() in ("0", "false", "no", "off")
+
+
+def _mapping_get(src: Any, key: str) -> Any:
+    if src is None:
+        return None
+    try:
+        if key not in src:
+            return None
+        return src.get(key)
+    except Exception:
+        return None
+
+
+def wants_unpublish(body: Any = None, query: Any = None, form: Any = None) -> bool:
+    """درخواست توقف انتشار — قبل از اعتبارسنجی انتشار خوانده می‌شود.
+
+    اپ مدیریت ملک همان مسیر انتشار را با ``unpublish`` و
+    ``published_for_sale=false`` (و کوئری ``published_for_sale=0``) می‌زند.
+    نبودن کلید به‌معنی توقف نیست تا ثبت عادی آگهی را خاموش نکند.
+    """
+    for src in (body, query, form):
+        if _flag_on(_mapping_get(src, "unpublish")):
+            return True
+        if src is None:
+            continue
+        try:
+            present = "published_for_sale" in src
+        except Exception:
+            present = False
+        if present and _flag_off(_mapping_get(src, "published_for_sale")):
+            return True
+    return False
+
+
+def _restore_private_owner_home(target: Dict[str, Any]) -> None:
+    """برگرداندن ملک منتشرشده به حالت خصوصی «ملک من».
+
+    هر سه علامتی که ``is_published_for_sale`` را روشن می‌کنند باید خاموش شوند،
+    وگرنه آگهی در فید عمومی می‌ماند.
+    """
+    extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
+    extras["published_for_sale"] = False
+    extras["public"] = False
+    extras["owner_home"] = True
+    extras["listed_by_owner"] = True
+    extras["listed_by_special"] = False
+    target["extras"] = extras
+    target["public"] = False
+    target["is_express"] = False
+    target["ad_type"] = "owner_home"
+    target["status"] = "pending"
+    target["express_status"] = "hidden"
+    target["owner_home"] = True
+    target["source"] = "my_property"
+
+
 SPECIAL_LISTING_ERRORS: Dict[str, str] = {
     "invalid_owner": "شناسه همکار نامعتبر است.",
     "required_fields": "لطفاً فیلدهای اجباری را پر کنید.",
@@ -750,6 +820,52 @@ def publish_owner_home(
 
     if send_all:
         assign_land_to_all_partners(target, pct)
+    return target, None
+
+
+def unpublish_owner_home(
+    phone: str,
+    *,
+    land_code: str = "",
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """برداشتن ملک «ملک من» از آگهی‌های فروش.
+
+    نحوهٔ پرداخت و پورسانت اینجا بررسی نمی‌شوند؛ همان مسیر انتشار این فیلدها را
+    قبل از پرچم توقف اجباری می‌کرد و توقف را به خطای «نحوه پرداخت» یا
+    «قبلاً منتشر شده» تبدیل می‌کرد و آگهی روشن می‌ماند.
+    """
+    want = str(land_code or "").strip()
+    if not want:
+        return None, "not_found"
+    homes = listings_owned_home(phone)
+    land = None
+    for home in homes:
+        if str(home.get("code") or "").strip() == want:
+            land = home
+            break
+    if land is None:
+        return None, "not_found"
+
+    code = str(land.get("code") or "").strip()
+    items = load_ads() or []
+    if not isinstance(items, list):
+        items = []
+    target = None
+    for item in items:
+        if isinstance(item, dict) and str(item.get("code") or "").strip() == code:
+            target = item
+            break
+    if target is None:
+        return None, "not_found"
+    if not is_published_for_sale(target):
+        return target, None
+
+    _restore_private_owner_home(target)
+    try:
+        save_ads(items)
+    except Exception:
+        current_app.logger.exception("unpublish owner home save failed code=%s", code)
+        return None, "save_failed"
     return target, None
 
 

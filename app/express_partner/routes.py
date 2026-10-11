@@ -4621,6 +4621,13 @@ def apk_my_property_submit():
     })
 
 
+def _publish_request_wants_unpublish(body: Any = None) -> bool:
+    """توقف را قبل از اعتبارسنجی انتشار تشخیص بده؛ کوئری، فرم و JSON هر سه ملاک‌اند."""
+    from .special_listings import wants_unpublish
+
+    return wants_unpublish(body, request.args, request.form)
+
+
 def _publish_request_fields() -> Dict[str, Any]:
     data = request.get_json(silent=True)
     if not data and request.data:
@@ -4630,7 +4637,7 @@ def _publish_request_fields() -> Dict[str, Any]:
             data = {}
     if not isinstance(data, dict) or not data:
         send_raw = request.form.get('auto_send_all_partners')
-        return {
+        fields = {
             'payment_method': (request.form.get('payment_method') or '').strip(),
             'commission_pct': (
                 request.form.get('express_commission_pct')
@@ -4640,38 +4647,49 @@ def _publish_request_fields() -> Dict[str, Any]:
             'send_all': bool(str(send_raw or '').strip()),
             'code': (request.form.get('code') or '').strip(),
         }
+        fields['unpublish'] = _publish_request_wants_unpublish(None)
+        return fields
     send_raw = data.get('auto_send_all_partners')
     if send_raw is None:
         send_raw = data.get('send_all')
-    return {
+    fields = {
         'payment_method': str(data.get('payment_method') or '').strip(),
         'commission_pct': data.get('express_commission_pct') or data.get('commission_pct') or '2',
         'send_all': send_raw is True or str(send_raw or '').strip().lower() in ('1', 'true', 'yes', 'on'),
         'code': str(data.get('code') or '').strip(),
     }
+    fields['unpublish'] = _publish_request_wants_unpublish(data)
+    return fields
 
 
 @express_partner_bp.route('/my-property/publish', methods=['POST'], endpoint='my_property_publish')
 @require_partner_access(allow_pending=True)
 def my_property_publish():
     from .apk_native import session_phone
-    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home
+    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home, unpublish_owner_home
 
     fields = _publish_request_fields()
-    rec, err = publish_owner_home(
-        session_phone(),
-        payment_method=fields['payment_method'],
-        commission_pct=fields['commission_pct'],
-        send_all=fields['send_all'],
-        land_code=fields.get('code') or '',
-    )
+    phone = session_phone()
+    if fields.get('unpublish'):
+        rec, err = unpublish_owner_home(phone, land_code=fields.get('code') or '')
+    else:
+        rec, err = publish_owner_home(
+            phone,
+            payment_method=fields['payment_method'],
+            commission_pct=fields['commission_pct'],
+            send_all=fields['send_all'],
+            land_code=fields.get('code') or '',
+        )
     if err:
         flash(SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.'), 'error')
         if fields.get('code'):
             return redirect(url_for('express_partner.land_detail', code=fields['code']))
         return redirect(url_for('express_partner.my_property'))
-    flash(f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.', 'success')
     code = str((rec or {}).get('code') or fields.get('code') or '').strip()
+    if fields.get('unpublish'):
+        flash('انتشار فروش متوقف شد.', 'success')
+    else:
+        flash(f'ملک شما با کد {code} برای فروش منتشر شد.', 'success')
     if code:
         return redirect(url_for('express_partner.land_detail', code=code))
     return redirect(url_for('express_partner.my_property'))
@@ -4682,26 +4700,37 @@ def my_property_publish():
 def apk_my_property_publish():
     from .my_property import page_payload
     from .apk_native import session_phone
-    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home
+    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home, unpublish_owner_home
 
     fields = _publish_request_fields()
-    rec, err = publish_owner_home(
-        session_phone(),
-        payment_method=fields['payment_method'],
-        commission_pct=fields['commission_pct'],
-        send_all=fields['send_all'],
-        land_code=fields.get('code') or '',
-    )
+    phone = session_phone()
+    stopped = bool(fields.get('unpublish'))
+    if stopped:
+        rec, err = unpublish_owner_home(phone, land_code=fields.get('code') or '')
+    else:
+        rec, err = publish_owner_home(
+            phone,
+            payment_method=fields['payment_method'],
+            commission_pct=fields['commission_pct'],
+            send_all=fields['send_all'],
+            land_code=fields.get('code') or '',
+        )
     if err:
         msg = SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.')
         return _apk_json({'ok': False, 'error': msg, 'error_code': err}, 400)
-    return _apk_json({
+    code = str((rec or {}).get('code') or fields.get('code') or '').strip()
+    if stopped:
+        message = 'انتشار فروش متوقف شد.'
+    else:
+        message = f'ملک شما با کد {code} برای فروش منتشر شد.'
+    payload = page_payload(phone)
+    payload.update({
         'ok': True,
-        'code': rec.get('code') if rec else '',
-        'message': f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.',
+        'code': code,
+        'message': message,
         'next': 'my-property',
-        **page_payload(session_phone()),
     })
+    return _apk_json(payload)
 
 
 @express_partner_bp.post('/api/listings/submit', endpoint='apk_listings_submit')
