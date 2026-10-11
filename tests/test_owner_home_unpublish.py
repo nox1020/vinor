@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from app.express_partner.special_listings import (
+    apply_owner_publish,
     apply_owner_unpublish,
     detail_sale_flag,
+    publish_terms,
     resolve_listing_for_viewer,
     unpublished_owner_home_only,
 )
@@ -96,3 +98,72 @@ def test_public_express_ad_stays_visible_and_flagged_on():
     assert land is ad
     assert detail_sale_flag(ad) is True
     assert unpublished_owner_home_only([ad], "9") is False
+
+
+def _private(code="4", owner="09120000000", **extra):
+    row = {
+        "code": code,
+        "owner": owner,
+        "source": "my_property",
+        "is_express": False,
+        "public": False,
+        "owner_home": True,
+        "price_total": 1_000_000,
+        "extras": {
+            "published_for_sale": False,
+            "listed_by_owner": True,
+            "owner_home": True,
+        },
+    }
+    row.update(extra)
+    return row
+
+
+def test_publish_terms_allow_zero_and_reject_out_of_range():
+    method, pct, err = publish_terms("نقدی", "0")
+    assert err is None
+    assert method == "نقدی"
+    assert pct == 0
+    assert publish_terms("نقدی", "-1")[2] == "invalid_commission"
+    assert publish_terms("نقدی", "101")[2] == "invalid_commission"
+    assert publish_terms("", "2")[2] == "payment_required"
+
+
+def test_publish_updates_every_owned_copy_and_leaves_others():
+    first = _private()
+    second = _private(is_express=True)
+    other = _private(owner="09121111111")
+    stranger = {
+        "code": "4",
+        "owner": "09123333333",
+        "source": "express",
+        "is_express": True,
+        "public": True,
+        "extras": {},
+    }
+    rec, err, changed = apply_owner_publish(
+        [first, second, other, stranger],
+        "989120000000",
+        "4",
+        payment_method="توافقی",
+        commission_pct=0,
+    )
+    assert err is None and changed is True
+    assert rec is first
+    for row in (first, second):
+        assert row["extras"]["published_for_sale"] is True
+        assert row["source"] == "my_property_published"
+        assert row["payment_method"] == "توافقی"
+        assert row["extras"]["express_commission_pct"] == 0
+    assert other["extras"]["published_for_sale"] is False
+    assert stranger.get("source") == "express"
+    again, again_err, again_changed = apply_owner_publish(
+        [first, second],
+        "09120000000",
+        "4",
+        payment_method="نقدی",
+        commission_pct=2,
+    )
+    assert again_err == "already_published"
+    assert again_changed is False
+    assert again["payment_method"] == "توافقی"

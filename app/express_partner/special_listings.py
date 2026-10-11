@@ -777,6 +777,69 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
         )
 
 
+def publish_terms(payment_method: str, commission_pct: Any = "2") -> Tuple[str, float, Optional[str]]:
+    """شرایط انتشار. صفر مجاز است؛ پیام خطا هم «بین ۰ و ۱۰۰» می‌گوید."""
+    method = str(payment_method or "").strip()
+    if method not in PUBLISH_PAYMENT_METHODS:
+        return "", 0.0, "payment_required"
+    pct_raw = str(commission_pct if commission_pct is not None else "").strip() or "2"
+    try:
+        pct = float(pct_raw.replace(",", ".").replace("٪", "").replace("%", ""))
+    except (TypeError, ValueError):
+        return "", 0.0, "invalid_commission"
+    if pct < 0 or pct > 100:
+        return "", 0.0, "invalid_commission"
+    return method, pct, None
+
+
+def apply_owner_publish(
+    items: Any,
+    phone: str,
+    land_code: str,
+    *,
+    payment_method: str,
+    commission_pct: float,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
+    """هر ردیف ملک منِ این کد را منتشر کن. ردیف دیگران با همین کد دست نمی‌خورد."""
+    owned = [
+        item
+        for item in _rows_for_code(items, land_code)
+        if is_my_property_record(item) and _same_phone(_owner_phone(item), phone)
+    ]
+    if not owned:
+        return None, "not_found", False
+    if all(is_published_for_sale(item) for item in owned):
+        return owned[0], "already_published", False
+    for target in owned:
+        price = 0
+        try:
+            price = int(target.get("price_total") or target.get("price") or 0)
+        except (TypeError, ValueError):
+            price = 0
+        amount = int(round(price * (commission_pct / 100.0))) if price else 0
+        extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
+        extras.update({
+            "express_commission_pct": commission_pct,
+            "express_commission_amount": amount,
+            "listed_by_special": True,
+            "listed_by_owner": True,
+            "owner_home": False,
+            "public": True,
+            "published_for_sale": True,
+        })
+        target["extras"] = extras
+        target["public"] = True
+        target["is_express"] = True
+        target["ad_type"] = "express"
+        target["status"] = "approved"
+        target["express_status"] = "approved"
+        target["owner_home"] = False
+        target["source"] = "my_property_published"
+        target["payment_method"] = payment_method
+        target["expert_verified"] = bool(target.get("expert_verified"))
+    return owned[0], None, True
+
+
 def publish_owner_home(
     phone: str,
     *,
@@ -786,78 +849,34 @@ def publish_owner_home(
     land_code: str = "",
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """انتشار ملک ثبت‌شده در «ملک من» به‌عنوان آگهی فروش عمومی."""
-    homes = listings_owned_home(phone)
-    if not homes:
-        return None, "not_found"
+    method, pct, term_err = publish_terms(payment_method, commission_pct)
+    if term_err:
+        return None, term_err
     want = str(land_code or "").strip()
-    land = None
-    if want:
-        for home in homes:
-            if str(home.get("code") or "").strip() == want:
-                land = home
-                break
-    else:
-        land = homes[0]
-    if land is None:
-        return None, "not_found"
-    if is_published_for_sale(land):
-        return None, "already_published"
-
-    method = str(payment_method or "").strip()
-    if method not in PUBLISH_PAYMENT_METHODS:
-        return None, "payment_required"
-
-    pct_raw = str(commission_pct if commission_pct is not None else "").strip() or "2"
-    try:
-        pct = float(pct_raw.replace(",", ".").replace("٪", "").replace("%", ""))
-    except (TypeError, ValueError):
-        return None, "invalid_commission"
-    if pct <= 0 or pct > 100:
-        return None, "invalid_commission"
-
-    code = str(land.get("code") or "").strip()
-    if not code:
+    if not want:
+        homes = [home for home in listings_owned_home(phone) if not is_published_for_sale(home)]
+        if not homes:
+            owned = listings_owned_home(phone)
+            return None, "already_published" if owned else "not_found"
+        want = str(homes[0].get("code") or "").strip()
+    if not want:
         return None, "not_found"
 
     items = load_ads() or []
     if not isinstance(items, list):
         items = []
-    target = None
-    for item in items:
-        if isinstance(item, dict) and str(item.get("code") or "").strip() == code:
-            target = item
-            break
-    if target is None:
-        return None, "not_found"
-
-    price = 0
-    try:
-        price = int(target.get("price_total") or target.get("price") or 0)
-    except (TypeError, ValueError):
-        price = 0
-    amount = int(round(price * (pct / 100.0))) if price else 0
-
-    extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
-    extras.update({
-        "express_commission_pct": pct,
-        "express_commission_amount": amount,
-        "listed_by_special": True,
-        "listed_by_owner": True,
-        "owner_home": False,
-        "public": True,
-        "published_for_sale": True,
-    })
-    target["extras"] = extras
-    target["public"] = True
-    target["is_express"] = True
-    target["ad_type"] = "express"
-    target["status"] = "approved"
-    target["express_status"] = "approved"
-    target["owner_home"] = False
-    target["source"] = "my_property_published"
-    target["payment_method"] = method
-    target["expert_verified"] = bool(target.get("expert_verified"))
-
+    target, err, changed = apply_owner_publish(
+        items,
+        phone,
+        want,
+        payment_method=method,
+        commission_pct=pct,
+    )
+    if err:
+        return None, err
+    if not changed or target is None:
+        return target, None
+    code = str(target.get("code") or want).strip()
     try:
         save_ads(items)
     except Exception:
