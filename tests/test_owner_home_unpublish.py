@@ -167,3 +167,11 @@ def test_publish_updates_every_owned_copy_and_leaves_others():
     assert again_err == "already_published"
     assert again_changed is False
     assert again["payment_method"] == "توافقی"
+
+
+def test_listing_detail_has_publish_form_without_stop():
+    from pathlib import Path
+
+    text = Path("app/express_partner/templates/express_partner/listing_detail_native.html").read_text(encoding="utf-8")
+    assert "انتشار برای فروش" in text
+    assert "توقف انتشار فروش" not in text
