@@ -207,6 +207,20 @@ def visit_date_min_iso() -> str:
     return _today().isoformat()
 
 
+def visit_schedule_for_land(land_code: str) -> Dict[str, Any]:
+    """تقویم بازدید همان فایل، برای جزئیات اپ. فیلدهای اضافهٔ وضعیت معامله."""
+    plus = plus_phone_for_land_code(land_code)
+    slot = next_auto_visit_date(plus_user_phone=plus)
+    min_iso = str((slot or {}).get("iso") or "").strip() or _today().isoformat()
+    code = str(land_code or "").strip()
+    return {
+        "visit_date_min": min_iso,
+        "visit_allowed_weekdays": visit_allowed_weekdays_for_js(plus_user_phone=plus),
+        "visit_allowed_hours": list(get_visit_allowed_hours(plus_user_phone=plus)),
+        "visit_request_url": f"/express/partner/visit-requests/{code}" if code else "",
+    }
+
+
 def _normalize_weekday_list(raw: Any) -> List[int]:
     if not isinstance(raw, (list, tuple, set)):
         return list(DEFAULT_VISIT_ALLOWED_WEEKDAYS)
