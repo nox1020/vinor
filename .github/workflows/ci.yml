@@ -79,6 +79,7 @@ jobs:
             tests/test_search_page.py
             tests/test_seo_listing_price_sitemap.py
             tests/test_vinor_man.py
+            tests/test_owner_home_unpublish.py
           )
           python -m pytest -q "${files[@]}"
 

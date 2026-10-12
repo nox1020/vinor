@@ -271,11 +271,6 @@
     cursor: pointer;
     font-family: inherit;
   }
-  #vinorListingDetail .vn-ld__publish button.is-stop {
-    background: var(--vn-ld-raised-2);
-    color: var(--vn-ld-text);
-    border: 1px solid var(--vn-ld-border);
-  }
   #vinorListingDetail .vn-ld__flashes p {
     margin: 0 0 0.75rem;
     padding: 0.7rem 0.85rem;
@@ -433,17 +428,6 @@
         ارسال به همه همکاران
       </label>
       <button type="submit">انتشار برای فروش</button>
-    </form>
-    {% elif d.is_mine and d.published_for_sale %}
-    <form class="vn-ld__publish" method="post" action="{{ url_for('express_partner.my_property_publish') }}" data-vinor-direct-action
-          onsubmit="return confirm('این ملک از آگهی‌های فروش برداشته می‌شود و دیگر برای بقیه دیده نمی‌شود.');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="code" value="{{ d.code }}">
-      <input type="hidden" name="unpublish" value="1">
-      <input type="hidden" name="published_for_sale" value="0">
-      <h2>توقف انتشار فروش</h2>
-      <p>با توقف، این ملک از آگهی‌های فروش برداشته می‌شود.</p>
-      <button type="submit" class="is-stop">توقف انتشار فروش</button>
     </form>
     {% endif %}
   </div>
