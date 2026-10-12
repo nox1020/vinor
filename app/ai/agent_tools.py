@@ -120,8 +120,14 @@ def _active_assignment_land_codes(phone: str) -> list[str]:
     if not ph:
         return []
     try:
-        from app.utils.storage import load_express_assignments
+        from app.utils.public_listings import is_partner_assignment_land
+        from app.utils.storage import load_ads_cached, load_express_assignments
 
+        code_to_land = {
+            str(land.get("code") or ""): land
+            for land in (load_ads_cached() or [])
+            if isinstance(land, dict)
+        }
         rows = []
         for a in load_express_assignments() or []:
             if not isinstance(a, dict):
@@ -142,6 +148,8 @@ def _active_assignment_land_codes(phone: str) -> list[str]:
         for a in rows:
             code = str(a.get("land_code") or "").strip()
             if not code or code in seen:
+                continue
+            if not is_partner_assignment_land(code_to_land.get(code)):
                 continue
             seen.add(code)
             st = str(a.get("status") or "active").strip().lower()

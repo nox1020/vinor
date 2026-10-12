@@ -226,6 +226,8 @@ def _build_partner_dashboard_lands(
     from ..utils.dates import is_ad_expired
     from ..utils.images import sanitize_land_media
 
+    from app.utils.public_listings import is_partner_assignment_land
+
     ph = (me_phone or '').strip()
     cities = selected_cities or []
     q = (search_query or '').strip().lower()
@@ -256,7 +258,7 @@ def _build_partner_dashboard_lands(
     code_to_assigned: Dict[str, Dict[str, Any]] = {}
     for a in my_assignments:
         land = code_to_land.get(str(a.get('land_code')))
-        if not land:
+        if not land or not is_partner_assignment_land(land):
             continue
         is_expired = is_ad_expired(land)
         if is_expired:
@@ -378,6 +380,8 @@ def _build_partner_dashboard_lands(
 
     assigned_lands: List[Dict[str, Any]] = []
     for land in display_lands:
+        if not is_partner_assignment_land(land):
+            continue
         code = str(land.get('code') or '')
         item = dict(land)
         assigned_item = code_to_assigned.get(code)
@@ -4755,6 +4759,33 @@ def apk_my_property_publish():
         'code': code,
         'message': message,
         'next': 'my-property',
+    })
+    return _apk_json(payload)
+
+
+@express_partner_bp.post('/api/my-property/delete', endpoint='apk_my_property_delete')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_delete():
+    """حذف ملک منِ خودِ کاربر. بدنه JSON است: ``{"code": "..."}``."""
+    from .apk_native import session_phone
+    from .my_property import page_payload
+    from .special_listings import delete_owner_property
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    code = str(data.get('code') or '').strip()
+    phone = session_phone()
+    removed, err = delete_owner_property(phone, code)
+    if err:
+        message = 'این ملک پیدا نشد.' if err == 'not_found' else 'حذف ملک ناموفق بود.'
+        status = 404 if err == 'not_found' else 400
+        return _apk_json({'ok': False, 'error': message, 'error_code': err}, status)
+    payload = page_payload(phone)
+    payload.update({
+        'ok': True,
+        'code': removed or code,
+        'message': 'ملک حذف شد.',
     })
     return _apk_json(payload)
 

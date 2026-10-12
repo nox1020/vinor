@@ -924,6 +924,18 @@ def resolve_listing_for_viewer(
     return None, "missing"
 
 
+def viewer_owns_private_home(lands: Any, code: str, phone: str) -> bool:
+    """مالکِ ملک خصوصیِ همین کد. بقیه نباید پاسخ تأیید توقف را ببینند."""
+    if not _canonical_mobile(phone):
+        return False
+    if not unpublished_owner_home_only(lands, code):
+        return False
+    return any(
+        is_my_property_record(land) and _same_phone(_owner_phone(land), phone)
+        for land in _rows_for_code(lands, code)
+    )
+
+
 def unpublished_owner_home_only(lands: Any, code: str) -> bool:
     """کد فقط به ملک خصوصی «ملک من» می‌خورد؛ آگهی عمومی با این کد نمانده."""
     matches = _rows_for_code(lands, code)
@@ -989,14 +1001,127 @@ def unpublish_owner_home(
     target, err, changed = apply_owner_unpublish(items, phone, want)
     if err:
         return None, err
-    if not changed:
-        return target, None
-    try:
-        save_ads(items)
-    except Exception:
-        current_app.logger.exception("unpublish owner home save failed code=%s", want)
-        return None, "save_failed"
+    if changed:
+        try:
+            save_ads(items)
+        except Exception:
+            current_app.logger.exception("unpublish owner home save failed code=%s", want)
+            return None, "save_failed"
+    revoke_broadcast_assignments(want)
     return target, None
+
+
+_KEEP_ASSIGNMENT_STATUSES = frozenset({"in_transaction", "in-transaction", "in transaction", "sold"})
+
+
+def _assignment_survives_unpublish(row: Dict[str, Any]) -> bool:
+    """معاملهٔ باز و فروخته‌شده بعد از توقف انتشار می‌مانند."""
+    if str(row.get("transaction_holder") or "").strip():
+        return True
+    status = str(row.get("status") or "").strip().lower()
+    return status in _KEEP_ASSIGNMENT_STATUSES
+
+
+def revoke_broadcast_assignments(land_code: str) -> None:
+    """انتساب «ارسال به همه همکاران» را لغو کن. معامله و فروش دست نمی‌خورند."""
+    code = str(land_code or "").strip()
+    if not code:
+        return
+    try:
+        from app.utils.storage import load_express_assignments, save_express_assignments
+
+        items = load_express_assignments() or []
+        if not isinstance(items, list):
+            return
+        changed = False
+        kept: List[Any] = []
+        for row in items:
+            if not isinstance(row, dict):
+                kept.append(row)
+                continue
+            if str(row.get("land_code") or "").strip() != code:
+                kept.append(row)
+                continue
+            if _assignment_survives_unpublish(row):
+                kept.append(row)
+                continue
+            status = str(row.get("status") or "").strip().lower()
+            if status == "revoked":
+                kept.append(row)
+                continue
+            updated = dict(row)
+            updated["status"] = "revoked"
+            kept.append(updated)
+            changed = True
+        if changed:
+            save_express_assignments(kept)
+    except Exception:
+        current_app.logger.exception(
+            "revoke broadcast assignments failed code=%s", code
+        )
+
+
+def delete_owner_property(phone: str, land_code: str) -> Tuple[Optional[str], Optional[str]]:
+    """ردیف‌های ملک منِ این مالک و انتساب‌های همین کد را حذف کن."""
+    want = str(land_code or "").strip()
+    if not want or not _canonical_mobile(phone):
+        return None, "not_found"
+    items = load_ads() or []
+    if not isinstance(items, list):
+        items = []
+    owned_indexes = {
+        idx
+        for idx, item in enumerate(items)
+        if isinstance(item, dict)
+        and str(item.get("code") or "").strip() == want
+        and is_my_property_record(item)
+        and _same_phone(_owner_phone(item), phone)
+    }
+    if not owned_indexes:
+        return None, "not_found"
+    remaining = [item for idx, item in enumerate(items) if idx not in owned_indexes]
+    try:
+        save_ads(remaining)
+    except Exception:
+        current_app.logger.exception("delete owner property save failed code=%s", want)
+        return None, "save_failed"
+    if not _public_express_remains(remaining, want):
+        drop_listing_assignments(want)
+    return want, None
+
+
+def _public_express_remains(items: Any, land_code: str) -> bool:
+    want = str(land_code or "").strip()
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("code") or "").strip() != want:
+            continue
+        if item.get("is_express") and item.get("public") is not False and not is_owner_home(item):
+            return True
+    return False
+
+
+def drop_listing_assignments(land_code: str) -> None:
+    """همهٔ انتساب‌های این کد را بردار. ملک دیگر در فهرست عمومی نیست."""
+    code = str(land_code or "").strip()
+    if not code:
+        return
+    try:
+        from app.utils.storage import load_express_assignments, save_express_assignments
+
+        items = load_express_assignments() or []
+        if not isinstance(items, list):
+            return
+        kept = [
+            row
+            for row in items
+            if not isinstance(row, dict) or str(row.get("land_code") or "").strip() != code
+        ]
+        if len(kept) != len(items):
+            save_express_assignments(kept)
+    except Exception:
+        current_app.logger.exception("drop listing assignments failed code=%s", code)
 
 
 def save_special_listing_upload_document(file) -> Optional[str]:

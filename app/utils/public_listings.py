@@ -52,3 +52,27 @@ def is_publicly_visible_listing(land: Any) -> bool:
         if land.get("owner_home") and land.get("public") is not True:
             return False
     return True
+
+
+def is_partner_assignment_land(land: Any) -> bool:
+    """فهرست اختصاص همکار فقط آگهی اکسپرسِ عمومی را نشان می‌دهد.
+
+    ملک خصوصی «ملک من» و آگهی با ``public=False`` نمی‌آید. فروخته‌شدهٔ
+    اکسپرس می‌ماند چون داشبورد همکار آن را در انتهای لیست نشان می‌دهد.
+    """
+    if not isinstance(land, dict):
+        return False
+    if not land.get("is_express"):
+        return False
+    if land.get("public") is False:
+        return False
+    try:
+        from app.express_partner.special_listings import is_owner_home
+
+        if is_owner_home(land):
+            return False
+    except Exception:
+        extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+        if land.get("owner_home") or extras.get("owner_home"):
+            return False
+    return True
