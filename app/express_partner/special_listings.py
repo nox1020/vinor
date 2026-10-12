@@ -968,10 +968,12 @@ def apply_owner_unpublish(
     land_code: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
     """هر ردیف ملک منِ این کد را خصوصی کن. خروجی: رکورد، خطا، و آیا فایلی عوض شد."""
+    # Management also lists ordinary express ads; stop those owned rows too.
     owned = [
         item
         for item in _rows_for_code(items, land_code)
-        if is_my_property_record(item) and _same_phone(_owner_phone(item), phone)
+        if (is_my_property_record(item) or item.get("is_express"))
+        and _same_phone(_owner_phone(item), phone)
     ]
     if not owned:
         return None, "not_found", False

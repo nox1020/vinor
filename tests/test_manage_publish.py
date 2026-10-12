@@ -257,3 +257,37 @@ def test_delete_removes_owner_rows_assignments_and_returns_page(client, app):
     _logout(client)
     guest = client.post("/express/partner/api/my-property/delete", json={"code": "9"})
     assert guest.status_code == 401
+
+
+def test_api_stops_regular_listing_and_owner_can_republish(client, app):
+    from app.utils.storage import load_ads, save_ads
+    from app.express_partner.my_property import property_cards
+
+    ad = _public("9")
+    ad["owner"] = OWNER
+    ad["payment_method"] = "نقدی"
+    ad["price_total"] = 1_000_000
+    with app.app_context():
+        save_ads([ad])
+        assert property_cards(OWNER)[0]["published_for_sale"] is True
+    _login(client, OTHER)
+    denied = client.post("/express/partner/api/my-property/publish?published_for_sale=0",
+                         json={"code": "9", "unpublish": True})
+    assert denied.status_code == 400
+    with app.app_context():
+        assert load_ads()[0]["is_express"] is True
+    _login(client, OWNER)
+    response = client.post("/express/partner/api/my-property/publish?published_for_sale=0",
+                           json={"code": "9", "published_for_sale": False, "unpublish": True})
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["ok"] is True
+    assert body["items"][0]["published_for_sale"] is False
+    assert client.get("/express/partner/api/lands/9/data").get_json()["published_for_sale"] is False
+    _logout(client)
+    assert client.get("/express/partner/api/lands/9/data").status_code == 404
+    _login(client, OWNER)
+    published = client.post("/express/partner/api/my-property/publish",
+                            json={"code": "9", "payment_method": "نقدی", "commission_pct": "2"})
+    assert published.status_code == 200
+    assert published.get_json()["items"][0]["published_for_sale"] is True
