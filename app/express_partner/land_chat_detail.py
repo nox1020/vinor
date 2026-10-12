@@ -450,18 +450,18 @@ def _listing_spec_rows(land: Dict[str, Any], *, is_divar: bool) -> list[dict[str
 
 
 def _unpublish_confirm_payload(code: str) -> Dict[str, Any]:
-    """پاسخ ۲۰۰ برای تأیید توقف، بدون نشان دادن ملک خصوصی به بقیه.
+    """پاسخ ۲۰۰ برای تأیید توقف، فقط وقتی جلسه مالک همین ملک است.
 
-    اپ موفقیت را فقط از ``published_for_sale: false`` روی همین مسیر می‌فهمد.
-    ``ok: false`` تا صفحهٔ جزئیات برای کسی که مالک نیست «پیدا نشد» بماند.
+    اپ موفقیت را از ``published_for_sale: false`` می‌فهمد. ``ok: false`` تا
+    صفحهٔ جزئیات عنوان آگهی نسازد. دیگران از همین مسیر ۴۰۴ می‌گیرند.
     """
     return {
         "ok": False,
         "error": "آگهی پیدا نشد.",
         "code": str(code or "").strip(),
         "published_for_sale": False,
-        "is_mine": False,
-        "can_publish": False,
+        "is_mine": True,
+        "can_publish": True,
     }
 
 
@@ -483,13 +483,19 @@ def native_listing_detail_payload(
     else:
         land, _approved = prepare_land_for_chat_detail(raw)
         tok = ""
-    if not land:
-        if confirm_unpublish and not is_divar:
-            from ..utils.storage import load_ads_cached
-            from .special_listings import unpublished_owner_home_only
+    if confirm_unpublish and not is_divar:
+        from flask import has_request_context
 
-            if unpublished_owner_home_only(load_ads_cached() or [], raw):
+        from ..utils.storage import load_ads_cached
+        from .special_listings import unpublished_owner_home_only, viewer_owns_private_home
+
+        lands = load_ads_cached() or []
+        if unpublished_owner_home_only(lands, raw):
+            me = str(session.get("user_phone") or "") if has_request_context() else ""
+            if viewer_owns_private_home(lands, raw, me):
                 return _unpublish_confirm_payload(raw)
+            return None
+    if not land:
         return None
     source = "divar" if (is_divar or str(land.get("_source") or "") == "divar") else "vinor"
     images = _listing_image_urls(land)

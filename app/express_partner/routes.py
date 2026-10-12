@@ -226,6 +226,8 @@ def _build_partner_dashboard_lands(
     from ..utils.dates import is_ad_expired
     from ..utils.images import sanitize_land_media
 
+    from app.utils.public_listings import is_partner_assignment_land
+
     ph = (me_phone or '').strip()
     cities = selected_cities or []
     q = (search_query or '').strip().lower()
@@ -256,7 +258,7 @@ def _build_partner_dashboard_lands(
     code_to_assigned: Dict[str, Dict[str, Any]] = {}
     for a in my_assignments:
         land = code_to_land.get(str(a.get('land_code')))
-        if not land:
+        if not land or not is_partner_assignment_land(land):
             continue
         is_expired = is_ad_expired(land)
         if is_expired:
@@ -378,6 +380,8 @@ def _build_partner_dashboard_lands(
 
     assigned_lands: List[Dict[str, Any]] = []
     for land in display_lands:
+        if not is_partner_assignment_land(land):
+            continue
         code = str(land.get('code') or '')
         item = dict(land)
         assigned_item = code_to_assigned.get(code)
@@ -1201,10 +1205,11 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
     from ..utils.dates import is_ad_expired
+    from app.utils.public_listings import is_partner_assignment_land
     result: List[Dict[str, Any]] = []
     for code in ordered:
         land = code_to_land.get(code)
-        if not land:
+        if not land or not is_partner_assignment_land(land):
             continue
         item = dict(land)
         global_status = _effective_land_status(code_to_global_status.get(code, 'active'), item)
@@ -3091,8 +3096,10 @@ def _home_suggested_files(
     assignments = load_express_assignments() or []
     commissions = load_express_commissions_cached() or []
     visits = visit_rows if isinstance(visit_rows, list) else (load_express_visit_requests() or [])
+    from app.utils.public_listings import is_partner_assignment_land
+
     for land in assigned_lands or []:
-        if not isinstance(land, dict):
+        if not isinstance(land, dict) or not is_partner_assignment_land(land):
             continue
         # کارت مأموریت/پیشنهاد خانه فقط فایلِ اختصاص‌یافته به همکار
         if not land.get('_assignment_id'):
@@ -4759,6 +4766,32 @@ def apk_my_property_publish():
     return _apk_json(payload)
 
 
+@express_partner_bp.post('/api/my-property/delete', endpoint='apk_my_property_delete')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_delete():
+    """حذف ملک منِ خودِ کاربر. بدنه JSON است: ``{"code": "..."}``."""
+    from .apk_native import session_phone
+    from .my_property import page_payload
+    from .special_listings import delete_owner_property
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    code = str(data.get('code') or '').strip()
+    phone = session_phone()
+    removed, err = delete_owner_property(phone, code)
+    if err:
+        message = 'این ملک پیدا نشد.' if err == 'not_found' else 'حذف ملک ناموفق بود.'
+        status = 404 if err == 'not_found' else 400
+        return _apk_json({'ok': False, 'error': message, 'error_code': err}, status)
+    return _apk_json({
+        'ok': True,
+        'code': removed or code,
+        'message': 'ملک حذف شد.',
+        'page_payload': page_payload(phone),
+    })
+
+
 @express_partner_bp.post('/api/listings/submit', endpoint='apk_listings_submit')
 @require_special_partner(json_response=True)
 def apk_listings_submit():
@@ -4850,7 +4883,10 @@ def apk_land_detail_data(code: str):
 
     payload = native_listing_detail_payload(code, confirm_unpublish=True)
     if not payload:
-        return _apk_json({"ok": False, "error": "آگهی پیدا نشد."}, 404)
+        return _apk_json(
+            {"ok": False, "error": "آگهی پیدا نشد.", "error_code": "not_found"},
+            404,
+        )
     return _apk_json(payload)
 
 
@@ -8863,21 +8899,29 @@ def _mark_in_transaction_finish(
 
 
 def _express_land_in_catalog(code: str) -> bool:
-    """فایل در لیست اکسپرس (یا آگهی‌ها) وجود دارد."""
+    """فایل عمومی اکسپرس در کاتالوگ است. ملک خصوصی «ملک من» نیست."""
+    from app.utils.public_listings import is_partner_assignment_land
+
     key = str(code or '').strip()
     if not key:
         return False
+    pools: List[Any] = []
     try:
-        express_lands = load_express_lands_cached() or []
+        pools.extend(load_express_lands_cached() or [])
     except Exception:
-        express_lands = []
-    if any(str(l.get('code') or '').strip() == key for l in express_lands):
-        return True
+        pass
     try:
-        lands_all = load_ads_cached() or []
+        pools.extend(load_ads_cached() or [])
     except Exception:
-        lands_all = []
-    return any(str(l.get('code') or '').strip() == key for l in lands_all)
+        pass
+    for land in pools:
+        if not isinstance(land, dict):
+            continue
+        if str(land.get('code') or '').strip() != key:
+            continue
+        if is_partner_assignment_land(land):
+            return True
+    return False
 
 
 def _express_land_partner_ctx(code: str, me_phone: str) -> Dict[str, Any] | None:
@@ -9450,6 +9494,12 @@ def land_tx_status(code: str):
         is_partner_approved=is_partner_approved,
         global_assignment_status=ctx['global_status'],
     )
+    try:
+        from .visit_requests import visit_schedule_for_land
+
+        state.update(visit_schedule_for_land(code))
+    except Exception:
+        current_app.logger.exception("visit schedule payload failed code=%s", code)
     # پولینگ tx-status هر چند ثانیه یک‌بار است؛ روتین را مسدود نکن
     if is_partner_approved:
         _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)

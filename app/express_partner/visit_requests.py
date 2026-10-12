@@ -207,6 +207,17 @@ def visit_date_min_iso() -> str:
     return _today().isoformat()
 
 
+def visit_schedule_for_land(land_code: str) -> Dict[str, Any]:
+    """همان مقادیر landDetailConfig: visitDateMin، visitAllowedWeekdays، visitAllowedHours."""
+    code = str(land_code or "").strip()
+    return {
+        "visit_date_min": visit_date_min_iso(),
+        "visit_allowed_weekdays": list(visit_allowed_weekdays_for_js()),
+        "visit_allowed_hours": list(get_visit_allowed_hours()),
+        "visit_request_url": f"/express/partner/visit-requests/{code}" if code else "",
+    }
+
+
 def _normalize_weekday_list(raw: Any) -> List[int]:
     if not isinstance(raw, (list, tuple, set)):
         return list(DEFAULT_VISIT_ALLOWED_WEEKDAYS)
