@@ -720,11 +720,21 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
         title = str(land.get("title") or "")
         partners = load_express_partners() or []
         items = load_express_assignments() or []
-        existing = {
-            (str(a.get("partner_phone")), str(a.get("land_code")))
-            for a in items
-            if isinstance(a, dict)
-        }
+        seen = set()
+        for row in items:
+            if not isinstance(row, dict):
+                continue
+            key = (str(row.get("partner_phone") or "").strip(), str(row.get("land_code") or "").strip())
+            if key[1] != new_code or not key[0]:
+                continue
+            seen.add(key)
+            if _assignment_survives_unpublish(row):
+                continue
+            status = str(row.get("status") or "").strip().lower()
+            if status in ("", "active"):
+                continue
+            row["status"] = "active"
+            row["commission_pct"] = commission_pct or 0
         max_id = max(
             [int(x.get("id", 0) or 0) for x in items if isinstance(x, dict)],
             default=0,
@@ -734,7 +744,7 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
             if not phone:
                 continue
             key = (phone, new_code)
-            if key in existing:
+            if key in seen:
                 continue
             max_id += 1
             items.append(
@@ -748,7 +758,7 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
                     + "Z",
                 }
             )
-            existing.add(key)
+            seen.add(key)
             try:
                 phone_normalized = _norm_phone(phone)
                 if phone_normalized and len(phone_normalized) == 11:
@@ -1086,7 +1096,7 @@ def delete_owner_property(phone: str, land_code: str) -> Tuple[Optional[str], Op
         current_app.logger.exception("delete owner property save failed code=%s", want)
         return None, "save_failed"
     if not _public_express_remains(remaining, want):
-        drop_listing_assignments(want)
+        drop_open_listing_assignments(want)
     return want, None
 
 
@@ -1102,8 +1112,8 @@ def _public_express_remains(items: Any, land_code: str) -> bool:
     return False
 
 
-def drop_listing_assignments(land_code: str) -> None:
-    """همهٔ انتساب‌های این کد را بردار. ملک دیگر در فهرست عمومی نیست."""
+def drop_open_listing_assignments(land_code: str) -> None:
+    """انتساب‌های باز این کد را بردار. معامله و فروخته‌شده می‌مانند."""
     code = str(land_code or "").strip()
     if not code:
         return
@@ -1113,15 +1123,17 @@ def drop_listing_assignments(land_code: str) -> None:
         items = load_express_assignments() or []
         if not isinstance(items, list):
             return
-        kept = [
-            row
-            for row in items
-            if not isinstance(row, dict) or str(row.get("land_code") or "").strip() != code
-        ]
+        kept = []
+        for row in items:
+            if not isinstance(row, dict) or str(row.get("land_code") or "").strip() != code:
+                kept.append(row)
+                continue
+            if _assignment_survives_unpublish(row):
+                kept.append(row)
         if len(kept) != len(items):
             save_express_assignments(kept)
     except Exception:
-        current_app.logger.exception("drop listing assignments failed code=%s", code)
+        current_app.logger.exception("drop open listing assignments failed code=%s", code)
 
 
 def save_special_listing_upload_document(file) -> Optional[str]:

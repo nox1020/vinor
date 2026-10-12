@@ -152,25 +152,42 @@ def test_publish_send_all_then_unpublish_leaves_partner_dashboard(app):
             assigned = _assigned_lands(phone)
             assert "4" not in _codes(assigned)
         assert "4" not in _active_assignment_land_codes(PARTNER)
+        from app.express_partner.routes import _express_land_in_catalog, _lands_for_favorite_codes
+
+        favorites = _lands_for_favorite_codes(["4", "9"], PARTNER)
+        assert "4" not in _codes(favorites)
+        assert "9" in _codes(favorites)
+        assert _express_land_in_catalog("4") is False
+        assert _express_land_in_catalog("9") is True
+
+        again, again_err = publish_owner_home(
+            OWNER,
+            payment_method="نقدی",
+            commission_pct="2",
+            send_all=True,
+            land_code="4",
+        )
+        assert again_err is None
+        assert str((again or {}).get("code")) == "4"
+        relisted, _expired = _build_partner_dashboard_lands(PARTNER, True)
+        assert "4" in _codes(relisted)
+        restored = load_express_assignments() or []
+        statuses = {
+            str(row.get("partner_phone")): str(row.get("status") or "")
+            for row in restored
+            if str(row.get("land_code")) == "4" and str(row.get("status")) != "in_transaction"
+        }
+        assert statuses[PARTNER] == "active"
+        assert any(
+            str(row.get("partner_phone")) == PARTNER and str(row.get("status")) == "in_transaction"
+            for row in restored
+            if str(row.get("land_code")) == "4"
+        )
+        assert _express_land_in_catalog("4") is True
 
 
-def test_owner_private_land_data_states_sale_flag(client, app):
+def test_private_land_data_is_owner_only(client, app):
     _seed(app)
-    _login(client, OWNER)
-    resp = client.get("/express/partner/api/lands/4/data")
-    assert resp.status_code == 200
-    body = resp.get_json()
-    assert body["published_for_sale"] is False
-    assert body["is_mine"] is True
-    assert body["can_publish"] is True
-
-
-def test_confirm_unpublish_payload_only_for_owner(client, app, monkeypatch):
-    _seed(app)
-    monkeypatch.setattr(
-        "app.express_partner.land_chat_detail.prepare_land_for_chat_detail",
-        lambda _code: (None, False),
-    )
     _login(client, OWNER)
     owner = client.get("/express/partner/api/lands/4/data")
     assert owner.status_code == 200
@@ -182,10 +199,13 @@ def test_confirm_unpublish_payload_only_for_owner(client, app, monkeypatch):
     _login(client, OTHER)
     other = client.get("/express/partner/api/lands/4/data")
     assert other.status_code == 404
+    assert other.get_json()["error_code"] == "not_found"
+    assert other.get_json()["ok"] is False
 
     _logout(client)
     guest = client.get("/express/partner/api/lands/4/data")
     assert guest.status_code == 404
+    assert guest.get_json()["error_code"] == "not_found"
 
 
 def test_delete_removes_owner_rows_assignments_and_returns_page(client, app):
@@ -212,15 +232,27 @@ def test_delete_removes_owner_rows_assignments_and_returns_page(client, app):
     assert body["ok"] is True
     assert body["code"] == "4"
     assert body["message"]
-    assert "items" in body
-    assert all(str(item.get("code")) != "4" for item in body["items"])
+    page = body["page_payload"]
+    assert all(str(item.get("code")) != "4" for item in page["items"])
     with app.app_context():
         ads = load_ads() or []
         assert all(str(row.get("code")) != "4" for row in ads)
         assert any(str(row.get("code")) == "9" for row in ads)
         left = load_express_assignments() or []
-        assert all(str(row.get("land_code")) != "4" for row in left)
+        assert all(
+            str(row.get("status")) in ("in_transaction", "sold")
+            for row in left
+            if str(row.get("land_code")) == "4"
+        )
+        assert any(
+            str(row.get("land_code")) == "4" and str(row.get("status")) == "in_transaction"
+            for row in left
+        )
         assert any(str(row.get("land_code")) == "9" for row in left)
+
+    missing = client.post("/express/partner/api/my-property/delete", json={"code": "404"})
+    assert missing.status_code == 404
+    assert missing.get_json()["error_code"] == "not_found"
 
     _logout(client)
     guest = client.post("/express/partner/api/my-property/delete", json={"code": "9"})

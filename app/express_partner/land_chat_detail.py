@@ -483,16 +483,19 @@ def native_listing_detail_payload(
     else:
         land, _approved = prepare_land_for_chat_detail(raw)
         tok = ""
-    if not land:
-        if confirm_unpublish and not is_divar:
-            from flask import has_request_context
+    if confirm_unpublish and not is_divar:
+        from flask import has_request_context
 
-            from ..utils.storage import load_ads_cached
-            from .special_listings import viewer_owns_private_home
+        from ..utils.storage import load_ads_cached
+        from .special_listings import unpublished_owner_home_only, viewer_owns_private_home
 
+        lands = load_ads_cached() or []
+        if unpublished_owner_home_only(lands, raw):
             me = str(session.get("user_phone") or "") if has_request_context() else ""
-            if viewer_owns_private_home(load_ads_cached() or [], raw, me):
+            if viewer_owns_private_home(lands, raw, me):
                 return _unpublish_confirm_payload(raw)
+            return None
+    if not land:
         return None
     source = "divar" if (is_divar or str(land.get("_source") or "") == "divar") else "vinor"
     images = _listing_image_urls(land)
