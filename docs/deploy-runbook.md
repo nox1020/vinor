@@ -279,4 +279,4 @@ git rev-parse --short=7 origin/main
 
 `sha` باید با خروجی git یکی باشد. `GET /healthz` همچنان 204 بدون بدنه است.
 
-<!-- deploy trigger 2026-10-15b -->
+<!-- deploy trigger 2026-10-15c -->
