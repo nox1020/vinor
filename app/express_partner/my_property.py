@@ -226,9 +226,15 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
     from .apk_native import land_card
     from .special_listings import (
         detail_sale_flag,
+        ensure_unique_land_codes,
         listings_owned_by,
         listings_owned_home,
     )
+
+    try:
+        ensure_unique_land_codes()
+    except Exception:
+        pass
 
     seen = set()
     out: List[Dict[str, Any]] = []

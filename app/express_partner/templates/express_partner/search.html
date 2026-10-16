@@ -544,6 +544,7 @@
       <a class="vn-search-row"
          role="listitem"
          href="{{ ad.url }}"
+         {% if ad.created_at %}data-created="{{ ad.created_at }}"{% endif %}
          {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% else %} data-divar-token="{{ ad.token }}"{% endif %}{% endif %}
          aria-label="{{ ad.title }}، {{ _price_show }}{% if _cap %}، {{ _cap }}{% endif %}">
         <div class="vn-search-meta">
