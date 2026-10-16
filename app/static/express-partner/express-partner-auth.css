@@ -87,6 +87,13 @@ textarea, select {
   line-height: 1.25rem;
   color: #a1a1aa;
 }
+.vinor-auth-reauth {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  text-align: right;
+  color: #71717a;
+}
 .vinor-auth-form { margin-top: 2rem; }
 .vinor-auth-form--otp { margin-top: 1.5rem; }
 .vinor-auth-legal {

@@ -66,15 +66,8 @@ def _log(event: str, detail: str = "") -> None:
 
 
 def _resolve_secret() -> str:
-    """Env wins. app.keys is only a fallback and an empty value is never valid."""
-    env_secret = (os.environ.get("VINOR_WEBHOOK_SECRET") or "").strip()
-    if env_secret:
-        return env_secret
-    try:
-        from app.keys import VINOR_WEBHOOK_SECRET as fallback
-    except Exception:
-        return ""
-    return (str(fallback) if fallback else "").strip()
+    """VINOR_WEBHOOK_SECRET from the environment only. Empty is never valid."""
+    return (os.environ.get("VINOR_WEBHOOK_SECRET") or "").strip()
 
 
 def _signature_ok(secret: str, raw_body: bytes) -> bool:
@@ -126,24 +119,27 @@ def _normalize_sha(value: Any) -> str:
     return sha
 
 
-def _eligible_sha(payload: dict) -> str:
-    """SHA to deploy, or empty when this delivery must be ignored."""
+def _workflow_run_decision(payload: dict) -> tuple[str, str]:
+    """Return (sha, reason). reason is a short code when this run must not deploy."""
     if str(payload.get("action") or "") != "completed":
-        return ""
+        return "", "not_completed"
     run = payload.get("workflow_run") or {}
     if not isinstance(run, dict):
-        return ""
+        return "", "not_completed"
     if str(run.get("conclusion") or "") != "success":
-        return ""
+        return "", "not_success"
     if str(run.get("event") or "") != "push":
-        return ""
+        return "", "wrong_event"
     if str(run.get("head_branch") or "") != "main":
-        return ""
+        return "", "wrong_branch"
     if _repo_full_name(payload) != _allowed_repo():
-        return ""
+        return "", "wrong_repo"
     if _payload_workflow_path(payload) != _workflow_path_expected():
-        return ""
-    return _normalize_sha(run.get("head_sha"))
+        return "", "path_mismatch"
+    sha = _normalize_sha(run.get("head_sha"))
+    if not sha:
+        return "", "bad_sha"
+    return sha, ""
 
 
 def _read_lines(path: str) -> set[str]:
@@ -259,8 +255,9 @@ def git_webhook():
     payload = request.get_json(silent=True) or {}
     if not isinstance(payload, dict):
         return _ignored()
-    sha = _eligible_sha(payload)
-    if not sha:
+    sha, reason = _workflow_run_decision(payload)
+    if reason:
+        _log("webhook_rejected", reason)
         return _ignored()
     if IS_WINDOWS:
         _log("webhook_skipped", "windows")
@@ -269,7 +266,7 @@ def git_webhook():
     delivery = (request.headers.get("X-GitHub-Delivery") or "").strip()
     with _StateLock(_deploy_state_dir()):
         if _already_handled(sha, delivery):
-            _log("webhook_duplicate", sha)
+            _log("webhook_rejected", "duplicate")
             return _ignored()
 
     try:
@@ -286,3 +283,4 @@ def git_webhook():
             _log("webhook_state", "unwritable")
     _log("webhook_accepted", sha)
     return jsonify(ok=True, accepted=True), 202
+

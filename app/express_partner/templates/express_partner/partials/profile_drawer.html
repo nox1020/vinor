@@ -1221,15 +1221,18 @@
           <i class="fas fa-gear" aria-hidden="true"></i>
           تنظیمات
         </a>
-        <button type="button"
-                class="ep-profile-drawer__user-menu-item ep-profile-drawer__user-menu-item--danger"
-                id="epDrawerLogoutBtn"
-                role="menuitem"
-                data-vinor-logout
-                aria-label="خروج">
-          <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
-          خروج
-        </button>
+        <form id="epDrawerLogoutForm" method="post" action="{{ url_for('express_partner.logout') }}" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  class="ep-profile-drawer__user-menu-item ep-profile-drawer__user-menu-item--danger"
+                  id="epDrawerLogoutBtn"
+                  role="menuitem"
+                  data-vinor-logout
+                  aria-label="خروج">
+            <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
+            خروج
+          </button>
+        </form>
       </div>
     </div>
   </div>
@@ -1925,7 +1928,8 @@
       if (typeof window.vinorExpressLogout === 'function') {
         window.vinorExpressLogout();
       } else {
-        try { window.location.assign('/express/partner/logout'); } catch (_) {}
+        var logoutForm = document.getElementById('epDrawerLogoutForm');
+        if (logoutForm) logoutForm.submit();
       }
       return;
     }

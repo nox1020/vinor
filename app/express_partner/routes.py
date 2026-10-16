@@ -23,6 +23,14 @@ def _avatar_initials_filter(value: str | None) -> str:
     return partner_avatar_initials(value)
 
 
+@express_partner_bp.app_template_filter("quote_next")
+def _quote_next_filter(value: str | None) -> str:
+    """Encode an internal next path so / becomes %2F."""
+    from urllib.parse import quote
+
+    return quote(str(value or ""), safe="")
+
+
 @express_partner_bp.app_template_filter("image_thumb_url")
 def _image_thumb_url_filter(value: str | None) -> str:
     from ..utils.images import gallery_display_url
@@ -218,6 +226,8 @@ def _build_partner_dashboard_lands(
     from ..utils.dates import is_ad_expired
     from ..utils.images import sanitize_land_media
 
+    from app.utils.public_listings import is_partner_assignment_land
+
     ph = (me_phone or '').strip()
     cities = selected_cities or []
     q = (search_query or '').strip().lower()
@@ -248,7 +258,7 @@ def _build_partner_dashboard_lands(
     code_to_assigned: Dict[str, Dict[str, Any]] = {}
     for a in my_assignments:
         land = code_to_land.get(str(a.get('land_code')))
-        if not land:
+        if not land or not is_partner_assignment_land(land):
             continue
         is_expired = is_ad_expired(land)
         if is_expired:
@@ -370,6 +380,8 @@ def _build_partner_dashboard_lands(
 
     assigned_lands: List[Dict[str, Any]] = []
     for land in display_lands:
+        if not is_partner_assignment_land(land):
+            continue
         code = str(land.get('code') or '')
         item = dict(land)
         assigned_item = code_to_assigned.get(code)
@@ -890,15 +902,14 @@ _APPLY_LOGIN_NEXT_ALIASES = frozenset({'apply', 'coop', 'cooperation'})
 
 
 def _resolve_login_next_url(raw: str) -> str | None:
-    """alias مثل apply → مسیر واقعی فرم همکاری؛ فقط مسیر داخلی همکار."""
-    nxt = (raw or '').strip()
-    if not nxt:
+    """alias مثل apply → مسیر واقعی فرم همکاری؛ هر مسیر دیگر از هلپر مشترک."""
+    from app.utils.safe_redirect import safe_internal_path_or_home
+
+    if not isinstance(raw, str) or raw == "":
         return None
-    if nxt.lower() in _APPLY_LOGIN_NEXT_ALIASES:
+    if not any(ch.isspace() for ch in raw) and raw.lower() in _APPLY_LOGIN_NEXT_ALIASES:
         return url_for('express_partner.apply')
-    if nxt.startswith('/') and not nxt.startswith('//'):
-        return nxt
-    return None
+    return safe_internal_path_or_home(raw)
 
 
 def _login_next_preserve():
@@ -1194,10 +1205,11 @@ def _lands_for_favorite_codes(codes: List[str], me_phone: str) -> List[Dict[str,
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
     from ..utils.dates import is_ad_expired
+    from app.utils.public_listings import is_partner_assignment_land
     result: List[Dict[str, Any]] = []
     for code in ordered:
         land = code_to_land.get(code)
-        if not land:
+        if not land or not is_partner_assignment_land(land):
             continue
         item = dict(land)
         global_status = _effective_land_status(code_to_global_status.get(code, 'active'), item)
@@ -1472,8 +1484,21 @@ def require_partner_access(json_response: bool = False, allow_pending: bool = Fa
                     return fn(*args, **kwargs)
                 if json_response:
                     return jsonify({"success": False, "error": "unauthorized"}), 401
-                nxt = request.full_path.rstrip("?") if request.full_path else request.path
-                return redirect(url_for("express_partner.login", next=nxt))
+                # مرورگر (text/html یا */* با کیفیت برابر) همان ۳۰۲ را می‌گیرد.
+                # کلاینت JSON (اپ، fetch، XHR) باید ۴۰۱ ببیند تا ریدایرکت HTML را دنبال نکند.
+                wants_json = (
+                    request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                    or request.is_json
+                    or request.accept_mimetypes["application/json"]
+                    > request.accept_mimetypes["text/html"]
+                )
+                if wants_json:
+                    resp = jsonify({"success": False, "error": "unauthorized"})
+                    resp.status_code = 401
+                    resp.headers["Cache-Control"] = "no-store"
+                    return resp
+                from app.utils.safe_redirect import safe_request_target
+                return redirect(url_for("express_partner.login", next=safe_request_target()))
 
             me_phone = (session.get("user_phone") or "").strip()
             _ensure_session_partner_on_g()
@@ -1575,13 +1600,6 @@ def inject_role_flags():
             is_express_partner = _is_partner_approved(getattr(g, 'express_partner_profile', None))
             session['VINOR_IS_EXPRESS_PARTNER'] = is_express_partner
     
-    # دریافت VAPID_PUBLIC_KEY از config
-    try:
-        from flask import current_app
-        vapid_public = current_app.config.get("VAPID_PUBLIC_KEY", "")
-    except Exception:
-        vapid_public = ""
-    
     from ..utils.apk_version import is_vinor_apk_request
 
     is_vinor_apk = False
@@ -1680,7 +1698,6 @@ def inject_role_flags():
     return {
         "VINOR_IS_EXPRESS_PARTNER": is_express_partner,
         "vinor_express_auth_segment": vinor_express_auth_segment,
-        "VAPID_PUBLIC_KEY": vapid_public,
         "is_vinor_apk": is_vinor_apk,
         "android_apk_url": android_apk_url,
         "android_apk_version": android_apk_version,
@@ -3079,8 +3096,10 @@ def _home_suggested_files(
     assignments = load_express_assignments() or []
     commissions = load_express_commissions_cached() or []
     visits = visit_rows if isinstance(visit_rows, list) else (load_express_visit_requests() or [])
+    from app.utils.public_listings import is_partner_assignment_land
+
     for land in assigned_lands or []:
-        if not isinstance(land, dict):
+        if not isinstance(land, dict) or not is_partner_assignment_land(land):
             continue
         # کارت مأموریت/پیشنهاد خانه فقط فایلِ اختصاص‌یافته به همکار
         if not land.get('_assignment_id'):
@@ -4485,8 +4504,19 @@ def my_property_page():
         return redirect(url_for('express_partner.my_property'))
 
     payload = page_payload(me_phone)
-    if request.args.get('register') == '1' or not payload.get('has_property'):
+    if request.args.get('register') == '1':
         return _render_owner_home_form(me_phone, is_special=is_special)
+    if not payload.get('has_property'):
+        return render_template(
+            'express_partner/my_property.html',
+            has_property=False,
+            show_register_form=False,
+            is_special=is_special,
+            property={},
+            items=[],
+            listings=[],
+            hide_header=True,
+        )
     return render_template(
         'express_partner/my_property.html',
         property=payload.get('property') or {},
@@ -4511,7 +4541,7 @@ def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
         form_values={'vinor_contact': phone} if phone else {},
         listing_code='',
         listing_form_action=url_for('express_partner.my_property'),
-        listing_back_url=url_for('express_partner.home'),
+        listing_back_url=url_for('express_partner.profile'),
         listing_upload_image_url=url_for('express_partner.my_property_upload_image'),
         listing_upload_video_url=url_for('express_partner.my_property_upload_video'),
         listing_upload_document_url=url_for('express_partner.my_property_upload_document'),
@@ -4529,6 +4559,7 @@ def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
         hide_header=True,
         listing_submit_label='ثبت ملک من',
         has_property=False,
+        show_register_form=True,
         property={},
         is_special=is_special,
     )
@@ -4597,6 +4628,37 @@ def apk_my_property_submit():
     })
 
 
+def _mark_payload_unpublished(payload: Dict[str, Any], code: str) -> None:
+    """کارت همین کد در پاسخ توقف باید خصوصی باشد تا اپ پیام موفقیت را دور نریزد."""
+    want = str(code or "").strip()
+    if not want or not isinstance(payload, dict):
+        return
+    for key in ("items", "listings"):
+        rows = payload.get(key)
+        if not isinstance(rows, list):
+            continue
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            row_code = str(item.get("code") or item.get("id") or "").strip()
+            if row_code != want:
+                continue
+            item["published_for_sale"] = False
+            item["badge_label"] = "خصوصی"
+            item["_status_label"] = "خصوصی"
+    prop = payload.get("property")
+    if isinstance(prop, dict) and str(prop.get("code") or "").strip() == want:
+        prop["published_for_sale"] = False
+        payload["published_for_sale"] = False
+
+
+def _publish_request_wants_unpublish(body: Any = None) -> bool:
+    """توقف را قبل از اعتبارسنجی انتشار تشخیص بده؛ کوئری، فرم و JSON هر سه ملاک‌اند."""
+    from .special_listings import wants_unpublish
+
+    return wants_unpublish(body, request.args, request.form)
+
+
 def _publish_request_fields() -> Dict[str, Any]:
     data = request.get_json(silent=True)
     if not data and request.data:
@@ -4606,7 +4668,7 @@ def _publish_request_fields() -> Dict[str, Any]:
             data = {}
     if not isinstance(data, dict) or not data:
         send_raw = request.form.get('auto_send_all_partners')
-        return {
+        fields = {
             'payment_method': (request.form.get('payment_method') or '').strip(),
             'commission_pct': (
                 request.form.get('express_commission_pct')
@@ -4616,38 +4678,49 @@ def _publish_request_fields() -> Dict[str, Any]:
             'send_all': bool(str(send_raw or '').strip()),
             'code': (request.form.get('code') or '').strip(),
         }
+        fields['unpublish'] = _publish_request_wants_unpublish(None)
+        return fields
     send_raw = data.get('auto_send_all_partners')
     if send_raw is None:
         send_raw = data.get('send_all')
-    return {
+    fields = {
         'payment_method': str(data.get('payment_method') or '').strip(),
         'commission_pct': data.get('express_commission_pct') or data.get('commission_pct') or '2',
         'send_all': send_raw is True or str(send_raw or '').strip().lower() in ('1', 'true', 'yes', 'on'),
         'code': str(data.get('code') or '').strip(),
     }
+    fields['unpublish'] = _publish_request_wants_unpublish(data)
+    return fields
 
 
 @express_partner_bp.route('/my-property/publish', methods=['POST'], endpoint='my_property_publish')
 @require_partner_access(allow_pending=True)
 def my_property_publish():
     from .apk_native import session_phone
-    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home
+    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home, unpublish_owner_home
 
     fields = _publish_request_fields()
-    rec, err = publish_owner_home(
-        session_phone(),
-        payment_method=fields['payment_method'],
-        commission_pct=fields['commission_pct'],
-        send_all=fields['send_all'],
-        land_code=fields.get('code') or '',
-    )
+    phone = session_phone()
+    if fields.get('unpublish'):
+        rec, err = unpublish_owner_home(phone, land_code=fields.get('code') or '')
+    else:
+        rec, err = publish_owner_home(
+            phone,
+            payment_method=fields['payment_method'],
+            commission_pct=fields['commission_pct'],
+            send_all=fields['send_all'],
+            land_code=fields.get('code') or '',
+        )
     if err:
         flash(SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.'), 'error')
         if fields.get('code'):
             return redirect(url_for('express_partner.land_detail', code=fields['code']))
         return redirect(url_for('express_partner.my_property'))
-    flash(f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.', 'success')
     code = str((rec or {}).get('code') or fields.get('code') or '').strip()
+    if fields.get('unpublish'):
+        flash('انتشار فروش متوقف شد.', 'success')
+    else:
+        flash(f'ملک شما با کد {code} برای فروش منتشر شد.', 'success')
     if code:
         return redirect(url_for('express_partner.land_detail', code=code))
     return redirect(url_for('express_partner.my_property'))
@@ -4658,25 +4731,64 @@ def my_property_publish():
 def apk_my_property_publish():
     from .my_property import page_payload
     from .apk_native import session_phone
-    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home
+    from .special_listings import SPECIAL_LISTING_ERRORS, publish_owner_home, unpublish_owner_home
 
     fields = _publish_request_fields()
-    rec, err = publish_owner_home(
-        session_phone(),
-        payment_method=fields['payment_method'],
-        commission_pct=fields['commission_pct'],
-        send_all=fields['send_all'],
-        land_code=fields.get('code') or '',
-    )
+    phone = session_phone()
+    stopped = bool(fields.get('unpublish'))
+    if stopped:
+        rec, err = unpublish_owner_home(phone, land_code=fields.get('code') or '')
+    else:
+        rec, err = publish_owner_home(
+            phone,
+            payment_method=fields['payment_method'],
+            commission_pct=fields['commission_pct'],
+            send_all=fields['send_all'],
+            land_code=fields.get('code') or '',
+        )
     if err:
         msg = SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.')
         return _apk_json({'ok': False, 'error': msg, 'error_code': err}, 400)
+    code = str((rec or {}).get('code') or fields.get('code') or '').strip()
+    if stopped:
+        message = 'انتشار فروش متوقف شد.'
+    else:
+        message = f'ملک شما با کد {code} برای فروش منتشر شد.'
+    payload = page_payload(phone)
+    if stopped and code:
+        _mark_payload_unpublished(payload, code)
+    payload.update({
+        'ok': True,
+        'code': code,
+        'message': message,
+        'next': 'my-property',
+    })
+    return _apk_json(payload)
+
+
+@express_partner_bp.post('/api/my-property/delete', endpoint='apk_my_property_delete')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_delete():
+    """حذف ملک منِ خودِ کاربر. بدنه JSON است: ``{"code": "..."}``."""
+    from .apk_native import session_phone
+    from .my_property import page_payload
+    from .special_listings import delete_owner_property
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    code = str(data.get('code') or '').strip()
+    phone = session_phone()
+    removed, err = delete_owner_property(phone, code)
+    if err:
+        message = 'این ملک پیدا نشد.' if err == 'not_found' else 'حذف ملک ناموفق بود.'
+        status = 404 if err == 'not_found' else 400
+        return _apk_json({'ok': False, 'error': message, 'error_code': err}, status)
     return _apk_json({
         'ok': True,
-        'code': rec.get('code') if rec else '',
-        'message': f'ملک شما با کد {rec.get("code")} برای فروش منتشر شد.',
-        'next': 'my-property',
-        **page_payload(session_phone()),
+        'code': removed or code,
+        'message': 'ملک حذف شد.',
+        'page_payload': page_payload(phone),
     })
 
 
@@ -4769,9 +4881,12 @@ def apk_legal_data():
 def apk_land_detail_data(code: str):
     from .land_chat_detail import native_listing_detail_payload
 
-    payload = native_listing_detail_payload(code)
+    payload = native_listing_detail_payload(code, confirm_unpublish=True)
     if not payload:
-        return _apk_json({"ok": False, "error": "آگهی پیدا نشد."}, 404)
+        return _apk_json(
+            {"ok": False, "error": "آگهی پیدا نشد.", "error_code": "not_found"},
+            404,
+        )
     return _apk_json(payload)
 
 
@@ -4890,6 +5005,13 @@ def _public_lands_payload(limit=50):
 def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
     """فایل‌های عمومی کامل برای نوار کشویی خانه (مهمان / کاربر عادی)."""
     from app.utils.public_listings import is_publicly_visible_listing
+
+    try:
+        from .special_listings import ensure_unique_land_codes
+
+        ensure_unique_land_codes()
+    except Exception:
+        current_app.logger.exception("repair duplicate land codes failed")
 
     sanitize_land_media = None
     try:
@@ -5024,6 +5146,7 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'price_toman': price_n if price_n > 0 else 0,
         'size': land.get('size') if land.get('size') not in (None, '') else '',
         'city': city,
+        'created_at': str(land.get('created_at') or land.get('updated_at') or '').strip(),
     }
 
 
@@ -5083,6 +5206,7 @@ def _home_ads_for_api() -> tuple:
             'area': str(ad.get('area') or '').strip(),
             'facts': [str(x).strip() for x in (ad.get('facts') or []) if str(x).strip()][:3],
             'listed_label': str(ad.get('listed_label') or '').strip(),
+            'created_at': str(ad.get('created_at') or '').strip(),
         }
         if ad.get('price_total') not in (None, ''):
             row['price_total'] = ad.get('price_total')
@@ -5106,7 +5230,7 @@ def _merge_home_ads_carousel(
     divar_ads: List[Dict[str, Any]],
     vinor_lands: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """وینور اول، سپس دیوار — بدون تکرار توکن/کد."""
+    """وینور اول، سپس دیوار. ردیف‌هایی که کد یکی دارند ولی زمان یا عنوان فرق دارد هر دو می‌مانند."""
     merged: List[Dict[str, Any]] = []
     seen: set[str] = set()
     try:
@@ -5123,7 +5247,8 @@ def _merge_home_ads_carousel(
         ad = _vinor_land_to_home_ad(land)
         if not ad:
             continue
-        key = f"vinor:{ad['token']}"
+        created = str(land.get("created_at") or land.get("updated_at") or "")
+        key = f"vinor:{ad['token']}:{created}:{ad.get('title') or ''}"
         if key in seen:
             continue
         seen.add(key)
@@ -7965,9 +8090,12 @@ def verify():
 
     verified_phone = _verify_otp_for_phone(code, form_phone)
     if verified_phone:
-        form_next = (request.form.get('next') or '').strip()
-        if form_next and form_next.startswith('/') and not form_next.startswith('//'):
-            session['next'] = form_next
+        form_next = request.form.get('next') or ''
+        if form_next:
+            from app.utils.safe_redirect import safe_internal_path_or_home
+
+            resolved = _resolve_login_next_url(form_next)
+            session['next'] = resolved or safe_internal_path_or_home(form_next)
         try:
             from .referrals import capture_ref_on_login
             capture_ref_on_login()
@@ -8030,11 +8158,11 @@ def legal_terms():
 
 def _redirect_login_next(fallback_endpoint: str = 'express_partner.home'):
     """هدایت امن بعد از ورود؛ فقط مسیر نسبی داخلی."""
+    from app.utils.safe_redirect import safe_internal_path_or_home
+
     nxt = session.pop('next', None)
-    if isinstance(nxt, str):
-        nxt = nxt.strip()
-        if nxt.startswith('/') and not nxt.startswith('//'):
-            return redirect(nxt)
+    if isinstance(nxt, str) and nxt != "":
+        return redirect(safe_internal_path_or_home(nxt))
     return redirect(url_for(fallback_endpoint))
 
 
@@ -8056,9 +8184,12 @@ def cooperation_terms():
     me_phone = (session.get('user_phone') or '').strip()
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile) if me_phone else False
-    next_url = (request.args.get('next') or '').strip()
+    from app.utils.safe_redirect import safe_internal_path
+
+    next_url = safe_internal_path(request.args.get('next') or '')
     back_url = url_for('express_partner.home')
-    if next_url.startswith('/express/partner'):
+    next_path = (next_url or '').split('?', 1)[0]
+    if next_url and (next_path == '/express/partner' or next_path.startswith('/express/partner/')):
         back_url = next_url
     return render_template(
         'express_partner/cooperation_terms.html',
@@ -8155,7 +8286,7 @@ def routine():
 
 
 @express_partner_bp.route('/routine/data', methods=['GET'], endpoint='routine_data')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def routine_data():
     """
     برگرداندن روزهای انجام‌شده روتین در ماه خواسته‌شده برای کاربر جاری.
@@ -8709,7 +8840,7 @@ def routine_steps():
 
 
 @express_partner_bp.get('/routine/steps/detail')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def routine_steps_detail():
     """برگرداندن لیست تیک‌های روز مشخص شده (detail) — ثبت خودکار."""
     phone = (session.get("user_phone") or "").strip()
@@ -8778,21 +8909,29 @@ def _mark_in_transaction_finish(
 
 
 def _express_land_in_catalog(code: str) -> bool:
-    """فایل در لیست اکسپرس (یا آگهی‌ها) وجود دارد."""
+    """فایل عمومی اکسپرس در کاتالوگ است. ملک خصوصی «ملک من» نیست."""
+    from app.utils.public_listings import is_partner_assignment_land
+
     key = str(code or '').strip()
     if not key:
         return False
+    pools: List[Any] = []
     try:
-        express_lands = load_express_lands_cached() or []
+        pools.extend(load_express_lands_cached() or [])
     except Exception:
-        express_lands = []
-    if any(str(l.get('code') or '').strip() == key for l in express_lands):
-        return True
+        pass
     try:
-        lands_all = load_ads_cached() or []
+        pools.extend(load_ads_cached() or [])
     except Exception:
-        lands_all = []
-    return any(str(l.get('code') or '').strip() == key for l in lands_all)
+        pass
+    for land in pools:
+        if not isinstance(land, dict):
+            continue
+        if str(land.get('code') or '').strip() != key:
+            continue
+        if is_partner_assignment_land(land):
+            return True
+    return False
 
 
 def _express_land_partner_ctx(code: str, me_phone: str) -> Dict[str, Any] | None:
@@ -9365,6 +9504,12 @@ def land_tx_status(code: str):
         is_partner_approved=is_partner_approved,
         global_assignment_status=ctx['global_status'],
     )
+    try:
+        from .visit_requests import visit_schedule_for_land
+
+        state.update(visit_schedule_for_land(code))
+    except Exception:
+        current_app.logger.exception("visit schedule payload failed code=%s", code)
     # پولینگ tx-status هر چند ثانیه یک‌بار است؛ روتین را مسدود نکن
     if is_partner_approved:
         _defer_routine_auto_tick(me_phone, ROUTINE_STEP_VISIT)
@@ -9780,20 +9925,20 @@ def mark_in_transaction(code: str):
 
 @express_partner_bp.route('/logout', methods=['GET', 'POST'], endpoint='logout')
 def logout():
-    """خروج با POST؛ GET فقط برای جلوگیری از 405 اگر URL روی /logout مانده باشد."""
-    from ..utils.flash_messages import FLASH_AUTH_INFO
+    """POST clears the session. GET only redirects home and does not log out.
 
+    The endpoint stays CSRF-exempt (stale tokens in long-open tabs and old PWAs).
+    Destination is always ``_logout_dest_url()``; ``next`` is ignored.
+    No flash and no toast — the confirm sheet is the only logout UI.
+    """
     dest = _logout_dest_url()
     if request.method == 'GET':
-        if session.get('user_phone'):
-            _clear_express_partner_auth_session()
         r = redirect(dest)
         r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
         r.headers['Pragma'] = 'no-cache'
         return r
 
     _clear_express_partner_auth_session()
-    flash('از حساب خارج شدید.', FLASH_AUTH_INFO)
     r = redirect(dest)
     r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     r.headers['Pragma'] = 'no-cache'
@@ -9904,20 +10049,52 @@ def otp_resend():
         return jsonify({'ok': False, 'error': 'خطا در ارسال مجدد کد.'}), 502
 
 
+_PHONE_DIGIT_TRANSLATION = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+    "01234567890123456789",
+)
+
+
+def mask_canonical_phone(phone: str) -> str:
+    """۰۹۱۲•••۴۵۶۷ فقط برای شمارهٔ canonical یازده‌رقمی ۰۹؛ وگرنه «•••».
+
+    نرمال‌سازی: ارقام فارسی/عربی به لاتین، حذف فاصله، +98 و 0098 به 0.
+    خروجی لاتین است تا قالب با فیلتر fa_digits رقم‌ها را فارسی کند.
+    """
+    raw = str(phone or "").translate(_PHONE_DIGIT_TRANSLATION)
+    raw = "".join(ch for ch in raw if not ch.isspace())
+    if raw.startswith("+"):
+        raw = raw[1:]
+    if raw.startswith("0098"):
+        raw = "0" + raw[4:]
+    elif raw.startswith("98"):
+        raw = "0" + raw[2:]
+    if len(raw) == 11 and raw.isdigit() and raw.startswith("09"):
+        return raw[:4] + "•••" + raw[-4:]
+    return "•••"
+
+
+def _private_nostore(resp):
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
+
+
 @express_partner_bp.route('/profile', methods=['GET'], endpoint='profile')
 @require_partner_access(allow_pending=True, allow_guest=True)
 def profile_page():
-    """وینور من — همه گزینه‌های منوی ساید، بدون کشوی کناری."""
+    """وینور من — مهمان یا واردشده. شمارهٔ خام هرگز در بدنهٔ پاسخ نیست."""
+    from flask import make_response
+
     me_phone = (session.get('user_phone') or '').strip()
+    logged_in = bool(me_phone)
     profile = getattr(g, 'express_partner_profile', None) or {}
     try:
-        is_approved = _is_partner_approved(profile)
+        is_approved = _is_partner_approved(profile) if logged_in else False
     except Exception:
         is_approved = False
-    is_special = _is_partner_special(profile) if is_approved else False
-    me_name = (profile.get('name') or '').strip() or 'همکار وینور'
-    has_pending_app = _partner_has_pending_app(me_phone) if me_phone and not is_approved else False
-    withdrawable = _partner_withdrawable_balance(me_phone) if me_phone else 0
+    is_special = _is_partner_special(profile) if logged_in and is_approved else False
+    me_name = ((profile.get('name') or '').strip() or 'همکار وینور') if logged_in else ''
+    has_pending_app = _partner_has_pending_app(me_phone) if logged_in and not is_approved else False
     lawyer_feature_on = False
     try:
         from app.lawyer.config import lawyer_enabled as _lawyer_enabled
@@ -9925,21 +10102,51 @@ def profile_page():
         lawyer_feature_on = bool(_lawyer_enabled())
     except Exception:
         lawyer_feature_on = False
-    return render_template(
-        'express_partner/profile.html',
-        profile=profile,
-        me_phone=me_phone,
-        me_name=me_name,
-        partner_name=me_name,
-        is_approved=is_approved,
-        is_special=is_special,
-        has_pending_app=has_pending_app,
-        withdrawable_balance=withdrawable,
-        lawyer_feature_on=lawyer_feature_on,
-        hide_header=True,
-        bottom_nav_active='profile',
-        seo_title='وینور من | وینور اکسپرس',
-    )
+    avatar_url = ''
+    if logged_in:
+        avatar = (profile.get('avatar') or '').strip()
+        if avatar:
+            try:
+                from ..utils.images import display_avatar_url
+
+                avatar_url = display_avatar_url(avatar, profile.get('avatar_updated_at')) or ''
+            except Exception:
+                avatar_url = ''
+    ctx = {
+        'me_logged_in': logged_in,
+        'me_name': me_name,
+        'me_initial': (me_name[:1] if me_name else ''),
+        'me_phone_masked': mask_canonical_phone(me_phone) if logged_in else '',
+        'avatar_url': avatar_url,
+        'is_approved': is_approved,
+        'is_special': is_special,
+        'has_pending_app': has_pending_app,
+        'lawyer_feature_on': lawyer_feature_on,
+        'hide_header': True,
+        'bottom_nav_active': 'profile',
+        'seo_title': 'وینور من | وینور اکسپرس',
+    }
+    if logged_in:
+        withdrawable = 0
+        if is_approved:
+            try:
+                withdrawable = _partner_withdrawable_balance(me_phone)
+            except Exception:
+                withdrawable = 0
+        ctx['withdrawable_balance'] = withdrawable
+        try:
+            from app.crm.config import crm_ui_enabled as _crm_ui_enabled
+
+            ctx['crm_ui_enabled'] = bool(_crm_ui_enabled() and is_approved)
+        except Exception:
+            ctx['crm_ui_enabled'] = False
+        try:
+            from app.services.notifications import unread_count as _unread_count
+
+            ctx['unread_count'] = int(_unread_count(me_phone) or 0)
+        except Exception:
+            ctx['unread_count'] = 0
+    return _private_nostore(make_response(render_template('express_partner/profile.html', **ctx)))
 
 
 @express_partner_bp.route('/listings', methods=['GET'], endpoint='special_listings')
@@ -10497,6 +10704,7 @@ def profile_data():
             visit_inbox_count = 0
     plus_system_on = False
     lawyer_feature_on = False
+    crm_ui_on = False
     try:
         from .zarinpal_config import plus_system_enabled as _plus_system_enabled
 
@@ -10509,7 +10717,13 @@ def profile_data():
         lawyer_feature_on = bool(_lawyer_enabled())
     except Exception:
         lawyer_feature_on = False
-    return jsonify({
+    try:
+        from app.crm.config import crm_ui_enabled as _crm_ui_enabled
+
+        crm_ui_on = bool(_crm_ui_enabled() and is_approved)
+    except Exception:
+        crm_ui_on = False
+    return _private_nostore(jsonify({
         'success': True,
         'me_phone': me_phone,
         'me_name': me_name or 'همکار وینور',
@@ -10525,7 +10739,8 @@ def profile_data():
         'csrf_token': csrf_token,
         'plus_system_enabled': plus_system_on,
         'lawyer_feature_on': lawyer_feature_on,
-    })
+        'crm_ui_enabled': crm_ui_on,
+    }))
 
 
 def _normalize_profile_birth_date(birth_date: str, prev_birth: str = '') -> str:
@@ -10962,7 +11177,7 @@ def profile_edit_page():
 
 
 @express_partner_bp.get('/profile/edit/data', endpoint='profile_edit_data')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, json_response=True)
 def profile_edit_data():
     """API JSON برای اپ اندروید: داده فرم ویرایش پروفایل."""
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
@@ -11129,17 +11344,27 @@ def profile_avatar_upload():
     """
     آپلود و تنظیم آواتار پروفایل همکار
     """
+    from app.utils.safe_redirect import safe_internal_path
+
     me_phone = _canonical_partner_phone(session.get('user_phone') or '')
-    next_url = (request.form.get('next') or request.args.get('next') or '').strip()
+    next_url = safe_internal_path(request.form.get('next') or request.args.get('next') or '')
+    next_path = (next_url or '').split('?', 1)[0]
+    partner_next = bool(
+        next_url and (next_path == '/express/partner' or next_path.startswith('/express/partner/'))
+    )
+
+    def _avatar_next(fallback: str):
+        return redirect(next_url if partner_next else fallback)
+
     f = request.files.get('avatar')
     if not f or not f.filename:
-        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.home', menu=1))
+        return _avatar_next(url_for('express_partner.home', menu=1))
     rel_path = _save_partner_avatar_upload(me_phone, f)
     if not rel_path:
         flash('خطا در ذخیره تصویر پروفایل.', 'profile')
-        return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
+        return _avatar_next(url_for('express_partner.profile_edit'))
     flash('عکس پروفایل به‌روز شد.', 'profile')
-    return redirect(next_url if next_url.startswith('/express/partner/') else url_for('express_partner.profile_edit'))
+    return _avatar_next(url_for('express_partner.profile_edit'))
 
 
 @express_partner_bp.post('/files/<int:fid>/delete')

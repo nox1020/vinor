@@ -271,6 +271,17 @@
     cursor: pointer;
     font-family: inherit;
   }
+  #vinorListingDetail .vn-ld__flashes p {
+    margin: 0 0 0.75rem;
+    padding: 0.7rem 0.85rem;
+    border-radius: var(--vn-ld-radius);
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--vn-ld-text);
+    font-size: 0.8rem;
+  }
+  #vinorListingDetail .vn-ld__flashes p.is-error {
+    background: rgba(226, 40, 40, 0.12);
+  }
   #vinorListingDetail .vn-ld__published {
     margin: 1rem 0 0;
     padding: 0.85rem 1rem;
@@ -348,6 +359,15 @@
   </div>
 
   <div class="vn-ld__body">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="vn-ld__flashes">
+        {% for category, message in messages %}
+        <p class="{% if category in ['error', 'danger', 'warning'] %}is-error{% endif %}">{{ message }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
     {% if d.source == 'divar' %}
     <span class="vn-ld__badge">دیوار</span>
     {% elif d.owner_badge %}
@@ -409,8 +429,6 @@
       </label>
       <button type="submit">انتشار برای فروش</button>
     </form>
-    {% elif d.is_mine and d.published_for_sale %}
-    <p class="vn-ld__published">این ملک برای فروش منتشر شده است.</p>
     {% endif %}
   </div>
 

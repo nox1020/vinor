@@ -21,7 +21,7 @@ from uuid import uuid4
 import requests
 from flask import current_app
 
-from .config import DEEPSEEK_BASE_URL, get_deepseek_api_key
+from .config import get_deepseek_api_key, get_deepseek_base_url
 from .credits import (
     budget_config,
     clear_api_balance_depleted,
@@ -213,7 +213,7 @@ def _call_deepseek(
         }
 
     model = assert_flash_model(resolve_deepseek_model(has_tools=bool(tools)))
-    url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
+    url = f"{get_deepseek_base_url()}/chat/completions"
     bcfg = budget_config()
     use_thinking = thinking_enabled()
     # با thinking، max_tokens خیلی کوچک ممکن است فقط reasoning بسوزاند و content خالی بماند

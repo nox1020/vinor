@@ -8,18 +8,21 @@
 
 ## ترتیب مرج
 
-1. **قبل از مرج PR #9:** مسعود هوک `vinor.ir/git-webhook` را بدون Pushes یا Inactive می‌کند. تا تأیید او مرج ممنوع است. جزئیات در بخش بعد.
-2. **همین PR**، بعد نصب دستی پایین، بعد سبز شدن `GET /healthz`. هوک را فقط بعد از این سلامت، و فقط با Workflow runs، دوباره روشن کنید.
-3. PR کلاینت وب (VAPID و صفحهٔ ورود).
-4. **آخر** PR کلیدهای بک‌اند (حذف `app/keys.py` و `api_keys.py`). فقط بعد از اینکه مسئول CI/CD تأیید کرد همهٔ متغیرهای بخش env روی سرور هست، و در کم‌ترافیک‌ترین ساعت.
+هر مرج به `main` پروداکشن را خودکار دیپلوی می‌کند. سرور همان `scripts/deploy.sh` را اجرا می‌کند که از قبل روی آن دیپلوی شده است، نه نسخه‌ای که فقط روی گیت‌هاب است.
 
-تا قبل از مرحلهٔ ۴ فایل‌های کلید روی سرور می‌مانند. دیپلوی، اگر کامیت هدف یکی از آن دو فایل را نداشته باشد، نام همهٔ کلیدهای موجود در کپی سرور را به‌صورت env غیرخالی می‌خواهد وگرنه قبل از دست زدن به working tree متوقف می‌شود.
+1. **این PR** باید قبل از PR #10 مرج و دیپلوی شود. اسکریپتِ فعلی روی سرور نام کلیدها را از `app/keys.py` و `api_keys.py` می‌خواند. اگر #10 زودتر برسد و آن فایل‌ها حذف شوند، دیپلوی به‌خاطر نبودن `DEEPSEEK_*` یا تنظیمات SMS که پیش‌فرض دارند، به‌اشتباه می‌ایستد.
+2. PR کلاینت وب (VAPID و صفحهٔ ورود).
+3. **PR #10** (حذف `app/keys.py` و `api_keys.py`) در کم‌ترافیک‌ترین ساعت، فقط وقتی env اجباری روی سرور هست. چرخش کلید پیامک: `SMS_API_KEY` جدید را در env بگذارید، PR #10 را دیپلوی کنید، OTP را تأیید کنید، و فقط بعد کلید قدیمی را در پنل sms.ir باطل کنید. `main` فعلی هنوز `SMS_API_KEY` را از `api_keys.py` می‌خواند.
+
+PR #9 (`6897f1ca`) قبلاً مرج و دیپلوی شده است.
 
 ## چرا اولین بار دستی است
 
 وب‌هوک فعلی عملاً دیپلوی نمی‌کند: مرج #2 و #4 به پروداکشن نرسیده‌اند. گیرندهٔ جدید (امضای اجباری، نادیده گرفتن `push`، دیپلوی فقط بعد از موفقیت ورک‌فلو CI) فقط با **همین یک نصب دستی** روی سرور می‌آید. بعد از آن، مرج به `main` با سبز شدن چک `pytest` خودش دیپلوی می‌شود.
 
 ## قبل از مرج (اجباری)
+
+PR #9 مرج و دیپلوی شده است. متن زیر سابقهٔ همان قطع هوک است، نه شرط مرج این PR.
 
 ست کردن env قبل از مرج جلوی گیرندهٔ قدیمی را نمی‌گیرد. `/git-webhook` قدیمی سکرت را اول از `app.keys` می‌خواند و `app.keys` آن را از `api_keys.py` می‌گیرد، جایی که خالی است. پس گیرندهٔ قدیمی صرف‌نظر از env همچنان fail-open است و روی `push` می‌تواند `git reset --hard` و `git clean` بزند.
 
@@ -47,19 +50,31 @@ git log -1 --oneline
 
 ## متغیرهای محیطی
 
-در Setup Python App همین‌ها را بگذارید. `deploy.sh` قبل از هر `git fetch` / `reset` این‌ها را غیرخالی می‌خواهد. `VINOR_CONSULTANT_API_ENABLED` باید دقیقاً `1` باشد.
+`DATABASE_URL` و همهٔ متغیرهای اجباری باید در env خودِ اپ پایتون باشند (cPanel → Setup Python App → Environment variables). هم پروسهٔ اپ و هم `deploy.sh` که وب‌هوک جدا بالا می‌آورد از همان env به ارث می‌برند. گذاشتن آن‌ها فقط در شل یا فایل `.env` کافی نیست.
 
-همیشه:
+`deploy.sh` قبل از هر `git fetch` / `reset` موارد اجباری را غیرخالی می‌خواهد. اگر `DATABASE_URL` با `sqlite:` شروع شود، فقط شکل مطلق `sqlite:////...` قبول است (مسیر بعد از سه اسلش باید با `/` شروع شود). مسیر نسبی رد می‌شود. فایل sqlite هم باید از قبل وجود داشته باشد. لاگ فقط کد دلیل است (`db_url_relative` یا `db_file_missing`) و خود URL یا مسیر را نمی‌نویسد. URL غیر sqlite فقط باید غیرخالی باشد.
 
-- `VINOR_WEBHOOK_SECRET`
+`VINOR_DB_CREATE_ALL` نباید در env پروداکشن وجود داشته باشد؛ اگر هر مقدار غیرخالی داشته باشد دیپلوی اجرا نمی‌شود.
+
+`INSTANCE_PATH` را خالی بگذارید یا به پوشهٔ instance فعلی اشاره دهید. اگر `lands.json` یا `users.json` نباشد یا خالی باشد، preflight دیپلوی را رد می‌کند.
+
+بعد از PR #10، `app/utils/secrets.py` با `REQUIRED_ENV_VARS` بدون همان شش متغیر بالا نمی‌آید. نام‌های داخل `app/keys.py` و `api_keys.py` دیگر مبنای preflight نیستند.
+
+اجباری:
+
 - `SECRET_KEY`
-- `DATABASE_URL`
-- `VINOR_CONSULTANT_API_ENABLED=1`
 - `SMS_API_KEY`
 - `VAPID_PRIVATE_KEY`
 - `VAPID_PUBLIC_KEY`
+- `DATABASE_URL`
+- `VINOR_WEBHOOK_SECRET`
+- `VINOR_CONSULTANT_API_ENABLED=1`
 
-و نام‌هایی که امروز در `api_keys.py` / `app/keys.py` هستند (برای وقتی آن فایل‌ها از ریپو حذف شوند؛ از همین نصب اول ست کنید):
+توصیه‌شده:
+
+- `VINOR_OTP_HMAC_SECRET`
+
+اختیاری (برای این‌ها پیش‌فرض هست، جز `DEEPSEEK_API_KEY` که اگر نباشد هوش مصنوعی از آن مسیر کلید ندارد):
 
 - `DEEPSEEK_API_KEY`
 - `DEEPSEEK_BASE_URL`
@@ -67,12 +82,28 @@ git log -1 --oneline
 - `SMS_TEMPLATE_ID`
 - `SMS_LINE_NUMBER`
 - `SMS_RETRIEVER_HASH`
+- `VAPID_SUB`
 
-`SMS_API_KEY` و `VINOR_WEBHOOK_SECRET` در هر دو فهرست‌اند. اختیاری: `VINOR_HEALTH_URL` (پیش‌فرض `https://vinor.ir/healthz`)، `VINOR_CI_WORKFLOW_PATH` (پیش‌فرض `.github/workflows/ci.yml`).
+`VINOR_HEALTH_URL` پیش‌فرضش `https://vinor.ir/healthz` است و `VINOR_CI_WORKFLOW_PATH` پیش‌فرضش `.github/workflows/ci.yml`.
 
 `SECRET_KEY` نباید مقدار سخت‌کد `config.py` یا fallback داخل `app/__init__.py` باشد. اسکریپت فقط sha256 آن‌ها را مقایسه می‌کند و خود مقدار را لاگ نمی‌کند. مقدار VAPID را همان کلیدی بگذارید که اپ امروز استفاده می‌کند تا push نشکند؛ متن کلید را اینجا کپی نکنید. چرخش VAPID با PR کلاینت وب است.
 
 عوض کردن `SECRET_KEY` همهٔ نشست‌های فعلی را خارج می‌کند.
+
+## قوانین env اپ روی cPanel
+
+اپ بدون این شش نام بالا نمی‌آید. در Setup Python App این نام‌ها را بگذارید. مقدار را در این سند یا در git ننویسید.
+
+- `SECRET_KEY`
+- `SMS_API_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_PUBLIC_KEY`
+- `DATABASE_URL`
+- `VINOR_WEBHOOK_SECRET`
+
+- `DATABASE_URL` باید مسیر sqlite مطلق باشد (`sqlite:////home/...`) و به فایل دیتابیس موجود پروداکشن اشاره کند.
+- `VINOR_DB_CREATE_ALL` هرگز در env پروداکشن ست نشود. این فلگ محافظ «فایل دیتابیس نیست» را دور می‌زند.
+- `VINOR_OTP_HMAC_SECRET` پیشنهادی است. بدون آن، چرخش `SECRET_KEY` کدهای OTP در جریان را بی‌اعتبار می‌کند.
 
 ## اولین دیپلوی دستی
 
@@ -114,7 +145,7 @@ openssl rand -hex 32
 
 یک بار برای `VINOR_WEBHOOK_SECRET`، یک بار جدا برای `SECRET_KEY`. در Setup Python App ذخیره کنید، بعد Restart تا پروسه env جدید را ببیند.
 
-`DATABASE_URL` باید همان دیتابیس فعلی باشد تا داده نپرد. پیش‌فرض کد وقتی env خالی است `instance/vinor.db` است، ولی دیپلوی بدون env صریح جلو نمی‌رود:
+`DATABASE_URL` باید همان فایل دیتابیس فعلی باشد تا داده نپرد. اگر این نام خالی باشد اپ بالا نمی‌آید و به sqlite خالی داخل instance سقوط نمی‌کند:
 
 ```bash
 ls -lh /home/vinorir/public_html/vinor/instance/*.db
@@ -155,7 +186,7 @@ test -d app/static/uploads
 
 مهاجرت جدا لازم نیست. Flask-Migrate و Alembic در این ریپو نیست و `scripts/deploy.sh` دستور migrate ندارد.
 
-- sqlite: `db.create_all()` در استارتاپ فقط اگر فایل دیتابیس نباشد، یا `VINOR_DB_CREATE_ALL=1`. دیتابیس موجود دوباره ساخته یا پاک نمی‌شود. `VINOR_DB_CREATE_ALL` را روی پروداکشن روشن نکنید.
+- sqlite: اگر فایل مطلق نباشد اپ بالا نمی‌آید، مگر `VINOR_DB_CREATE_ALL=1` که این محافظ را دور می‌زند. این فلگ را در env پروداکشن ست نکنید. دیتابیس موجود دوباره ساخته یا پاک نمی‌شود. دیپلوی نیز در صورت مقدار غیرخالی این متغیر متوقف می‌شود.
 - `init_schema()` مربوط به OTP موقع بالا آمدن، جدول غایب را می‌سازد.
 - `migrate_legacy` یک‌بار فایل قدیمی `data/` را به instance کپی می‌کند اگر مارکر نباشد؛ فایل موجود را بازنویسی نمی‌کند.
 - اینوست مهاجرت غیرمخرب خودش را در `invest/invest_app/database/migrations.py` موقع استارت همان سرویس اعمال می‌کند، نه به‌صورت دستور دیپلوی.
@@ -231,7 +262,7 @@ bash scripts/deploy.sh <40-hex-sha>
 
 ## رویهٔ مرج و سلامت مرج
 
-یک مسئول مرج (عامل CI/CD). فقط squash. هر بار فقط یک PR.
+مرج طبق `.cursor/rules/auto-pr-merge.mdc` است: merge commit، مگر مخزن فقط squash یا rebase را اجازه بدهد. هر بار فقط یک PR.
 
 قبل از مرج `mergeable_state` را بخوان:
 
@@ -259,12 +290,25 @@ bash scripts/deploy.sh <40-hex-sha>
 
 Issue با عنوان `Merge health` و برچسب `merge-health` همین یافته‌ها را نگه می‌دارد. جاب حتی وقتی یافته دارد خروج صفر می‌دهد تا `main` قرمز نشود. دیپلوی فقط بعد از موفقیت `ci.yml` است.
 
-Ruleset مورد انتظار روی `main`: PR الزامی، پوش مستقیم بسته، چک الزامی `pytest`، فقط squash.
+Ruleset مورد انتظار روی `main`: PR الزامی، پوش مستقیم بسته، چک الزامی `pytest`. روش مرج merge commit است، مگر مخزن فقط squash یا rebase را اجازه بدهد.
 
 ## کارهای بعدی
 
-- در PR کلیدها، fallback ‏`app.keys` را از `_resolve_secret` بردارید.
-- وقتی `workflow_run` رد می‌شود دلیل را لاگ کنید، به‌خصوص ناهمخوانی path.
-- اکشن‌های گیت‌هاب را به SHA پین کنید.
+- انجام شد: `_resolve_secret` فقط `VINOR_WEBHOOK_SECRET` را از env می‌خواند.
 - بعد از مرج، چک `pytest` را در branch protection شاخهٔ `main` اجباری کنید.
-- اولین تست نشست بعد: fail-closed بودن وب‌هوک.
+- PR #10 فایل‌های کلید و fallback ‏`app.keys` را برمی‌دارد. این PR باید قبل از آن روی سرور باشد.
+
+## نسخهٔ در حال اجرا
+
+`GET /version` بدون ورود است و JSON با `Cache-Control: no-store` می‌دهد. `sha` هفت کاراکتر اول کامیت است؛ `full_sha` فقط وقتی SHA بلندتر از ۷ باشد می‌آید. `version` تعداد کامیت‌های `HEAD` است (`git rev-list --count HEAD`) و روی کلون کامل با هر کامیت جدید بالا می‌رود. اگر git این شمارش را ندهد، همان یک خط `version.txt` است. فایل‌های استاتیک همچنان با mtime کش‌باست می‌شوند؛ نسخهٔ APK از تنظیمات ادمین است و این عدد را نمی‌خواند.
+
+SHA به این ترتیب خوانده می‌شود و اگر mtime فایل `current_sha` عوض شود دوباره خوانده می‌شود: `instance/deploy/current_sha` (۷ تا ۴۰ رقم hex)، بعد `VINOR_DEPLOYED_SHA`، بعد `.git` (HEAD / refs / packed-refs)، وگرنه `unknown`.
+
+```bash
+curl -s https://vinor.ir/version
+git rev-parse --short=7 origin/main
+```
+
+`sha` باید با خروجی git یکی باشد. `GET /healthz` همچنان 204 بدون بدنه است.
+
+<!-- deploy trigger 2026-10-15j -->

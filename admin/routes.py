@@ -1021,6 +1021,11 @@ def login():
 
 @admin_bp.route('/logout', methods=['POST', 'GET'])
 def logout():
+    # GET فقط برمی‌گرداند؛ پاک کردن سشن فقط با POST. next پذیرفته نمی‌شود.
+    if request.method != 'POST':
+        if session.get('logged_in'):
+            return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('admin.login'))
     # فقط کلیدهای ادمین؛ ورود همکار (user_phone) روی همان مرورگر حفظ می‌ماند
     for k in (
         'logged_in',
@@ -3568,11 +3573,9 @@ def view_land_by_index(land_id):
 # ثبت/ویرایش/حذف آگهی (پشتیبانی همزمان از آپلود فایل و ورودی متنی تصاویر)
 # -----------------------------------------------------------------------------
 def _next_numeric_code(lands: List[Dict[str, Any]]) -> str:
-    existing_codes = [
-        int(l['code']) for l in lands
-        if isinstance(l, dict) and 'code' in l and str(l['code']).isdigit()
-    ]
-    return str(max(existing_codes) + 1) if existing_codes else '1'
+    from app.express_partner.special_listings import _next_numeric_code as _alloc
+
+    return _alloc(lands if isinstance(lands, list) else [])
 
 def _normalize_images_from_form(form, files) -> List[str]:
     """
@@ -3650,7 +3653,17 @@ def add_land():
         if expiry_days < 0:
             expiry_days = 0
 
-        new_code = form.get("code") or _next_numeric_code(lands)
+        submitted_code = (form.get("code") or "").strip().translate(
+            str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+        )
+        taken = {
+            str(row.get("code") or "").strip().translate(
+                str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+            )
+            for row in lands
+            if isinstance(row, dict) and str(row.get("code") or "").strip()
+        }
+        new_code = submitted_code if submitted_code and submitted_code not in taken else _next_numeric_code(lands)
         images = _normalize_images_from_form(request.form, request.files)
 
         deal_type = (form.get('deal_type') or '').strip()

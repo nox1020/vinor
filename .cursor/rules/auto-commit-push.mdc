@@ -3,21 +3,21 @@ description: کار روی برنچ cursor/* و PR؛ هرگز کامیت یا پ
 alwaysApply: true
 ---
 
-# برنچ، PR، و CI — بدون کامیت یا پوش به main
+# برنچ، PR، و CI — بدون پوش مستقیم به main
 
-Work on a `cursor/*` branch, open a PR, and never commit or push directly to main.
-
-`main` و `master` محافظت می‌شوند: پوش مستقیم بسته است، مرج فقط با PR، چک الزامی `pytest`، و فقط squash. عامل کدنویس خودش مرج نمی‌کند. مرج را فقط عامل CI/CD با squash انجام می‌دهد، هر بار یکی.
+به `main` یا `master` مستقیم پوش نکن. کار را روی برنچ `cursor/*` انجام بده و PR به `main` باز کن. مرج را قانون `.cursor/rules/auto-pr-merge.mdc` انجام می‌دهد.
 
 ## برنچ و PR
 
-1. اگر روی `main`/`master` یا HEAD جدا هستی، قبل از هر کامیت `git checkout -b cursor/<name>` بزن. روی `main` کامیت نساز.
+1. اگر روی `main`/`master` یا HEAD جدا هستی، قبل از هر ویرایش `git checkout -b cursor/<name>` بزن. روی `main` کامیت نساز.
 2. کامیت فقط روی همان برنچ `cursor/*` است. پیام commit کوتاه و متمرکز بر «چرا» باشد.
-3. پوش فقط همان برنچ است: `git fetch origin` سپس `git push -u origin HEAD:refs/heads/<branch>`. هرگز `--force`. هرگز `git push origin HEAD` وقتی برنچ `main` است.
-4. PR را به `main` باز کن (یا به‌روز کن). خودت مرج نکن.
-5. سکرت‌ها را commit نکن: `.env`، کلید، keystore، `credentials.json`، `google-services.json`، `key.properties`.
-6. اگر هوک `stop` پوش را رد کرد، همان خطا را بخوان و برنچ را درست پوش کن. خروج صفرِ بی‌صدا یعنی کار نرسیده است.
-7. اگر هوک `stop` هم push کرد، همان commit را دوباره نساز.
+3. وقتی کار روی فایل‌ها تمام شد، `git add` / `git commit` را بدون پرسیدن اجرا کن، بعد `git fetch origin` و `git push -u origin HEAD:refs/heads/<branch>`. هرگز `--force`. هرگز `git push origin HEAD` وقتی برنچ `main` یا `master` است. مقصد پوش همین برنچ است، نه `main`.
+4. PR را به `main` باز کن (یا به‌روز کن). به `main` پوش نکن. مرج طبق `auto-pr-merge` است: merge commit، مگر مخزن فقط squash یا rebase را اجازه بدهد.
+5. Force-push به `main`/`master` نکن. تاریخچهٔ `main` را بازنویسی نکن.
+6. سکرت‌ها را commit نکن: `.env`، کلید، keystore، `credentials.json`، `google-services.json`، `key.properties`.
+7. اگر هوک `stop` پوش را رد کرد، همان خطا را بخوان و برنچ را درست پوش کن. خروج صفرِ بی‌صدا یعنی کار نرسیده است. اگر هوک `stop` هم push کرد، همان commit را دوباره نساز.
+
+مرج PR را `.cursor/rules/auto-pr-merge.mdc` تعیین می‌کند. تأیید انسانی جداگانه لازم نیست. Draft، تست ناموفق، تداخل حل‌نشده و Branch Protection دور زده نمی‌شوند.
 
 اگر push به‌خاطر auth شکست، در پاسخ نهایی بگو و همان‌جا متوقف شو.
 

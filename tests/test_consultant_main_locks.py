@@ -6,11 +6,13 @@ Does not call external services.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -124,6 +126,31 @@ def test_partner_onboarding_locks(app, client):
     assert os.environ.get("VINOR_CONSULTANT_DRY_RUN") is None
     assert dry_run_enabled() is False
 
+    # مهمان: نشست نیست. CSRF مثل بقیهٔ همین تست روشن است؛
+    # register-customer در app/__init__.py از CSRF معاف است.
+    routine = client.get("/express/partner/routine/data")
+    assert routine.status_code == 401
+    assert routine.get_json() == {"success": False, "error": "unauthorized"}
+
+    register_json = client.post(
+        "/express/partner/home/register-customer",
+        headers={"Accept": "application/json"},
+    )
+    assert register_json.status_code == 401
+    assert register_json.get_json() == {"success": False, "error": "unauthorized"}
+    assert register_json.headers.get("Cache-Control") == "no-store"
+
+    register_html = client.post(
+        "/express/partner/home/register-customer",
+        headers={"Accept": "text/html"},
+    )
+    assert register_html.status_code == 302
+    login_loc = urlsplit(register_html.headers.get("Location") or "")
+    assert login_loc.path == "/express/partner/login"
+    assert parse_qs(login_loc.query).get("next") == [
+        "/express/partner/home/register-customer"
+    ]
+
     _login(client)
     _assert_redirect(client.get(GATE), APPLY_PAGE)
 
@@ -225,6 +252,31 @@ def test_partner_onboarding_locks(app, client):
     assert still_blocked["error"] == "not_approved"
     assert _body(client.get("/api/consultant/status"), 200)["status"] == "rejected"
 
+    # Open redirects: hostile next stays on this site; a relative path is kept.
+    _login(client)
+    hostile = (
+        "//evil.com",
+        "/\\evil.com",
+        "https://evil.com",
+        "/%2F%2Fevil.com",
+        "/%5Cevil.com",
+    )
+    for nxt in hostile:
+        for path in ("/partners", "/"):
+            resp = client.get(path, query_string={"next": nxt})
+            assert resp.status_code in (301, 302, 303, 307, 308), (path, nxt, resp.status_code)
+            loc = resp.headers.get("Location") or ""
+            parts = urlsplit(loc)
+            assert parts.scheme == "" and parts.netloc == "", loc
+            assert (parts.path or "/") == "/", loc
+            assert "evil.com" not in loc.lower()
+            assert "\\" not in loc
+    kept = client.get("/partners", query_string={"next": "/some/path"})
+    assert kept.status_code in (301, 302, 303, 307, 308)
+    kept_parts = urlsplit(kept.headers.get("Location") or "")
+    assert kept_parts.scheme == "" and kept_parts.netloc == ""
+    assert kept_parts.path == "/some/path"
+
 
 def test_sales_coach_apply_link_follows_consultant_api_flag(app, client, monkeypatch):
     from app.express_partner.consultant_onboarding import consultant_api_enabled
@@ -258,3 +310,88 @@ def test_sales_coach_apply_link_follows_consultant_api_flag(app, client, monkeyp
     assert legacy_home["href"] == OLD_APPLY_PAGE
     _login(client)
     _assert_redirect(client.get(GATE), HOME_PAGE)
+
+    spawned = []
+
+    def _record(sha):
+        spawned.append(sha)
+
+    def _popen_forbidden(*_args, **_kwargs):
+        raise AssertionError("deploy.sh must not start")
+
+    monkeypatch.setattr("app.routes.webhook.spawn_deploy", _record)
+    monkeypatch.setattr("app.routes.webhook.subprocess.Popen", _popen_forbidden)
+
+    secret = "ci-only-not-secret"
+    monkeypatch.setenv("VINOR_WEBHOOK_SECRET", "")
+    empty = client.post(
+        "/git-webhook",
+        data=b"{}",
+        headers={"X-GitHub-Event": "workflow_run"},
+        content_type="application/json",
+    )
+    assert empty.status_code == 403
+    assert spawned == []
+
+    monkeypatch.setenv("VINOR_WEBHOOK_SECRET", secret)
+    missing = client.post(
+        "/git-webhook",
+        data=b"{}",
+        headers={"X-GitHub-Event": "workflow_run"},
+        content_type="application/json",
+    )
+    assert missing.status_code == 403
+    wrong = client.post(
+        "/git-webhook",
+        data=b"{}",
+        headers={
+            "X-GitHub-Event": "workflow_run",
+            "X-Hub-Signature-256": "sha256=" + ("0" * 64),
+        },
+        content_type="application/json",
+    )
+    assert wrong.status_code == 403
+    assert spawned == []
+
+    def _post(payload):
+        raw = json.dumps(payload).encode()
+        mac = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+        return client.post(
+            "/git-webhook",
+            data=raw,
+            headers={
+                "X-GitHub-Event": "workflow_run",
+                "X-Hub-Signature-256": "sha256=" + mac,
+                "X-GitHub-Delivery": "fail-closed-" + payload["workflow_run"]["conclusion"],
+            },
+            content_type="application/json",
+        )
+
+    base = {
+        "action": "completed",
+        "workflow_run": {
+            "head_branch": "main",
+            "head_sha": "a" * 40,
+            "event": "push",
+            "conclusion": "failure",
+            "path": ".github/workflows/ci.yml",
+        },
+        "repository": {"full_name": "nox1020/vinor"},
+    }
+    failed = _post(base)
+    assert failed.status_code == 200
+    assert failed.get_json()["result"] == "ignored"
+
+    other = dict(base)
+    other["workflow_run"] = dict(base["workflow_run"], conclusion="success", head_branch="feature")
+    branched = _post(other)
+    assert branched.status_code == 200
+    assert branched.get_json()["result"] == "ignored"
+    assert spawned == []
+
+    log_path = os.path.join(os.environ["INSTANCE_PATH"], "logs", "deploy.log")
+    logged = open(log_path, encoding="utf-8").read()
+    assert '"detail": "not_success"' in logged
+    assert '"detail": "wrong_branch"' in logged
+    assert secret not in logged
+

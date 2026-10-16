@@ -105,25 +105,9 @@ def prepare_land_for_chat_detail(code: str) -> Tuple[Optional[Dict[str, Any]], b
         me_phone = (session.get("user_phone") or "").strip()
 
     lands = load_ads_cached() or []
-    land = next(
-        (l for l in lands if str(l.get("code") or "") == code_s and l.get("is_express")),
-        None,
-    )
-    if not land:
-        cand = next(
-            (l for l in lands if isinstance(l, dict) and str(l.get("code") or "") == code_s),
-            None,
-        )
-        if isinstance(cand, dict):
-            try:
-                from .special_listings import _norm_phone, is_my_property_record
+    from .special_listings import resolve_listing_for_viewer
 
-                owner = _norm_phone(str(cand.get("owner") or cand.get("user_phone") or ""))
-                me = _norm_phone(me_phone)
-                if is_my_property_record(cand) and owner and me and owner == me:
-                    land = cand
-            except Exception:
-                land = None
+    land, _mode = resolve_listing_for_viewer(lands, code_s, me_phone)
     if not land or not isinstance(land, dict):
         return None, False
 
@@ -465,7 +449,28 @@ def _listing_spec_rows(land: Dict[str, Any], *, is_divar: bool) -> list[dict[str
     return rows[:18]
 
 
-def native_listing_detail_payload(code: str, *, source_hint: str = "") -> Optional[Dict[str, Any]]:
+def _unpublish_confirm_payload(code: str) -> Dict[str, Any]:
+    """پاسخ ۲۰۰ برای تأیید توقف، فقط وقتی جلسه مالک همین ملک است.
+
+    اپ موفقیت را از ``published_for_sale: false`` می‌فهمد. ``ok: false`` تا
+    صفحهٔ جزئیات عنوان آگهی نسازد. دیگران از همین مسیر ۴۰۴ می‌گیرند.
+    """
+    return {
+        "ok": False,
+        "error": "آگهی پیدا نشد.",
+        "code": str(code or "").strip(),
+        "published_for_sale": False,
+        "is_mine": True,
+        "can_publish": True,
+    }
+
+
+def native_listing_detail_payload(
+    code: str,
+    *,
+    source_hint: str = "",
+    confirm_unpublish: bool = False,
+) -> Optional[Dict[str, Any]]:
     """جزئیات آگهی برای صفحهٔ نیتیو وب و اپ — وینور یا دیوار."""
     raw = str(code or "").strip()
     if not raw:
@@ -478,6 +483,18 @@ def native_listing_detail_payload(code: str, *, source_hint: str = "") -> Option
     else:
         land, _approved = prepare_land_for_chat_detail(raw)
         tok = ""
+    if confirm_unpublish and not is_divar:
+        from flask import has_request_context
+
+        from ..utils.storage import load_ads_cached
+        from .special_listings import unpublished_owner_home_only, viewer_owns_private_home
+
+        lands = load_ads_cached() or []
+        if unpublished_owner_home_only(lands, raw):
+            me = str(session.get("user_phone") or "") if has_request_context() else ""
+            if viewer_owns_private_home(lands, raw, me):
+                return _unpublish_confirm_payload(raw)
+            return None
     if not land:
         return None
     source = "divar" if (is_divar or str(land.get("_source") or "") == "divar") else "vinor"
@@ -508,19 +525,27 @@ def native_listing_detail_payload(code: str, *, source_hint: str = "") -> Option
         meta_parts.append(code_out)
     is_mine = False
     published = False
+    sale_flag = True
     try:
         from flask import has_request_context as _has_req
-        from .special_listings import _norm_phone, is_my_property_record, is_published_for_sale
+        from .special_listings import (
+            _same_phone,
+            detail_sale_flag,
+            is_my_property_record,
+            is_published_for_sale,
+        )
 
         me = ""
         if _has_req():
-            me = _norm_phone(session.get("user_phone") or "")
-        owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
-        is_mine = bool(me and owner and me == owner and is_my_property_record(land))
+            me = str(session.get("user_phone") or "")
+        owner = str(land.get("owner") or land.get("user_phone") or "")
+        is_mine = bool(me and owner and _same_phone(me, owner) and is_my_property_record(land))
         published = is_published_for_sale(land)
+        sale_flag = detail_sale_flag(land)
     except Exception:
         is_mine = False
         published = False
+        sale_flag = True
     return {
         "ok": True,
         "source": source,
@@ -544,7 +569,7 @@ def native_listing_detail_payload(code: str, *, source_hint: str = "") -> Option
         "show_divar": source == "divar" and bool(divar_url),
         "can_favorite": source == "vinor",
         "is_mine": is_mine,
-        "published_for_sale": published if is_mine else True,
+        "published_for_sale": sale_flag,
         "can_publish": bool(is_mine and not published),
         "owner_badge": (
             "منتشرشده" if is_mine and published else ("خصوصی" if is_mine else "")

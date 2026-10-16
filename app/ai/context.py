@@ -470,12 +470,14 @@ def _assigned_lands(phone: str) -> list[dict[str, Any]]:
         and (a.get("status") or "active")
         in (None, "active", "pending", "approved", "in_transaction", "sold")
     ]
+    from app.utils.public_listings import is_partner_assignment_land
+
     lands_all = load_ads_cached() or []
     code_to_land = {str(l.get("code")): l for l in lands_all}
     out: list[dict[str, Any]] = []
     for a in my_assignments:
         land = code_to_land.get(str(a.get("land_code")))
-        if not land:
+        if not land or not is_partner_assignment_land(land):
             continue
         item = dict(land)
         item["_assignment_status"] = _assignment_status(a)

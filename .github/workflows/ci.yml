@@ -53,10 +53,10 @@ jobs:
       VINOR_ADMIN_SMS_SCHEDULER: "0"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: pip
@@ -78,5 +78,8 @@ jobs:
             tests/test_consultant_main_locks.py
             tests/test_search_page.py
             tests/test_seo_listing_price_sitemap.py
+            tests/test_vinor_man.py
+            tests/test_owner_home_unpublish.py
           )
           python -m pytest -q "${files[@]}"
+

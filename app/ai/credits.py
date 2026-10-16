@@ -270,7 +270,7 @@ def probe_deepseek_api_balance(*, clear_on_ok: bool = True) -> dict[str, Any]:
     """استعلام زندهٔ موجودی از DeepSeek `/user/balance`."""
     import requests
 
-    from app.keys import DEEPSEEK_BASE_URL, get_deepseek_api_key
+    from app.utils.secrets import get_deepseek_api_key, get_deepseek_base_url
 
     api_key = get_deepseek_api_key()
     if not api_key:
@@ -283,7 +283,7 @@ def probe_deepseek_api_balance(*, clear_on_ok: bool = True) -> dict[str, Any]:
         _store_balance_probe(out)
         return out
 
-    url = f"{DEEPSEEK_BASE_URL.rstrip('/')}/user/balance"
+    url = f"{get_deepseek_base_url()}/user/balance"
     try:
         resp = requests.get(
             url,

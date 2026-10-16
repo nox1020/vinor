@@ -225,10 +225,16 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
     """همهٔ ملک‌ها و آگهی‌های این شماره برای لیست کارت دیوار."""
     from .apk_native import land_card
     from .special_listings import (
-        is_published_for_sale,
+        detail_sale_flag,
+        ensure_unique_land_codes,
         listings_owned_by,
         listings_owned_home,
     )
+
+    try:
+        ensure_unique_land_codes()
+    except Exception:
+        pass
 
     seen = set()
     out: List[Dict[str, Any]] = []
@@ -251,7 +257,7 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
         card = land_card(land)
         published = False
         try:
-            published = is_published_for_sale(land)
+            published = detail_sale_flag(land)
         except Exception:
             published = False
         img = str(card.get("image_url") or "").strip()

@@ -1,104 +1,175 @@
 <style id="vinor-profile-styles">
-  .profile-menu-row {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-    text-decoration: none;
-    color: inherit;
+  #vinorMePage {
+    --vn-search-bg: #000000;
+    --vn-search-raised: #1C1C1E;
+    --vn-search-raised-2: #2F2F2F;
+    --vn-search-text: #ECECEC;
+    --vn-search-muted: #8E8E93;
+    --vn-search-border: rgba(255,255,255,.08);
+    --vn-search-focus: rgba(255,255,255,.16);
+    --vn-search-accent: #10B981;
+    --vn-search-primary: #E22828;
+    --vn-search-primary-pressed: #C91F1F;
+    --vn-search-on: #FFFFFF;
+    --vn-search-error: #FB7185;
+    --vn-search-scrim: rgba(0,0,0,.6);
+    background: var(--vn-search-bg);
+    color: var(--vn-search-text);
+    min-height: 100dvh;
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   }
-  .profile-menu-badge {
-    position: absolute;
-    top: -0.15rem;
-    inset-inline-end: -0.2rem;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    padding: 0 0.3rem;
-    border-radius: 9999px;
-    background: #2563eb;
-    color: #fff;
-    font-size: 0.625rem;
-    font-weight: 700;
-    line-height: 1.1rem;
-    text-align: center;
-    box-shadow: 0 0 0 2px #030712;
-    display: none;
+  html:has(#vinorMePage),
+  body:has(#vinorMePage) { background: #000000 !important; }
+  #vinorMePage .vn-me-shell { max-width: 28rem; margin-inline: auto; }
+  #vinorMePage .vn-me-header {
+    height: calc(56px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    display: flex;
     align-items: center;
     justify-content: center;
   }
-  .profile-menu-badge.is-visible {
-    display: inline-flex;
+  #vinorMePage .vn-me-header h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #ECECEC;
   }
-  .profile-identity {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-  }
-  .profile-invite-banner {
+  #vinorMePage .vn-me-profile {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
     text-decoration: none;
     color: inherit;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
   }
-  .profile-invite-banner:active {
-    background-color: rgba(255, 255, 255, 0.04);
-  }
-  .profile-sheet-root {
-    align-items: flex-end;
-  }
-  @media (min-width: 640px) {
-    .profile-sheet-root {
-      align-items: center;
-      justify-content: center;
-    }
-  }
-  .profile-sheet__backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    opacity: 0;
-    transition: opacity 0.22s ease;
-  }
-  .profile-sheet-root.is-open .profile-sheet__backdrop {
-    opacity: 1;
-  }
-  .profile-sheet {
-    position: relative;
-    width: 100%;
-    max-width: 28rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-bottom: none;
-    border-radius: 1.25rem 1.25rem 0 0;
-    background: #12181f;
-    transform: translateY(100%);
-    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  @media (min-width: 640px) {
-    .profile-sheet {
-      border-radius: 1rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      transform: translateY(1.5rem);
-      opacity: 0;
-      transition: transform 0.22s ease, opacity 0.22s ease;
-    }
-    .profile-sheet-root.is-open .profile-sheet {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-  .profile-sheet-root.is-open .profile-sheet {
-    transform: translateY(0);
-  }
-  .profile-sheet__handle-wrap {
+  #vinorMePage .vn-me-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    background: #2F2F2F;
+    color: #ECECEC;
     display: flex;
+    align-items: center;
     justify-content: center;
-    padding: 0.65rem 0 0.25rem;
+    overflow: hidden;
+    flex-shrink: 0;
+    font-size: 18px;
+    font-weight: 700;
   }
-  @media (min-width: 640px) {
-    .profile-sheet__handle-wrap { display: none; }
+  #vinorMePage .vn-me-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  #vinorMePage .vn-me-profile__name {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #ECECEC;
   }
-  .profile-sheet__handle {
-    width: 2.25rem;
-    height: 0.25rem;
-    border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.18);
+  #vinorMePage .vn-me-profile__phone {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #8E8E93;
+    display: block;
+  }
+  #vinorMePage .vn-me-profile__edit {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: #8E8E93;
+  }
+  #vinorMePage .vn-me-guest { padding: 16px; }
+  #vinorMePage .vn-me-guest__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #ECECEC;
+  }
+  #vinorMePage .vn-me-guest__sub {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #8E8E93;
+  }
+  #vinorMePage .vn-me-guest__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 48px;
+    margin-top: 16px;
+    border-radius: 12px;
+    background: #E22828;
+    color: #FFFFFF;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  #vinorMePage .vn-me-guest__btn:active { background: #C91F1F; }
+  #vinorMePage .vn-me-label {
+    margin: 0;
+    padding: 12px 16px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8E8E93;
+  }
+  #vinorMePage .vn-me-gap { height: 8px; background: #1C1C1E; }
+  #vinorMePage .profile-menu-row {
+    min-height: 56px;
+    padding: 0 16px;
+    gap: 12px;
+    text-align: start;
+    text-decoration: none;
+    color: #ECECEC;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    -webkit-tap-highlight-color: transparent;
+  }
+  #vinorMePage .profile-menu-row > div:first-child {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border-radius: 0;
+    background: transparent;
+    color: #8E8E93;
+    font-size: 16px;
+  }
+  #vinorMePage .vn-me-row__title { font-size: 15px; font-weight: 400; color: #ECECEC; }
+  #vinorMePage .vn-me-row__sub { margin-top: 4px; font-size: 12px; color: #8E8E93; }
+  #vinorMePage .vn-me-badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #E22828;
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+  }
+  #vinorMePage .vn-me-fa-chev { display: none; }
+  #vinorMePage .vn-me-chev {
+    display: block !important;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: #8E8E93;
+  }
+  [dir=rtl] #vinorMePage .vn-me-chev { transform: scaleX(-1); }
+  #vinorMePage .vn-me-logout {
+    min-height: 56px;
+    width: 100%;
+    padding: 0 16px;
+    border: 0;
+    background: transparent;
+    color: #E22828;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 400;
+    text-align: start;
+    cursor: pointer;
   }
 </style>
