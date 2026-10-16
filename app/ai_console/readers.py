@@ -844,20 +844,9 @@ def lands_inventory_summary(*, sample_limit: int = 8) -> dict[str, Any]:
         "express_count": 0,
     }
     try:
-        from app.utils.storage import data_dir
+        from app.listings.service import load_listings
 
-        path = os.path.join(data_dir(), "lands.json")
-        if not os.path.isfile(path):
-            fallback = os.path.abspath(
-                os.path.join(
-                    os.path.dirname(__file__), "..", "data", "lands.json"
-                )
-            )
-            path = fallback if os.path.isfile(fallback) else path
-        if not os.path.isfile(path):
-            return blank
-        with open(path, encoding="utf-8") as f:
-            lands = json.load(f)
+        lands = load_listings()
         items: list = []
         if isinstance(lands, list):
             items = lands

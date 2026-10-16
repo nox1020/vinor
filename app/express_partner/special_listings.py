@@ -2,7 +2,6 @@
 """آگهی‌های همکار ویژه — مالکیت بر اساس owner=phone."""
 from __future__ import annotations
 
-import fcntl
 import os
 import re
 from contextlib import contextmanager
@@ -14,7 +13,7 @@ from werkzeug.utils import secure_filename
 
 from app.land_category_specs import ALL_SPEC_FIELDS, apply_category_specs_from_form
 from app.utils.images import save_upload_image
-from app.utils.storage import ensure_file, load_ads, load_ads_cached, save_ads
+from app.utils.storage import load_ads, load_ads_cached, save_ads
 
 
 def _norm_phone(phone: str) -> str:
@@ -206,15 +205,10 @@ def _used_codes(lands: List[Dict[str, Any]]) -> set[str]:
 @contextmanager
 def _lands_file_lock() -> Iterator[None]:
     """قفل فایل آگهی تا دو ثبت هم‌زمان یک کد نگیرند."""
-    path = ensure_file("LANDS_FILE", "lands.json", [])
-    lock_path = path + ".lock"
-    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
-    with open(lock_path, "a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    from app.listings.service import listings_lock
+
+    with listings_lock():
+        yield
 
 
 def _next_numeric_code(lands: List[Dict[str, Any]]) -> str:
@@ -337,38 +331,23 @@ def _owned_unique_row(
 
 def is_published_for_sale(land: Dict[str, Any] | None) -> bool:
     """ملک «ملک من» که برای فروش منتشر شده و باید در فید عمومی بیاید."""
-    if not isinstance(land, dict):
-        return False
-    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
-    if extras.get("published_for_sale") is True:
-        return True
-    if str(land.get("source") or "").strip().lower() == "my_property_published":
-        return True
-    if land.get("public") is True and extras.get("listed_by_owner"):
-        return True
-    return False
+    from app.listings.service import is_published_for_sale as published
+
+    return published(land)
 
 
 def is_my_property_record(land: Dict[str, Any] | None) -> bool:
     """رکورد ثبت‌شده از صفحهٔ ملک من — خصوصی یا منتشرشده."""
-    if not isinstance(land, dict):
-        return False
-    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
-    src = str(land.get("source") or "").strip().lower()
-    if src in ("my_property", "my_property_published", "owner_home"):
-        return True
-    if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):
-        return True
-    if str(land.get("ad_type") or "").strip().lower() == "owner_home":
-        return True
-    return False
+    from app.listings.service import is_my_property_record as mine
+
+    return mine(land)
 
 
 def is_owner_home(land: Dict[str, Any] | None) -> bool:
     """ملک ثبت‌شده از «ملک من» که هنوز برای فروش منتشر نشده."""
-    if not is_my_property_record(land):
-        return False
-    return not is_published_for_sale(land)
+    from app.listings.service import is_private_owner_home
+
+    return is_private_owner_home(land)
 
 
 def detail_sale_flag(land: Dict[str, Any] | None) -> bool:
@@ -603,20 +582,9 @@ def _restore_private_owner_home(target: Dict[str, Any]) -> None:
     هر سه علامتی که ``is_published_for_sale`` را روشن می‌کنند باید خاموش شوند،
     وگرنه آگهی در فید عمومی می‌ماند.
     """
-    extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
-    extras["published_for_sale"] = False
-    extras["public"] = False
-    extras["owner_home"] = True
-    extras["listed_by_owner"] = True
-    extras["listed_by_special"] = False
-    target["extras"] = extras
-    target["public"] = False
-    target["is_express"] = False
-    target["ad_type"] = "owner_home"
-    target["status"] = "pending"
-    target["express_status"] = "hidden"
-    target["owner_home"] = True
-    target["source"] = "my_property"
+    from app.listings.service import mark_private
+
+    mark_private(target)
 
 
 SPECIAL_LISTING_ERRORS: Dict[str, str] = {
@@ -988,26 +956,14 @@ def apply_owner_publish(
         except (TypeError, ValueError):
             price = 0
         amount = int(round(price * (commission_pct / 100.0))) if price else 0
-        extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
-        extras.update({
-            "express_commission_pct": commission_pct,
-            "express_commission_amount": amount,
-            "listed_by_special": True,
-            "listed_by_owner": True,
-            "owner_home": False,
-            "public": True,
-            "published_for_sale": True,
-        })
-        target["extras"] = extras
-        target["public"] = True
-        target["is_express"] = True
-        target["ad_type"] = "express"
-        target["status"] = "approved"
-        target["express_status"] = "approved"
-        target["owner_home"] = False
-        target["source"] = "my_property_published"
-        target["payment_method"] = payment_method
-        target["expert_verified"] = bool(target.get("expert_verified"))
+        from app.listings.service import mark_published
+
+        mark_published(
+            target,
+            payment_method=payment_method,
+            commission_pct=commission_pct,
+            amount=amount,
+        )
     return owned[0], None, True
 
 
@@ -1033,26 +989,19 @@ def publish_owner_home(
     if not want:
         return None, "not_found"
 
-    items = load_ads() or []
-    if not isinstance(items, list):
-        items = []
-    target, err, changed = apply_owner_publish(
-        items,
+    from app.listings.service import publish_listing
+
+    target, err, changed = publish_listing(
         phone,
-        want,
         payment_method=method,
         commission_pct=pct,
+        land_code=want,
     )
     if err:
         return None, err
     if not changed or target is None:
         return target, None
     code = str(target.get("code") or want).strip()
-    try:
-        save_ads(items)
-    except Exception:
-        current_app.logger.exception("publish owner home save failed code=%s", code)
-        return None, "save_failed"
 
     try:
         from .new_land_sms import notify_all_partners_new_express_land_background
@@ -1168,18 +1117,11 @@ def unpublish_owner_home(
     want = str(land_code or "").strip()
     if not want:
         return None, "not_found"
-    items = load_ads() or []
-    if not isinstance(items, list):
-        items = []
-    target, err, changed = apply_owner_unpublish(items, phone, want)
+    from app.listings.service import unpublish_listing
+
+    target, err, _changed = unpublish_listing(phone, land_code=want)
     if err:
         return None, err
-    if changed:
-        try:
-            save_ads(items)
-        except Exception:
-            current_app.logger.exception("unpublish owner home save failed code=%s", want)
-            return None, "save_failed"
     revoke_broadcast_assignments(want)
     return target, None
 

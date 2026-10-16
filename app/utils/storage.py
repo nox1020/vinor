@@ -158,63 +158,31 @@ def _file_cache_load(cache: dict, path: str, loader):
     cache.update({"path": path, "mtime": mtime, "size": size, "data": data})
     return data
 
-def load_ads(app=None):        return _load(ensure_file('LANDS_FILE','lands.json',[],app))
+def load_ads(app=None):
+    from app.listings.service import load_listings
+    return load_listings(app)
 
 def load_ads_cached(app=None):
     """لود آگهی‌ها با کش ساده مبتنی بر mtime/size فایل."""
-    app = _resolve_app(app)
-    path = ensure_file('LANDS_FILE','lands.json',[],app)
-    try:
-        st = os.stat(path)
-        mtime = st.st_mtime_ns if hasattr(st, 'st_mtime_ns') else int(st.st_mtime * 1e9)
-        size = st.st_size
-    except Exception:
-        mtime = None
-        size = None
-
-    c = _ADS_CACHE
-    if c["path"] == path and c["mtime"] == mtime and c["size"] == size and c["data"] is not None:
-        return c["data"]
-
-    data = _load(path)
-    _ADS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": data})
-    # پاک کردن کش اکسپرس هنگام تغییر فایل اصلی
-    _EXPRESS_LANDS_CACHE.update({"path": None, "mtime": None, "size": None, "data": None})
-    return data
-
+    from app.listings.service import load_listings_cached
+    return load_listings_cached(app)
 
 def _is_published_my_property(land) -> bool:
-    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
-    if extras.get("published_for_sale") is True:
-        return True
-    if str(land.get("source") or "").strip().lower() == "my_property_published":
-        return True
-    if land.get("public") is True and extras.get("listed_by_owner"):
-        return True
-    return False
+    from app.listings.service import is_published_for_sale
+    return is_published_for_sale(land)
 
 
 def _is_owner_home_land(land) -> bool:
     """ملک خصوصی «ملک من» نباید در فید عمومی اکسپرس بیاید."""
-    if not isinstance(land, dict):
-        return False
-    if _is_published_my_property(land):
-        return False
-    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
-    if land.get("owner_home") or extras.get("owner_home") or extras.get("listed_by_owner"):
-        return True
-    src = str(land.get("source") or "").strip().lower()
-    if src in ("my_property", "owner_home"):
-        return True
-    if str(land.get("ad_type") or "").strip().lower() == "owner_home":
-        return True
-    return False
+    from app.listings.service import is_private_owner_home
+    return is_private_owner_home(land)
 
 
 def load_express_lands_cached(app=None):
     """لود فایل‌های اکسپرس فیلتر شده با کش جداگانه برای سرعت بیشتر."""
     app = _resolve_app(app)
-    path = ensure_file('LANDS_FILE','lands.json',[],app)
+    from app.listings.service import listings_path
+    path = listings_path(app)
     try:
         st = os.stat(path)
         mtime = st.st_mtime_ns if hasattr(st, 'st_mtime_ns') else int(st.st_mtime * 1e9)
@@ -231,7 +199,7 @@ def load_express_lands_cached(app=None):
     all_lands = load_ads_cached(app)
     express_lands = [
         l for l in all_lands
-        if l.get('is_express', False) and not _is_owner_home_land(l)
+        if isinstance(l, dict) and l.get('is_express', False) and not _is_owner_home_land(l)
     ]
     # مرتب‌سازی بر اساس تاریخ ایجاد (جدیدترین اول)
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
@@ -245,7 +213,8 @@ def get_lands_file_stats(app=None):
     خروجی: {"path": str, "mtime": int|None, "size": int|None, "etag": str}
     """
     app = _resolve_app(app)
-    path = ensure_file('LANDS_FILE','lands.json',[],app)
+    from app.listings.service import listings_path
+    path = listings_path(app)
     try:
         st = os.stat(path)
         mtime = st.st_mtime_ns if hasattr(st, 'st_mtime_ns') else int(st.st_mtime * 1e9)
@@ -268,15 +237,14 @@ def _update_ads_cache_after_save(path, items):
     # به‌روزرسانی کش اکسپرس
     express_lands = [
         l for l in items
-        if l.get('is_express', False) and not _is_owner_home_land(l)
+        if isinstance(l, dict) and l.get('is_express', False) and not _is_owner_home_land(l)
     ]
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
     _EXPRESS_LANDS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": express_lands})
 
 def save_ads(items, app=None):
-    path = ensure_file('LANDS_FILE','lands.json',[],app)
-    _save(path, items)
-    _update_ads_cache_after_save(path, items)
+    from app.listings.service import save_listings
+    save_listings(items, app)
 
 def _normalize_users(raw):
     if isinstance(raw, list):

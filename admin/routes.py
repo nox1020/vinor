@@ -435,15 +435,8 @@ def _settings_path() -> str:
     )
 
 def _lands_path() -> str:
-    primary = current_app.config.get(
-        "LANDS_FILE",
-        os.path.join(current_app.instance_path, "data", "lands.json")
-    )
-    if os.path.exists(primary):
-        return primary
-    # fallback: مسیر قدیمی داخل app/data/lands.json
-    fallback = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app", "data", "lands.json")
-    return fallback
+    from app.listings.service import listings_path
+    return listings_path()
 
 
 # ریشه آپلود تصاویر (static/uploads)
@@ -453,7 +446,18 @@ def _uploads_root() -> str:
 # -----------------------------------------------------------------------------
 # توابع کمکی JSON
 # -----------------------------------------------------------------------------
+def _is_listings_file(path: str) -> bool:
+    try:
+        from app.listings.service import listings_path
+        return os.path.abspath(path) == os.path.abspath(listings_path())
+    except Exception:
+        return False
+
+
 def load_json(path: str):
+    if _is_listings_file(path):
+        from app.listings.service import load_listings
+        return load_listings()
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
             try:
@@ -464,6 +468,10 @@ def load_json(path: str):
     return []
 
 def save_json(path: str, data):
+    if _is_listings_file(path):
+        from app.listings.service import save_listings
+        save_listings(data if isinstance(data, list) else [])
+        return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

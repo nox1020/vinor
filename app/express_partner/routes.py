@@ -164,7 +164,6 @@ def _mark_express_land_sold(code: str) -> bool:
         if str(land.get('express_status') or '').strip().lower() != 'sold':
             land['express_status'] = 'sold'
             changed = True
-        break
     if changed:
         save_ads(lands)
     return changed
