@@ -2,17 +2,19 @@
 """آگهی‌های همکار ویژه — مالکیت بر اساس owner=phone."""
 from __future__ import annotations
 
+import fcntl
 import os
 import re
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from flask import current_app, url_for
 from werkzeug.utils import secure_filename
 
-from app.land_category_specs import apply_category_specs_from_form
+from app.land_category_specs import ALL_SPEC_FIELDS, apply_category_specs_from_form
 from app.utils.images import save_upload_image
-from app.utils.storage import load_ads, load_ads_cached, save_ads
+from app.utils.storage import ensure_file, load_ads, load_ads_cached, save_ads
 
 
 def _norm_phone(phone: str) -> str:
@@ -191,13 +193,146 @@ def _save_video_from_form(files) -> Optional[str]:
     return f"uploads/{filename}"
 
 
+def _code_key(land: Any) -> str:
+    if not isinstance(land, dict):
+        return ""
+    return str(land.get("code") or "").strip().translate(_FA_AR_DIGITS)
+
+
+def _used_codes(lands: List[Dict[str, Any]]) -> set[str]:
+    return {code for land in lands if (code := _code_key(land))}
+
+
+@contextmanager
+def _lands_file_lock() -> Iterator[None]:
+    """قفل فایل آگهی تا دو ثبت هم‌زمان یک کد نگیرند."""
+    path = ensure_file("LANDS_FILE", "lands.json", [])
+    lock_path = path + ".lock"
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _next_numeric_code(lands: List[Dict[str, Any]]) -> str:
-    existing = [
-        int(l["code"])
-        for l in lands
-        if isinstance(l, dict) and str(l.get("code") or "").isdigit()
+    """عدد بعد از بزرگ‌ترین کد عددی. کد حذف‌شده دوباره داده نمی‌شود تا آمار همان کد به آگهی جدید نچسبد."""
+    used = _used_codes(lands)
+    nums: List[int] = []
+    for code in used:
+        if code.isdigit():
+            try:
+                nums.append(int(code))
+            except ValueError:
+                continue
+    candidate = (max(nums) + 1) if nums else 1
+    while str(candidate) in used:
+        candidate += 1
+    return str(candidate)
+
+
+def _codes_need_repair(lands: List[Dict[str, Any]]) -> bool:
+    seen: set[str] = set()
+    for land in lands:
+        if not isinstance(land, dict):
+            continue
+        code = _code_key(land)
+        if not code or code in seen:
+            return True
+        seen.add(code)
+    return False
+
+
+def repair_duplicate_land_codes(lands: List[Dict[str, Any]]) -> bool:
+    """ردیف‌های بدون کد یا با کد تکراری کد تازه می‌گیرند. اولی همان کد را نگه می‌دارد."""
+    seen: set[str] = set()
+    changed = False
+    for land in lands:
+        if not isinstance(land, dict):
+            continue
+        code = _code_key(land)
+        if code and code not in seen:
+            seen.add(code)
+            continue
+        land["code"] = _next_numeric_code(lands)
+        seen.add(_code_key(land))
+        changed = True
+    return changed
+
+
+def ensure_unique_land_codes() -> bool:
+    """آگهی‌های قبلی که همه روی یک کد مانده‌اند را جدا کن تا جستجو و خانه هر کدام را نشان بدهند."""
+    preview = load_ads_cached() or []
+    if not isinstance(preview, list) or not _codes_need_repair(preview):
+        return False
+    with _lands_file_lock():
+        lands = load_ads() or []
+        if not isinstance(lands, list):
+            return False
+        if not repair_duplicate_land_codes(lands):
+            return False
+        save_ads(lands)
+        return True
+
+
+_LISTING_UPDATE_FIELDS = (
+    "title",
+    "location",
+    "city",
+    "size",
+    "price_total",
+    "price_per_meter",
+    "description",
+    "images",
+    "category",
+    "payment_method",
+    "payment_terms",
+    "vinor_contact",
+    "express_documents",
+    "video",
+    "latitude",
+    "longitude",
+)
+
+
+def _apply_listing_update(target: Dict[str, Any], rec: Dict[str, Any]) -> None:
+    """ویرایش همان ردیف. کد، تاریخ ثبت و وضعیت انتشار عوض نمی‌شود."""
+    keep_when_blank = {"images", "express_documents", "video"}
+    for key in _LISTING_UPDATE_FIELDS:
+        if key not in rec:
+            continue
+        if key in keep_when_blank and not rec.get(key):
+            continue
+        target[key] = rec[key]
+    target["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for key in ALL_SPEC_FIELDS:
+        if key in rec:
+            target[key] = rec[key]
+        else:
+            target.pop(key, None)
+    extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
+    incoming = rec.get("extras") if isinstance(rec.get("extras"), dict) else {}
+    for key in ("express_commission_pct", "express_commission_amount"):
+        if key in incoming:
+            extras[key] = incoming[key]
+    target["extras"] = extras
+
+
+def _owned_unique_row(
+    lands: List[Dict[str, Any]],
+    owner: str,
+    code: str,
+) -> Optional[Dict[str, Any]]:
+    matches = [
+        land
+        for land in lands
+        if _code_key(land) == code and _same_phone(_owner_phone(land), owner)
     ]
-    return str(max(existing) + 1) if existing else "1"
+    if len(matches) != 1:
+        return None
+    return matches[0]
 
 
 def is_published_for_sale(land: Dict[str, Any] | None) -> bool:
@@ -346,6 +481,10 @@ def _plus_display_name(rec: Dict[str, Any] | None, fallback: str = "") -> str:
 
 def listings_owned_by_plus_partners() -> List[Dict[str, Any]]:
     """آگهی‌های وینور ثبت‌شده توسط همکاران پلاس فعلی."""
+    try:
+        ensure_unique_land_codes()
+    except Exception:
+        current_app.logger.exception("repair duplicate land codes failed")
     plus = plus_partner_map()
     if not plus:
         return []
@@ -403,9 +542,9 @@ def land_owned_by_special(land: Dict[str, Any] | None, phone: str) -> bool:
 
 
 def find_owned_land(phone: str, code: str) -> Optional[Dict[str, Any]]:
-    code = str(code or "").strip()
+    want = str(code or "").strip().translate(_FA_AR_DIGITS)
     for land in listings_owned_by(phone):
-        if str(land.get("code") or "") == code:
+        if _code_key(land) == want:
             return land
     return None
 
@@ -551,21 +690,15 @@ def create_special_listing_from_express_form(
     if len(vinor_contact) < 10:
         return None, "invalid_contact"
 
-    lands = load_ads() or []
-    if not isinstance(lands, list):
-        lands = []
-    new_code = (form.get("code") or "").strip() or _next_numeric_code(lands)
-
     documents: List[str] = []
+    pending_docs: List[Any] = []
     for doc_key in ("document_1", "document_2"):
         pre = (form.get(doc_key) or "").strip()
         if pre:
             documents.append(pre)
     for key, file in files.items():
         if key.startswith("document_") and getattr(file, "filename", None):
-            doc_filename = _save_express_document(file, new_code)
-            if doc_filename and doc_filename not in documents:
-                documents.append(doc_filename)
+            pending_docs.append(file)
 
     images = _normalize_images_from_form(form, files)
 
@@ -645,7 +778,7 @@ def create_special_listing_from_express_form(
             return None, "installments_required"
 
     rec: Dict[str, Any] = {
-        "code": new_code,
+        "code": "",
         "title": title,
         "location": location,
         "city": city,
@@ -697,11 +830,39 @@ def create_special_listing_from_express_form(
 
     apply_category_specs_from_form(rec, form)
 
-    lands.append(rec)
+    submitted = (form.get("code") or "").strip().translate(_FA_AR_DIGITS)
+    wants_update = _flag_on(form.get("update_existing"))
     try:
-        save_ads(lands)
+        with _lands_file_lock():
+            lands = load_ads() or []
+            if not isinstance(lands, list):
+                lands = []
+            repair_duplicate_land_codes(lands)
+            if wants_update and submitted:
+                target = _owned_unique_row(lands, owner, submitted)
+                if target is not None:
+                    for file in pending_docs:
+                        doc_filename = _save_express_document(file, submitted)
+                        if doc_filename and doc_filename not in documents:
+                            documents.append(doc_filename)
+                    rec["express_documents"] = documents
+                    rec["code"] = submitted
+                    _apply_listing_update(target, rec)
+                    save_ads(lands)
+                    return target, None
+            new_code = _next_numeric_code(lands)
+            for file in pending_docs:
+                doc_filename = _save_express_document(file, new_code)
+                if doc_filename and doc_filename not in documents:
+                    documents.append(doc_filename)
+            rec["express_documents"] = documents
+            rec["code"] = new_code
+            lands.append(rec)
+            save_ads(lands)
     except Exception:
-        current_app.logger.exception("special listing save failed code=%s", new_code)
+        current_app.logger.exception(
+            "special listing save failed code=%s", rec.get("code")
+        )
         return None, "save_failed"
     return rec, None
 
@@ -720,11 +881,21 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
         title = str(land.get("title") or "")
         partners = load_express_partners() or []
         items = load_express_assignments() or []
-        existing = {
-            (str(a.get("partner_phone")), str(a.get("land_code")))
-            for a in items
-            if isinstance(a, dict)
-        }
+        seen = set()
+        for row in items:
+            if not isinstance(row, dict):
+                continue
+            key = (str(row.get("partner_phone") or "").strip(), str(row.get("land_code") or "").strip())
+            if key[1] != new_code or not key[0]:
+                continue
+            seen.add(key)
+            if _assignment_survives_unpublish(row):
+                continue
+            status = str(row.get("status") or "").strip().lower()
+            if status in ("", "active"):
+                continue
+            row["status"] = "active"
+            row["commission_pct"] = commission_pct or 0
         max_id = max(
             [int(x.get("id", 0) or 0) for x in items if isinstance(x, dict)],
             default=0,
@@ -734,7 +905,7 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
             if not phone:
                 continue
             key = (phone, new_code)
-            if key in existing:
+            if key in seen:
                 continue
             max_id += 1
             items.append(
@@ -748,7 +919,7 @@ def assign_land_to_all_partners(land: Dict[str, Any], commission_pct: float) -> 
                     + "Z",
                 }
             )
-            existing.add(key)
+            seen.add(key)
             try:
                 phone_normalized = _norm_phone(phone)
                 if phone_normalized and len(phone_normalized) == 11:
@@ -924,6 +1095,18 @@ def resolve_listing_for_viewer(
     return None, "missing"
 
 
+def viewer_owns_private_home(lands: Any, code: str, phone: str) -> bool:
+    """مالکِ ملک خصوصیِ همین کد. بقیه نباید پاسخ تأیید توقف را ببینند."""
+    if not _canonical_mobile(phone):
+        return False
+    if not unpublished_owner_home_only(lands, code):
+        return False
+    return any(
+        is_my_property_record(land) and _same_phone(_owner_phone(land), phone)
+        for land in _rows_for_code(lands, code)
+    )
+
+
 def unpublished_owner_home_only(lands: Any, code: str) -> bool:
     """کد فقط به ملک خصوصی «ملک من» می‌خورد؛ آگهی عمومی با این کد نمانده."""
     matches = _rows_for_code(lands, code)
@@ -946,10 +1129,12 @@ def apply_owner_unpublish(
     land_code: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
     """هر ردیف ملک منِ این کد را خصوصی کن. خروجی: رکورد، خطا، و آیا فایلی عوض شد."""
+    # Management also lists ordinary express ads; stop those owned rows too.
     owned = [
         item
         for item in _rows_for_code(items, land_code)
-        if is_my_property_record(item) and _same_phone(_owner_phone(item), phone)
+        if (is_my_property_record(item) or item.get("is_express"))
+        and _same_phone(_owner_phone(item), phone)
     ]
     if not owned:
         return None, "not_found", False
@@ -989,14 +1174,129 @@ def unpublish_owner_home(
     target, err, changed = apply_owner_unpublish(items, phone, want)
     if err:
         return None, err
-    if not changed:
-        return target, None
-    try:
-        save_ads(items)
-    except Exception:
-        current_app.logger.exception("unpublish owner home save failed code=%s", want)
-        return None, "save_failed"
+    if changed:
+        try:
+            save_ads(items)
+        except Exception:
+            current_app.logger.exception("unpublish owner home save failed code=%s", want)
+            return None, "save_failed"
+    revoke_broadcast_assignments(want)
     return target, None
+
+
+_KEEP_ASSIGNMENT_STATUSES = frozenset({"in_transaction", "in-transaction", "in transaction", "sold"})
+
+
+def _assignment_survives_unpublish(row: Dict[str, Any]) -> bool:
+    """معاملهٔ باز و فروخته‌شده بعد از توقف انتشار می‌مانند."""
+    if str(row.get("transaction_holder") or "").strip():
+        return True
+    status = str(row.get("status") or "").strip().lower()
+    return status in _KEEP_ASSIGNMENT_STATUSES
+
+
+def revoke_broadcast_assignments(land_code: str) -> None:
+    """انتساب «ارسال به همه همکاران» را لغو کن. معامله و فروش دست نمی‌خورند."""
+    code = str(land_code or "").strip()
+    if not code:
+        return
+    try:
+        from app.utils.storage import load_express_assignments, save_express_assignments
+
+        items = load_express_assignments() or []
+        if not isinstance(items, list):
+            return
+        changed = False
+        kept: List[Any] = []
+        for row in items:
+            if not isinstance(row, dict):
+                kept.append(row)
+                continue
+            if str(row.get("land_code") or "").strip() != code:
+                kept.append(row)
+                continue
+            if _assignment_survives_unpublish(row):
+                kept.append(row)
+                continue
+            status = str(row.get("status") or "").strip().lower()
+            if status == "revoked":
+                kept.append(row)
+                continue
+            updated = dict(row)
+            updated["status"] = "revoked"
+            kept.append(updated)
+            changed = True
+        if changed:
+            save_express_assignments(kept)
+    except Exception:
+        current_app.logger.exception(
+            "revoke broadcast assignments failed code=%s", code
+        )
+
+
+def delete_owner_property(phone: str, land_code: str) -> Tuple[Optional[str], Optional[str]]:
+    """ردیف‌های ملک منِ این مالک و انتساب‌های همین کد را حذف کن."""
+    want = str(land_code or "").strip()
+    if not want or not _canonical_mobile(phone):
+        return None, "not_found"
+    items = load_ads() or []
+    if not isinstance(items, list):
+        items = []
+    owned_indexes = {
+        idx
+        for idx, item in enumerate(items)
+        if isinstance(item, dict)
+        and str(item.get("code") or "").strip() == want
+        and is_my_property_record(item)
+        and _same_phone(_owner_phone(item), phone)
+    }
+    if not owned_indexes:
+        return None, "not_found"
+    remaining = [item for idx, item in enumerate(items) if idx not in owned_indexes]
+    try:
+        save_ads(remaining)
+    except Exception:
+        current_app.logger.exception("delete owner property save failed code=%s", want)
+        return None, "save_failed"
+    if not _public_express_remains(remaining, want):
+        drop_open_listing_assignments(want)
+    return want, None
+
+
+def _public_express_remains(items: Any, land_code: str) -> bool:
+    want = str(land_code or "").strip()
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("code") or "").strip() != want:
+            continue
+        if item.get("is_express") and item.get("public") is not False and not is_owner_home(item):
+            return True
+    return False
+
+
+def drop_open_listing_assignments(land_code: str) -> None:
+    """انتساب‌های باز این کد را بردار. معامله و فروخته‌شده می‌مانند."""
+    code = str(land_code or "").strip()
+    if not code:
+        return
+    try:
+        from app.utils.storage import load_express_assignments, save_express_assignments
+
+        items = load_express_assignments() or []
+        if not isinstance(items, list):
+            return
+        kept = []
+        for row in items:
+            if not isinstance(row, dict) or str(row.get("land_code") or "").strip() != code:
+                kept.append(row)
+                continue
+            if _assignment_survives_unpublish(row):
+                kept.append(row)
+        if len(kept) != len(items):
+            save_express_assignments(kept)
+    except Exception:
+        current_app.logger.exception("drop open listing assignments failed code=%s", code)
 
 
 def save_special_listing_upload_document(file) -> Optional[str]:

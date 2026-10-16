@@ -175,3 +175,53 @@ def test_listing_detail_has_publish_form_without_stop():
     text = Path("app/express_partner/templates/express_partner/listing_detail_native.html").read_text(encoding="utf-8")
     assert "انتشار برای فروش" in text
     assert "توقف انتشار فروش" not in text
+
+
+def test_stop_regular_express_listing_and_publish_again():
+    # This is the shape produced by the public listing form, without owner_home.
+    ad = {"code": "9", "owner": "09120000000", "is_express": True,
+          "ad_type": "express", "status": "approved", "price_total": 1000000,
+          "payment_method": "توافقی", "images": ["photo.jpg"],
+          "extras": {"listed_by_special": True, "express_commission_pct": 2}}
+    rec, err, changed = apply_owner_unpublish([ad], "09120000000", "9")
+    assert err is None and changed is True
+    assert rec is ad
+    assert detail_sale_flag(ad) is False
+    assert ad["is_express"] is False
+    assert ad["payment_method"] == "توافقی"
+    assert ad["images"] == ["photo.jpg"]
+    assert ad["extras"]["express_commission_pct"] == 2
+    assert resolve_listing_for_viewer([ad], "9", "09121111111")[0] is None
+    assert apply_owner_unpublish([ad], "09120000000", "9")[2] is False
+    rec, err, changed = apply_owner_publish(
+        [ad], "09120000000", "9", payment_method="توافقی", commission_pct=2)
+    assert err is None and changed is True
+    assert detail_sale_flag(rec) is True
+
+
+def test_stop_express_duplicate_preserves_other_owners():
+    home = _published()
+    duplicate = {"code": "4", "owner": "09120000000", "is_express": True, "extras": {}}
+    foreign = {"code": "4", "owner": "09123333333", "is_express": True, "extras": {}}
+    items = [home, duplicate, foreign]
+    _, err, changed = apply_owner_unpublish(items, "09120000000", "4")
+    assert err is None and changed is True
+    assert home["is_express"] is False
+    assert duplicate["is_express"] is False
+    assert foreign["is_express"] is True
+    assert apply_owner_unpublish([foreign], "09120000000", "4")[1] == "not_found"
+
+
+def test_management_card_marks_regular_express_listing_published(monkeypatch):
+    from flask import Flask
+    from app.express_partner import special_listings, apk_native
+    from app.express_partner.my_property import property_cards
+
+    ad = {"code": "9", "owner": "09120000000", "is_express": True, "extras": {}}
+    monkeypatch.setattr(special_listings, "listings_owned_home", lambda phone: [])
+    monkeypatch.setattr(special_listings, "listings_owned_by", lambda phone: [ad])
+    monkeypatch.setattr(apk_native, "land_card", lambda land: {"code": land["code"]})
+    with Flask(__name__).test_request_context():
+        card = property_cards("09120000000")[0]
+    assert card["published_for_sale"] is True
+    assert card["badge_label"] == "منتشرشده"
