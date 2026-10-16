@@ -5006,6 +5006,13 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
     """فایل‌های عمومی کامل برای نوار کشویی خانه (مهمان / کاربر عادی)."""
     from app.utils.public_listings import is_publicly_visible_listing
 
+    try:
+        from .special_listings import ensure_unique_land_codes
+
+        ensure_unique_land_codes()
+    except Exception:
+        current_app.logger.exception("repair duplicate land codes failed")
+
     sanitize_land_media = None
     try:
         from ..utils.images import sanitize_land_media as _sanitize_land_media
@@ -5139,6 +5146,7 @@ def _vinor_land_to_home_ad(land: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'price_toman': price_n if price_n > 0 else 0,
         'size': land.get('size') if land.get('size') not in (None, '') else '',
         'city': city,
+        'created_at': str(land.get('created_at') or land.get('updated_at') or '').strip(),
     }
 
 
@@ -5198,6 +5206,7 @@ def _home_ads_for_api() -> tuple:
             'area': str(ad.get('area') or '').strip(),
             'facts': [str(x).strip() for x in (ad.get('facts') or []) if str(x).strip()][:3],
             'listed_label': str(ad.get('listed_label') or '').strip(),
+            'created_at': str(ad.get('created_at') or '').strip(),
         }
         if ad.get('price_total') not in (None, ''):
             row['price_total'] = ad.get('price_total')
@@ -5221,7 +5230,7 @@ def _merge_home_ads_carousel(
     divar_ads: List[Dict[str, Any]],
     vinor_lands: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """وینور اول، سپس دیوار — بدون تکرار توکن/کد."""
+    """وینور اول، سپس دیوار. ردیف‌هایی که کد یکی دارند ولی زمان یا عنوان فرق دارد هر دو می‌مانند."""
     merged: List[Dict[str, Any]] = []
     seen: set[str] = set()
     try:
@@ -5238,7 +5247,8 @@ def _merge_home_ads_carousel(
         ad = _vinor_land_to_home_ad(land)
         if not ad:
             continue
-        key = f"vinor:{ad['token']}"
+        created = str(land.get("created_at") or land.get("updated_at") or "")
+        key = f"vinor:{ad['token']}:{created}:{ad.get('title') or ''}"
         if key in seen:
             continue
         seen.add(key)
