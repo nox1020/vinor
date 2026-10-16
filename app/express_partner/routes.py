@@ -9498,12 +9498,12 @@ def land_tx_status(code: str):
     except Exception:
         is_partner_approved = False
 
-    state = _partner_land_tx_payload(
+    state = dict(_partner_land_tx_payload(
         code,
         me_phone,
         is_partner_approved=is_partner_approved,
         global_assignment_status=ctx['global_status'],
-    )
+    ))
     try:
         from .visit_requests import visit_schedule_for_land
 
