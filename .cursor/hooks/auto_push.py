@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Commit leftover work and push to origin when the agent loop ends."""
+"""Commit leftover work on a feature branch and push that branch when the agent stops.
+
+Never pushes main or master. A rejected push is reported on stderr and exits
+non-zero. This is a Cursor ``stop`` hook: stdout is a JSON object with an
+optional ``followup_message`` (https://cursor.com/docs/hooks)."""
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -38,8 +43,19 @@ SECRET_RE = re.compile(
 )
 
 
+REFUSAL = "auto_push: refusing to push main; use a PR branch"
+PROTECTED_BRANCHES = {"main", "master"}
+
+
 def log(message: str) -> None:
     print(f"[auto-push] {message}", file=sys.stderr, flush=True)
+
+
+def fail(message: str) -> int:
+    """Surface a push failure. Exit non-zero so a rejected push is not silent."""
+    print(message, file=sys.stderr, flush=True)
+    emit(message)
+    return 1
 
 
 def emit(followup: str | None = None) -> None:
@@ -51,9 +67,14 @@ def emit(followup: str | None = None) -> None:
 
 
 def git(*args: str, check: bool = False) -> subprocess.CompletedProcess[str]:
+    if any(arg in {"--force", "--force-with-lease", "-f"} for arg in args):
+        raise RuntimeError("auto_push: force-push is not allowed")
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
     return subprocess.run(
         ["git", *args],
         cwd=REPO,
+        env=env,
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -77,6 +98,18 @@ def in_progress_git_state(git_dir: Path) -> bool:
         (git_dir / name).exists()
         for name in ("MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD")
     )
+
+
+def current_branch() -> str | None:
+    symbolic = git("symbolic-ref", "-q", "HEAD")
+    if symbolic.returncode != 0:
+        return None
+    ref = symbolic.stdout.strip()
+    prefix = "refs/heads/"
+    if not ref.startswith(prefix):
+        return None
+    branch = ref[len(prefix):]
+    return branch or None
 
 
 def unstage_secrets() -> None:
@@ -118,15 +151,13 @@ def main() -> int:
     if not git_dir.is_absolute():
         git_dir = REPO / git_dir
     if in_progress_git_state(git_dir):
-        log("skipped: merge/rebase in progress")
-        emit()
-        return 0
+        return fail("auto_push: refusing to push during merge/rebase")
 
-    symbolic = git("symbolic-ref", "-q", "HEAD")
-    if symbolic.returncode != 0:
-        log("skipped: detached HEAD")
-        emit()
-        return 0
+    # main is protected (PR-only). Detached HEAD has no branch to publish.
+    # Do not fetch, commit, or push in either case.
+    branch = current_branch()
+    if branch is None or branch in PROTECTED_BRANCHES:
+        return fail(REFUSAL)
 
     git("add", "-A")
     unstage_secrets()
@@ -145,28 +176,31 @@ def main() -> int:
     else:
         log("nothing new to commit")
 
+    fetch = git("fetch", "origin")
+    if fetch.returncode != 0:
+        detail = (fetch.stderr or fetch.stdout or "fetch failed").strip()
+        return fail(f"auto_push: fetch failed: {detail}")
+
+    # Same branch only. -u sets upstream on the first push. Never --force.
+    destination = f"HEAD:refs/heads/{branch}"
+    if destination in {"HEAD:refs/heads/main", "HEAD:refs/heads/master"}:
+        return fail(REFUSAL)
+    push = git("push", "-u", "origin", destination)
+    if push.returncode != 0:
+        detail = (push.stderr or push.stdout or "push failed").strip()
+        return fail(f"auto_push: push rejected: {detail}")
+
     ahead = git("rev-list", "--count", "@{u}..HEAD")
     if ahead.returncode != 0:
-        # No upstream yet — still push the current branch.
-        should_push = True
-    else:
-        should_push = (ahead.stdout.strip() or "0") != "0" or has_staged.returncode != 0
-
-    if not should_push:
-        # Catch the case where commit succeeded but upstream comparison failed earlier.
-        porcelain = git_ok("status", "-sb").splitlines()
-        should_push = any("ahead" in line for line in porcelain[:1])
-
-    did_push = False
-    if not should_push:
-        log("already in sync with origin")
-    else:
-        push = git("push", "origin", "HEAD")
-        if push.returncode != 0:
-            log((push.stderr or push.stdout or "push failed").strip())
-        else:
-            log("pushed to origin")
-            did_push = True
+        detail = (ahead.stderr or ahead.stdout or "upstream check failed").strip()
+        return fail(f"auto_push: upstream check failed: {detail}")
+    ahead_count = ahead.stdout.strip() or "0"
+    if ahead_count != "0":
+        return fail(
+            f"auto_push: branch still ahead of upstream after push ({ahead_count} commits)"
+        )
+    log(f"pushed origin/{branch}")
+    did_push = True
 
     followup = None
     if loop_count < 8:
@@ -188,7 +222,7 @@ if __name__ == "__main__":
         if hasattr(sys.stderr, "reconfigure"):
             sys.stderr.reconfigure(encoding="utf-8")
         raise SystemExit(main())
-    except Exception as exc:  # noqa: BLE001 — fail open so the agent can still stop
-        log(f"error: {exc}")
-        emit()
-        raise SystemExit(0)
+    except Exception as exc:  # noqa: BLE001 — a failed push must not look like success
+        print(f"auto_push: error: {exc}", file=sys.stderr, flush=True)
+        emit(f"auto_push: error: {exc}")
+        raise SystemExit(1)

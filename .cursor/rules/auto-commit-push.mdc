@@ -1,25 +1,29 @@
 ---
-description: کار روی برنچ و PR به main؛ هرگز پوش مستقیم به main
+description: کار روی برنچ cursor/* و PR؛ هرگز کامیت یا پوش مستقیم به main
 alwaysApply: true
 ---
 
 # برنچ، PR، و CI — بدون پوش مستقیم به main
 
-به `main` یا `master` مستقیم پوش نکن. کار را روی برنچ انجام بده و PR به `main` باز کن. مرج را قانون `.cursor/rules/auto-pr-merge.mdc` انجام می‌دهد.
+به `main` یا `master` مستقیم پوش نکن. کار را روی برنچ `cursor/*` انجام بده و PR به `main` باز کن. مرج را قانون `.cursor/rules/auto-pr-merge.mdc` انجام می‌دهد.
 
 ## برنچ و PR
 
-1. اگر روی `main`/`master` هستی، قبل از هر ویرایش `git checkout -b` بزن. کامیت را روی همان برنچ بگذار.
-2. وقتی کار روی فایل‌ها تمام شد، `git add` / `git commit` / `git push -u origin HEAD` را بدون پرسیدن اجرا کن. مقصد پوش همین برنچ است، نه `main`.
-3. PR را به `main` باز کن (یا به‌روز کن). به `main` پوش نکن. مرج طبق `auto-pr-merge` است.
-4. پیام commit کوتاه و متمرکز بر «چرا» باشد.
+1. اگر روی `main`/`master` یا HEAD جدا هستی، قبل از هر ویرایش `git checkout -b cursor/<name>` بزن. روی `main` کامیت نساز.
+2. کامیت فقط روی همان برنچ `cursor/*` است. پیام commit کوتاه و متمرکز بر «چرا» باشد.
+3. وقتی کار روی فایل‌ها تمام شد، `git add` / `git commit` را بدون پرسیدن اجرا کن، بعد `git fetch origin` و `git push -u origin HEAD:refs/heads/<branch>`. هرگز `--force`. هرگز `git push origin HEAD` وقتی برنچ `main` یا `master` است. مقصد پوش همین برنچ است، نه `main`.
+4. PR را به `main` باز کن (یا به‌روز کن). به `main` پوش نکن. مرج طبق `auto-pr-merge` است: merge commit، مگر مخزن فقط squash یا rebase را اجازه بدهد.
 5. Force-push به `main`/`master` نکن. تاریخچهٔ `main` را بازنویسی نکن.
 6. سکرت‌ها را commit نکن: `.env`، کلید، keystore، `credentials.json`، `google-services.json`، `key.properties`.
-7. اگر هوک `stop` هم push کرد، همان commit را دوباره نساز.
+7. اگر هوک `stop` پوش را رد کرد، همان خطا را بخوان و برنچ را درست پوش کن. خروج صفرِ بی‌صدا یعنی کار نرسیده است. اگر هوک `stop` هم push کرد، همان commit را دوباره نساز.
 
 مرج PR را `.cursor/rules/auto-pr-merge.mdc` تعیین می‌کند. تأیید انسانی جداگانه لازم نیست. Draft، تست ناموفق، تداخل حل‌نشده و Branch Protection دور زده نمی‌شوند.
 
 اگر push به‌خاطر auth شکست، در پاسخ نهایی بگو و همان‌جا متوقف شو.
+
+## نسخه
+
+PR قابلیت `version.txt` را بالا نمی‌برد. بالا بردن نسخه فقط در PR مخصوص انتشار است، یا وقتی عامل CI/CD تصمیم می‌گیرد. جزئیات در `bump-app-version.mdc`.
 
 ## GitHub Actions
 
@@ -28,6 +32,6 @@ alwaysApply: true
 1. اجرا کن: `python .cursor/hooks/ci_watch.py --wait` (اگر `gh` بود: `gh run list` / `gh run view --log-failed`).
 2. اگر `CI_STATE` برابر `failure` بود، فایل لاگ `FAILED_JOB` را بخوان، علت ریشه را در کد یا ورک‌فلو درست کن.
 3. ورک‌فلو را فقط برای مخفی‌کردن شکست ضعیف/skip نکن. `continue-on-error` و `|| true` روی تست ممنوع است.
-4. فیکس را روی همان برنچ commit و push کن — منتظر درخواست کاربر نمان و به `main` پوش نکن.
+4. فیکس را روی همان برنچ `cursor/*` commit و push کن — منتظر درخواست کاربر نمان و به `main` پوش نکن.
 5. تا وقتی run آخر روی همین branch سبز شود تکرار کن. اگر راز/auth کم است یا مشکل خارجی غیرقابل‌رفع است، گزارش بده و بایست.
 6. اگر `CI_STATE` برابر `none` بود، برای این commit ورک‌فلو اجرا نشده (مثلاً فقط فایل‌های `.cursor`) — تمام.

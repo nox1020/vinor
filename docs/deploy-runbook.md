@@ -260,6 +260,38 @@ bash scripts/deploy.sh <40-hex-sha>
 
 انتشار APK دستی می‌ماند.
 
+## رویهٔ مرج و سلامت مرج
+
+مرج طبق `.cursor/rules/auto-pr-merge.mdc` است: merge commit، مگر مخزن فقط squash یا rebase را اجازه بدهد. هر بار فقط یک PR.
+
+قبل از مرج `mergeable_state` را بخوان:
+
+- `behind`: برنچ را با base به‌روز کن، بعد صبر کن تا CI سبز شود. این کار تأیید ناظر را باطل نمی‌کند؛ به نویسنده فقط FYI بده.
+- `pending`: صبر کن.
+- `dirty`: به نویسندهٔ PR خبر بده.
+- پاسخ 405 یا 409، یا `mergeable` برابر `null`: تا ۳ بار دوباره بخوان.
+
+بعد از مرج تأیید کن `merged=true` است، SHA مرج روی `main` هست، و `ci.yml` روی همان SHA شروع شده است.
+
+سلامت مرج ورک‌فلو `.github/workflows/merge-health.yml` است. زمان‌بندی `43 5 * * *` به وقت UTC (۰۹:۱۳ تهران) به‌علاوهٔ `workflow_dispatch`، یعنی روزی یک‌بار. هر چه همان لحظه کهنه باشد گزارش می‌شود. آستانهٔ PR کهنه ۴ ساعت می‌ماند و از تاریخ committer کامیت head حساب می‌شود، نه از `updated_at`، چون کامنت و برچسب آن ساعت را جابه‌جا می‌کنند. اگر تاریخ committer نباشد، `updated_at` پشتیبان است. `direct_push` کامیت‌های `main` را در ۲۶ ساعت گذشته می‌بیند.
+
+| کد | معنی |
+| --- | --- |
+| `pr_dirty` | `mergeable_state=dirty` و head قدیمی‌تر از ۴ ساعت |
+| `pr_behind` | عقب از base، همان آستانه |
+| `pr_blocked` | `blocked`، همان آستانه |
+| `pr_unstable` | `unstable`، همان آستانه |
+| `check_missing` | چک `REQUIRED_CHECKS` (پیش‌فرض `pytest`) روی SHA هد، ۳۰ دقیقه بعد از تاریخ کامیت هنوز نیست |
+| `check_failed` | همان چک تمام شده و نتیجه‌اش `success` نیست |
+| `direct_push` | `GET /commits/{sha}/pulls` برای کامیت `main` در ۲۶ ساعت اخیر خالی است. SHA، پیام کوتاه و نویسنده ثبت می‌شود |
+| `main_ci_failed` | آخرین اجرای تمام‌شدهٔ هر ورک‌فلو روی `main` جز خود merge-health، با conclusion برابر `failure` یا `cancelled` یا `startup_failure` |
+| `healthz_down` | `https://vinor.ir/healthz` کدی جز 204 داده است |
+| `deploy_lag` | `GET /version` کد 200 و JSON است، `full_sha` (یا `sha` به‌صورت پیشوند) با HEAD ‏`main` یکی نیست، و `ci.yml` همان SHA بیش از ۱۵ دقیقه پیش موفق تمام شده. 404 یا JSON خراب نادیده گرفته می‌شود |
+
+Issue با عنوان `Merge health` و برچسب `merge-health` همین یافته‌ها را نگه می‌دارد. جاب حتی وقتی یافته دارد خروج صفر می‌دهد تا `main` قرمز نشود. دیپلوی فقط بعد از موفقیت `ci.yml` است.
+
+Ruleset مورد انتظار روی `main`: PR الزامی، پوش مستقیم بسته، چک الزامی `pytest`. روش مرج merge commit است، مگر مخزن فقط squash یا rebase را اجازه بدهد.
+
 ## کارهای بعدی
 
 - انجام شد: `_resolve_secret` فقط `VINOR_WEBHOOK_SECRET` را از env می‌خواند.

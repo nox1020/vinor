@@ -1,0 +1,590 @@
+name: Merge health
+
+# Daily at 05:43 UTC (09:13 Asia/Tehran), plus workflow_dispatch.
+# A daily run reports whatever is already stale. The stale-PR threshold
+# stays 4 hours and is measured from the head commit's committer date
+# (updated_at also moves on comments, so it is only a fallback).
+# direct_push looks at main commits from the last 26 hours.
+# Findings do not fail the job: deploy watches ci.yml, not this workflow.
+# No third-party actions. gh, curl, and python3 ship on ubuntu-latest.
+
+on:
+  schedule:
+    - cron: "43 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  actions: read
+  statuses: read
+  issues: write
+
+concurrency:
+  group: merge-health-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  merge-health:
+    name: merge-health
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      REQUIRED_CHECKS: pytest
+    steps:
+      - name: Report merge health
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          import time
+          from datetime import datetime, timedelta, timezone
+          from urllib.parse import quote
+
+          REPO = (os.environ.get("REPO") or os.environ.get("GITHUB_REPOSITORY") or "").strip()
+          if "/" not in REPO:
+              print("merge-health: REPO must be owner/name", file=sys.stderr)
+              sys.exit(1)
+          OWNER = REPO.split("/", 1)[0]
+          STALE_PR = timedelta(hours=4)
+          DIRECT_PUSH_WINDOW = timedelta(hours=26)
+          CHECK_GRACE = timedelta(minutes=30)
+          DEPLOY_LAG = timedelta(minutes=15)
+          STATE_CODE = {
+              "dirty": "pr_dirty",
+              "behind": "pr_behind",
+              "blocked": "pr_blocked",
+              "unstable": "pr_unstable",
+          }
+          BAD_CI = {"failure", "cancelled", "startup_failure"}
+          SEEN_RE = re.compile(
+              r"<!-- seen:(.+)\|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) -->"
+          )
+          FP_RE = re.compile(r"<!-- fp:([0-9a-fA-F]{64}) -->")
+
+
+          class GhError(RuntimeError):
+              pass
+
+
+          def scrub(text):
+              redacted = text or ""
+              for key in ("GH_TOKEN", "GITHUB_TOKEN"):
+                  token = os.environ.get(key) or ""
+                  if token:
+                      redacted = redacted.replace(token, "[redacted]")
+              return redacted
+
+
+          def gh(method, path, payload=None):
+              cmd = ["gh", "api", "--method", method, path]
+              data = None
+              if payload is not None:
+                  cmd.extend(["--input", "-"])
+                  data = json.dumps(payload)
+              proc = subprocess.run(
+                  cmd,
+                  input=data,
+                  text=True,
+                  capture_output=True,
+                  timeout=90,
+              )
+              if proc.returncode != 0:
+                  detail = scrub((proc.stderr or proc.stdout or "").strip())
+                  raise GhError(detail or ("gh api %s %s failed" % (method, path)))
+              text = (proc.stdout or "").strip()
+              if not text:
+                  return None
+              return json.loads(text)
+
+
+          def gh_list(path, params):
+              items = []
+              for page in range(1, 21):
+                  query_args = {key: str(value) for key, value in params.items()}
+                  query_args["per_page"] = "100"
+                  query_args["page"] = str(page)
+                  query = "&".join(
+                      "%s=%s" % (key, quote(value, safe=""))
+                      for key, value in query_args.items()
+                  )
+                  joiner = "&" if "?" in path else "?"
+                  data = gh("GET", "%s%s%s" % (path, joiner, query))
+                  if not data:
+                      break
+                  if not isinstance(data, list):
+                      raise GhError("expected a list from %s" % path)
+                  items.extend(data)
+                  if len(data) < 100:
+                      break
+              return items
+
+
+          def parse_time(value):
+              text = (value or "").strip()
+              if not text:
+                  raise GhError("missing timestamp")
+              if text.endswith("Z"):
+                  text = text[:-1] + "+00:00"
+              parsed = datetime.fromisoformat(text)
+              if parsed.tzinfo is None:
+                  parsed = parsed.replace(tzinfo=timezone.utc)
+              return parsed.astimezone(timezone.utc)
+
+
+          def stamp(moment):
+              return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+          def cell(value):
+              return str(value).replace("|", "/").replace("\n", " ").strip()
+
+
+          def curl_status(url):
+              proc = subprocess.run(
+                  [
+                      "curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
+                      "--max-time", "20", url,
+                  ],
+                  text=True,
+                  capture_output=True,
+                  timeout=30,
+              )
+              return ((proc.stdout or "").strip() or "000")
+
+
+          def curl_body(url):
+              proc = subprocess.run(
+                  [
+                      "curl", "-sS", "--max-time", "20", "-w", "\n%{http_code}", url,
+                  ],
+                  text=True,
+                  capture_output=True,
+                  timeout=30,
+              )
+              text = proc.stdout or ""
+              if not text:
+                  return "000", ""
+              body, sep, code = text.rpartition("\n")
+              if not sep:
+                  return "000", text
+              return code.strip() or "000", body
+
+
+          def add(findings, code, subject, detail):
+              findings.append({
+                  "code": code,
+                  "subject": subject,
+                  "detail": detail,
+                  "key": "%s|%s" % (code, subject),
+              })
+
+
+          def head_anchor(pr, now):
+              # Committer date of the head SHA. updated_at moves on comments
+              # and would hide a quiet conflict, so it is only a fallback.
+              sha = ((pr.get("head") or {}).get("sha")) or ""
+              if sha:
+                  commit = gh("GET", "repos/%s/commits/%s" % (REPO, sha))
+                  raw = (
+                      ((commit.get("commit") or {}).get("committer") or {}).get("date")
+                      or ""
+                  )
+                  if raw:
+                      return parse_time(raw)
+              updated = pr.get("updated_at") or ""
+              if updated:
+                  return parse_time(updated)
+              return now
+
+
+          def refetch_pr(number):
+              pr = gh("GET", "repos/%s/pulls/%s" % (REPO, number))
+              tries = 0
+              while pr.get("mergeable") is None and tries < 3:
+                  time.sleep(10)
+                  pr = gh("GET", "repos/%s/pulls/%s" % (REPO, number))
+                  tries += 1
+              return pr
+
+
+          def check_runs(sha):
+              runs = []
+              page = 1
+              while page <= 10:
+                  data = gh(
+                      "GET",
+                      "repos/%s/commits/%s/check-runs?per_page=100&page=%s"
+                      % (REPO, sha, page),
+                  )
+                  batch = (data or {}).get("check_runs") or []
+                  runs.extend(batch)
+                  total = int((data or {}).get("total_count") or 0)
+                  if not batch or len(runs) >= total:
+                      break
+                  page += 1
+              return runs
+
+
+          def latest_named(runs, name):
+              matched = [item for item in runs if item.get("name") == name]
+              if not matched:
+                  return None
+              matched.sort(key=lambda item: item.get("completed_at") or item.get("started_at") or "")
+              return matched[-1]
+
+
+          def collect(now):
+              findings = []
+              pulls = gh_list("repos/%s/pulls" % REPO, {"state": "open"})
+              required = [
+                  part.strip()
+                  for part in (os.environ.get("REQUIRED_CHECKS") or "pytest").split(",")
+                  if part.strip()
+              ]
+              for summary in pulls:
+                  if summary.get("draft"):
+                      continue
+                  pr = refetch_pr(summary["number"])
+                  if pr.get("draft") or pr.get("state") != "open":
+                      continue
+                  number = pr["number"]
+                  sha = ((pr.get("head") or {}).get("sha")) or ""
+                  anchor = head_anchor(pr, now)
+                  state = pr.get("mergeable_state") or ""
+                  code = STATE_CODE.get(state)
+                  if code and (now - anchor) > STALE_PR:
+                      add(
+                          findings,
+                          code,
+                          "#%s" % number,
+                          "mergeable_state=%s since head committer %s"
+                          % (state, stamp(anchor)),
+                      )
+                  if not sha:
+                      continue
+                  runs = check_runs(sha)
+                  age = now - anchor
+                  for name in required:
+                      run = latest_named(runs, name)
+                      subject = "#%s %s" % (number, name)
+                      if run is None:
+                          if age > CHECK_GRACE:
+                              add(
+                                  findings,
+                                  "check_missing",
+                                  subject,
+                                  "no %s check-run on %s; head committer %s"
+                                  % (name, sha[:7], stamp(anchor)),
+                              )
+                          continue
+                      if run.get("status") == "completed" and run.get("conclusion") != "success":
+                          add(
+                              findings,
+                              "check_failed",
+                              subject,
+                              "%s conclusion=%s on %s"
+                              % (name, run.get("conclusion"), sha[:7]),
+                          )
+
+              since = stamp(now - DIRECT_PUSH_WINDOW)
+              commits = gh_list(
+                  "repos/%s/commits" % REPO,
+                  {"sha": "main", "since": since},
+              )
+              for commit in commits:
+                  sha = commit.get("sha") or ""
+                  if not sha:
+                      continue
+                  committed = (
+                      ((commit.get("commit") or {}).get("committer") or {}).get("date") or ""
+                  )
+                  if committed and (now - parse_time(committed)) > DIRECT_PUSH_WINDOW:
+                      continue
+                  linked = gh("GET", "repos/%s/commits/%s/pulls" % (REPO, sha))
+                  if linked is None:
+                      raise GhError("commits/%s/pulls returned an empty body" % sha[:7])
+                  if linked:
+                      continue
+                  author = ((commit.get("author") or {}).get("login")) or (
+                      ((commit.get("commit") or {}).get("author") or {}).get("name")
+                  ) or "unknown"
+                  message = ((commit.get("commit") or {}).get("message") or "").splitlines()
+                  short = (message[0] if message else "")[:120]
+                  add(
+                      findings,
+                      "direct_push",
+                      sha,
+                      "%s: %s" % (author, short or "(no message)"),
+                  )
+
+              page = 1
+              workflows = []
+              while page <= 10:
+                  data = gh(
+                      "GET",
+                      "repos/%s/actions/workflows?per_page=100&page=%s" % (REPO, page),
+                  )
+                  batch = (data or {}).get("workflows") or []
+                  workflows.extend(batch)
+                  total = int((data or {}).get("total_count") or 0)
+                  if not batch or len(workflows) >= total:
+                      break
+                  page += 1
+              for workflow in workflows:
+                  path = workflow.get("path") or ""
+                  if path.endswith("merge-health.yml"):
+                      continue
+                  data = gh(
+                      "GET",
+                      "repos/%s/actions/workflows/%s/runs?branch=main&status=completed&per_page=1"
+                      % (REPO, workflow.get("id")),
+                  )
+                  runs = (data or {}).get("workflow_runs") or []
+                  if not runs:
+                      continue
+                  run = runs[0]
+                  if run.get("conclusion") not in BAD_CI:
+                      continue
+                  run_sha = run.get("head_sha") or ""
+                  add(
+                      findings,
+                      "main_ci_failed",
+                      "%s#%s" % (run_sha, run.get("id")),
+                      "%s run %s conclusion=%s"
+                      % (workflow.get("name") or path, run.get("id"), run.get("conclusion")),
+                  )
+
+              health = curl_status("https://vinor.ir/healthz")
+              if health != "204":
+                  add(
+                      findings,
+                      "healthz_down",
+                      "https://vinor.ir/healthz",
+                      "http %s" % health,
+                  )
+
+              status, body = curl_body("https://vinor.ir/version")
+              if status != "404":
+                  payload = None
+                  if status == "200":
+                      try:
+                          payload = json.loads(body)
+                      except json.JSONDecodeError:
+                          payload = None
+                  if isinstance(payload, dict):
+                      main = gh("GET", "repos/%s/commits/main" % REPO)
+                      main_sha = main.get("sha") or ""
+                      full = str(payload.get("full_sha") or "").strip()
+                      short = str(payload.get("sha") or "").strip()
+                      matches = None
+                      shown = ""
+                      if full:
+                          matches = full.lower() == main_sha.lower()
+                          shown = full
+                      elif short:
+                          matches = main_sha.lower().startswith(short.lower())
+                          shown = short
+                      if matches is False and main_sha:
+                          data = gh(
+                              "GET",
+                              "repos/%s/actions/workflows/ci.yml/runs?branch=main&head_sha=%s&status=completed&per_page=20"
+                              % (REPO, main_sha),
+                          )
+                          newest = None
+                          for run in (data or {}).get("workflow_runs") or []:
+                              if run.get("conclusion") != "success":
+                                  continue
+                              if (run.get("head_sha") or "") != main_sha:
+                                  continue
+                              updated = parse_time(run.get("updated_at") or "")
+                              if newest is None or updated > newest:
+                                  newest = updated
+                          # updated_at on a completed run is the completion time.
+                          if newest is not None and (now - newest) > DEPLOY_LAG:
+                              add(
+                                  findings,
+                                  "deploy_lag",
+                                  main_sha,
+                                  "deployed %s != main %s; ci.yml success at %s"
+                                  % (shown, main_sha[:7], stamp(newest)),
+                              )
+              return findings
+
+
+          def previous_seen(body):
+              found = {}
+              for key, seen in SEEN_RE.findall(body or ""):
+                  found[key] = seen
+              return found
+
+
+          def previous_fp(body):
+              match = FP_RE.search(body or "")
+              return match.group(1).lower() if match else None
+
+
+          def render(findings, seen_map, now):
+              dedup = {}
+              for finding in findings:
+                  dedup.setdefault(finding["key"], finding)
+              ordered = [dedup[key] for key in sorted(dedup)]
+              rows = []
+              seen_lines = []
+              for finding in ordered:
+                  seen = seen_map.get(finding["key"]) or stamp(now)
+                  rows.append(
+                      "| %s | %s | %s | %s |"
+                      % (
+                          cell(finding["code"]),
+                          cell(finding["subject"]),
+                          cell(finding["detail"]),
+                          seen,
+                      )
+                  )
+                  seen_lines.append("<!-- seen:%s|%s -->" % (finding["key"], seen))
+              keys = sorted(dedup)
+              fingerprint = hashlib.sha256("\n".join(keys).encode("utf-8")).hexdigest()
+              lines = [
+                  "## Merge health",
+                  "",
+                  "Daily `43 5 * * *` UTC (09:13 Asia/Tehran), plus workflow_dispatch.",
+                  "PR staleness uses the head committer date (4h). direct_push looks back 26h.",
+                  "",
+                  "| code | PR or SHA | detail | first seen |",
+                  "| --- | --- | --- | --- |",
+              ]
+              if rows:
+                  lines.extend(rows)
+              else:
+                  lines.append("| — | — | no findings | — |")
+              lines.append("")
+              lines.extend(seen_lines)
+              lines.append("<!-- fp:%s -->" % fingerprint)
+              return "\n".join(lines) + "\n", fingerprint
+
+
+          def ensure_label():
+              try:
+                  gh("GET", "repos/%s/labels/merge-health" % REPO)
+              except GhError as exc:
+                  if "404" not in str(exc) and "Not Found" not in str(exc):
+                      raise
+                  gh(
+                      "POST",
+                      "repos/%s/labels" % REPO,
+                      {
+                          "name": "merge-health",
+                          "color": "d73a4a",
+                          "description": "Daily merge-health findings",
+                      },
+                  )
+
+
+          def find_issue():
+              found = {}
+              labeled = gh_list(
+                  "repos/%s/issues" % REPO,
+                  {"state": "all", "labels": "merge-health"},
+              )
+              query = quote('repo:%s is:issue "Merge health" in:title' % REPO)
+              searched = gh("GET", "search/issues?q=%s&per_page=20" % query)
+              for item in labeled + ((searched or {}).get("items") or []):
+                  if item.get("title") != "Merge health":
+                      continue
+                  if "pull_request" in item:
+                      continue
+                  found[item["number"]] = item
+              if not found:
+                  return None
+              pool = list(found.values())
+              opens = [item for item in pool if item.get("state") == "open"]
+              choose_from = opens or pool
+              choose_from.sort(key=lambda item: item.get("updated_at") or "", reverse=True)
+              return gh("GET", "repos/%s/issues/%s" % (REPO, choose_from[0]["number"]))
+
+
+          def reassign(number):
+              # Un-assign then assign so GitHub emits issue-assigned even if
+              # the owner was already assigned.
+              path = "repos/%s/issues/%s/assignees" % (REPO, number)
+              gh("DELETE", path, {"assignees": [OWNER]})
+              gh("POST", path, {"assignees": [OWNER]})
+
+
+          def publish(findings, now):
+              ensure_label()
+              issue = find_issue()
+              body_prev = (issue or {}).get("body") or ""
+              text, fingerprint = render(findings, previous_seen(body_prev), now)
+              old_fp = previous_fp(body_prev)
+              if not findings:
+                  if issue is None:
+                      print("merge-health findings=0")
+                      return fingerprint
+                  if issue.get("state") == "closed" and old_fp == fingerprint:
+                      print("merge-health findings=0 issue already closed")
+                      return fingerprint
+                  gh(
+                      "PATCH",
+                      "repos/%s/issues/%s" % (REPO, issue["number"]),
+                      {"title": "Merge health", "body": text, "state": "closed"},
+                  )
+                  print("merge-health findings=0 closed #%s" % issue["number"])
+                  return fingerprint
+
+              if issue is None:
+                  issue = gh(
+                      "POST",
+                      "repos/%s/issues" % REPO,
+                      {
+                          "title": "Merge health",
+                          "body": text,
+                          "labels": ["merge-health"],
+                      },
+                  )
+                  changed = True
+              else:
+                  gh(
+                      "PATCH",
+                      "repos/%s/issues/%s" % (REPO, issue["number"]),
+                      {"title": "Merge health", "body": text, "state": "open"},
+                  )
+                  gh(
+                      "POST",
+                      "repos/%s/issues/%s/labels" % (REPO, issue["number"]),
+                      {"labels": ["merge-health"]},
+                  )
+                  changed = old_fp != fingerprint
+              if changed:
+                  reassign(issue["number"])
+                  print("merge-health reassigned #%s" % issue["number"])
+              print(
+                  "merge-health findings=%d issue=#%s fingerprint=%s"
+                  % (len(findings), issue["number"], fingerprint)
+              )
+              return fingerprint
+
+
+          def main():
+              now = datetime.now(timezone.utc)
+              findings = collect(now)
+              publish(findings, now)
+              return 0
+
+
+          if __name__ == "__main__":
+              try:
+                  sys.exit(main())
+              except GhError as exc:
+                  print("merge-health: %s" % scrub(str(exc)), file=sys.stderr)
+                  sys.exit(1)
+          PY
