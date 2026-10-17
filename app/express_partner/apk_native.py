@@ -229,7 +229,7 @@ def requests_payload(me_phone: str, profile, tab: str = '') -> Dict[str, Any]:
         else:
             requested = 'requests'
     keys = (
-        'items', 'inbox_items', 'offers', 'tab_counts', 'open_count',
+        'items', 'inbox_items', 'cards', 'offers', 'tab_counts', 'open_count',
         'is_approved', 'is_special', 'support_phone', 'allow_attendance',
     )
     out = {k: json_ready(pipe.get(k)) for k in keys}

@@ -41,7 +41,14 @@ def _canonical_mobile(phone: str) -> str:
 
 
 def _owner_phone(land: Dict[str, Any]) -> str:
-    return str(land.get("owner") or land.get("user_phone") or "")
+    """همان فیلدهای listings.service.owner_phone. مقایسه با _canonical_mobile است."""
+    return str(
+        land.get("owner")
+        or land.get("user_phone")
+        or land.get("phone")
+        or land.get("owner_phone")
+        or ""
+    )
 
 
 def _same_phone(a: str, b: str) -> bool:
@@ -476,7 +483,7 @@ def listings_owned_by_plus_partners() -> List[Dict[str, Any]]:
             continue
         if is_admin_created_express_listing(land):
             continue
-        owner_raw = str(land.get("owner") or land.get("user_phone") or "")
+        owner_raw = _owner_phone(land)
         owner = _norm_phone(owner_raw)
         rec = plus.get(owner)
         if rec is None:

@@ -2,7 +2,7 @@
 {% if offers %}
 <section class="px-0" aria-label="پیشنهادهای قیمت">
   {% for off in offers %}
-  <article class="sv-offer" data-pipeline="deals"{% if active_tab|default('requests') != 'deals' %} hidden{% endif %}>
+  <article class="sv-offer" data-pipeline="deals">
     <p class="sv-origin">آگهی شما</p>
     <h2>پیشنهاد قیمت · فایل {{ off.land_code }}</h2>
     <p>{{ '{:,}'.format(off.amount) }} تومان{% if off.terms %} · {{ off.terms }}{% endif %}</p>
@@ -30,53 +30,6 @@
         <button type="submit" class="sv-btn sv-btn--deal">متقابل</button>
       </form>
       {% endif %}
-    </div>
-  </article>
-  {% endfor %}
-</section>
-{% endif %}
-
-{% if inbox_items %}
-<section aria-label="صندوق بازدید آگهی و تقویم">
-  <p class="rq-section-label" data-rq-section="inbox">{% if (active_tab|default('requests')) == 'deals' %}آماده معامله روی آگهی شما{% else %}درخواست‌های دریافتی{% endif %}</p>
-  {% for item in inbox_items %}
-  {% set title = item.land_title or item.title %}
-  {% set status_class = 'is-pending' if item.needs_action else ('is-done' if item.status in ('completed', 'approved') else ('is-closed' if item.status in ('cancelled', 'no_show') else '')) %}
-  <article class="sv-card{% if item.needs_action %} sv-card--need{% endif %}"
-           data-pipeline="{{ item.pipeline_tab|default('visits') }}"
-           data-request-id="{{ item.id }}"
-           data-land-code="{{ item.land_code|default('') }}"
-           data-title="{{ title }}"
-           data-remove-url="{{ url_for('express_partner.requests_remove', vid=item.id) }}"
-           data-revisit-url="{{ url_for('express_partner.requests_revisit', vid=item.id) }}"
-           {% if item.can_cancel %}data-rq-cancel="1"{% endif %}
-           {% if (item.pipeline_tab|default('visits')) != (active_tab|default('requests')) %}hidden{% endif %}>
-    {% include 'express_partner/partials/visit_card_face.html' %}
-    <div class="rq-vcard__body" data-rq-detail-body hidden>
-      {% include 'express_partner/partials/visit_card_detail_facts.html' %}
-      {% if item.land_code %}
-      <button type="button" class="rq-vcard__open-land" data-rq-open-land data-vinor-direct-action>مشاهده فایل</button>
-      {% endif %}
-    {% if item.progress_steps %}
-    <div class="sv-progress" aria-hidden="true">
-      {% for step in item.progress_steps %}
-      <span class="{% if step.state == 'done' %}is-done{% elif step.state == 'current' %}is-current{% elif step.state in ['blocked', 'rejected'] %}is-blocked{% endif %}" title="{{ step.label }}"></span>
-      {% endfor %}
-    </div>
-    <p class="sv-stage">
-      مرحله: <strong>{{ item.stage_label or item.progress_summary.current_label }}</strong>
-      · {{ item.progress_summary.done_count|default(0) }} از {{ item.progress_summary.total|default(item.progress_steps|length) }}
-    </p>
-    {% endif %}
-    {% if item.sale_amount or item.deal_commission_amount %}
-    <p class="sv-money">
-      {% if item.sale_amount %}مبلغ فروش {{ item.sale_amount|toman }}{% endif %}
-      {% if item.deal_commission_amount %}{% if item.sale_amount %} · {% endif %}پورسانت همکار {{ item.deal_commission_amount|toman }}{% endif %}
-    </p>
-    {% endif %}
-    {% with card_kind='received' %}
-    {% include 'express_partner/partials/visit_card_actions.html' %}
-    {% endwith %}
     </div>
   </article>
   {% endfor %}

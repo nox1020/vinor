@@ -2,7 +2,10 @@
 """درخواست بازدید همکار از فایل اکسپرس."""
 from __future__ import annotations
 
+import os
+import threading
 import uuid
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -34,6 +37,18 @@ PIPELINE_REQUESTS = "requests"
 PIPELINE_VISITS = "visits"
 PIPELINE_DEALS = "deals"
 PIPELINE_TABS = frozenset({PIPELINE_REQUESTS, PIPELINE_VISITS, PIPELINE_DEALS})
+
+STAGE_VISIT_REQUEST = "visit_request"
+STAGE_VISIT = "visit"
+STAGE_DEAL = "deal"
+FOLLOW_STAGES = frozenset({STAGE_VISIT_REQUEST, STAGE_VISIT, STAGE_DEAL})
+STAGE_LABELS = {
+    STAGE_VISIT_REQUEST: "درخواست بازدید",
+    STAGE_VISIT: "بازدید",
+    STAGE_DEAL: "معامله",
+}
+DIRECTION_INCOMING = "incoming"
+DIRECTION_OUTGOING = "outgoing"
 
 
 def visit_is_deal_pipeline(
@@ -1081,7 +1096,11 @@ def partner_request_feed_item(
         "notes": notes,
         "created_at": str(row.get("created_at") or "").strip(),
         "created_at_label": format_visit_stamp_label(row.get("created_at")),
+        "updated_at": str(row.get("updated_at") or row.get("created_at") or "").strip(),
         "updated_at_label": format_visit_stamp_label(row.get("updated_at") or row.get("completed_at")),
+        "revisit_count": _as_int(row.get("revisit_count")),
+        "history": [dict(item) for item in (row.get("history") or []) if isinstance(item, dict)],
+        "owner_phone": str(row.get("owner_phone") or "").strip(),
         "support_phone": support,
         "status": st,
         "status_label": labels.get(st, st or "در جریان"),
@@ -1112,6 +1131,43 @@ def partner_request_feed_item(
             can_confirm_deal=bool(deal_flags.get("can_confirm_deal")),
         ),
     }
+
+
+def follow_card_stage(item: Dict[str, Any] | None) -> str:
+    """visit_request تا تأیید، visit برای وقت و انجام، deal برای معامله."""
+    row = item if isinstance(item, dict) else {}
+    status = str(row.get("status") or "").strip()
+    if status == PENDING_STATUS:
+        return STAGE_VISIT_REQUEST
+    if visit_is_deal_pipeline(
+        visit_outcome=str(row.get("visit_outcome") or ""),
+        assignment_status=str(row.get("assignment_status") or ""),
+        tx_status=str(row.get("tx_status") or ""),
+        deal_commission_status=str(row.get("deal_commission_status") or ""),
+        deal_decision=str(row.get("deal_decision") or ""),
+    ):
+        return STAGE_DEAL
+    return STAGE_VISIT
+
+
+def annotate_follow_card(item: Dict[str, Any], direction: str) -> Dict[str, Any]:
+    """فیلدهای مشترک لیست واحد. pipeline_tab با stage یکی می‌شود تا tab_counts درست بماند."""
+    stage = follow_card_stage(item)
+    item["stage"] = stage
+    item["stage_label"] = STAGE_LABELS[stage]
+    item["direction"] = direction if direction in (DIRECTION_INCOMING, DIRECTION_OUTGOING) else DIRECTION_OUTGOING
+    item["direction_label"] = "دریافتی" if item["direction"] == DIRECTION_INCOMING else "ارسالی"
+    item["updated_at"] = str(item.get("updated_at") or item.get("created_at") or "")
+    item["pipeline_tab"] = {
+        STAGE_VISIT_REQUEST: PIPELINE_REQUESTS,
+        STAGE_VISIT: PIPELINE_VISITS,
+        STAGE_DEAL: PIPELINE_DEALS,
+    }[stage]
+    item["revisit_count"] = _as_int(item.get("revisit_count"))
+    history = item.get("history")
+    item["history"] = [dict(row) for row in history if isinstance(row, dict)] if isinstance(history, list) else []
+    item["owner_phone"] = str(item.get("owner_phone") or "")
+    return item
 
 
 def partner_cancel_own_visit(
@@ -1615,6 +1671,284 @@ def partner_requests_can_revisit(
     return False
 
 
+_VISIT_GUARD = threading.RLock()
+_VISIT_LOCK_DEPTH = 0
+_VISIT_LOCK_HANDLE = None
+
+
+def _code_text(raw: Any) -> str:
+    return to_en_digits(str(raw or "")).strip()
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _visit_lands() -> List[Dict[str, Any]]:
+    try:
+        from app.utils.storage import load_ads_cached
+
+        lands = load_ads_cached() or []
+    except Exception:
+        return []
+    return [land for land in lands if isinstance(land, dict)] if isinstance(lands, list) else []
+
+
+def canonical_land_code(code: str, lands: List[Dict[str, Any]] | None = None) -> str:
+    """کد فعلی آگهی. previous_code همان ملک است."""
+    key = _code_text(code)
+    if not key:
+        return ""
+    rows = lands if lands is not None else _visit_lands()
+    for land in rows:
+        current = _code_text(land.get("code"))
+        extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+        prev = _code_text(extras.get("previous_code"))
+        if key == current or (prev and key == prev):
+            return current or key
+    return key
+
+
+def owner_phone_for_listing(code: str, lands: List[Dict[str, Any]] | None = None) -> str:
+    """شمارهٔcanonical مالک از همان فیلدهای listings.service.owner_phone."""
+    key = _code_text(code)
+    if not key:
+        return ""
+    rows = lands if lands is not None else _visit_lands()
+    try:
+        from app.listings.service import owner_phone as listing_owner_phone
+    except Exception:
+        listing_owner_phone = None
+    for land in rows:
+        current = _code_text(land.get("code"))
+        extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+        prev = _code_text(extras.get("previous_code"))
+        if key != current and key != prev:
+            continue
+        raw = listing_owner_phone(land) if listing_owner_phone else ""
+        return _canonical_visit_phone(raw) or ""
+    return ""
+
+
+def _customer_key(phone: Any) -> str:
+    return _canonical_visit_phone(phone) or ""
+
+
+def _partner_key(phone: Any) -> str:
+    return _canonical_visit_phone(phone) or str(phone or "").strip()
+
+
+def visit_identity(row: Dict[str, Any], lands: List[Dict[str, Any]] | None = None) -> Tuple[str, str, str]:
+    """یک کارت: کد ملک، درخواست‌کننده، و شماره مشتری اگر باشد."""
+    return (
+        canonical_land_code(str(row.get("land_code") or ""), lands),
+        _partner_key(row.get("partner_phone")),
+        _customer_key(row.get("customer_phone")),
+    )
+
+
+def _same_visit_card(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+    lands: List[Dict[str, Any]] | None = None,
+) -> bool:
+    return visit_identity(left, lands) == visit_identity(right, lands) and bool(
+        visit_identity(left, lands)[1]
+    )
+
+
+def _history_snapshot(row: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        "id": str(row.get("id") or ""),
+        "visit_date": str(row.get("visit_date") or ""),
+        "visit_time": str(row.get("visit_time") or ""),
+        "status": str(row.get("status") or ""),
+        "updated_at": str(row.get("updated_at") or ""),
+        "created_at": str(row.get("created_at") or ""),
+        "visit_outcome": str(row.get("visit_outcome") or ""),
+        "notes": str(row.get("notes") or ""),
+    }
+
+
+def _stamp_owner_phone(row: Dict[str, Any], lands: List[Dict[str, Any]] | None = None) -> None:
+    if str(row.get("owner_phone") or "").strip():
+        row["owner_phone"] = _canonical_visit_phone(row.get("owner_phone")) or str(row.get("owner_phone")).strip()
+        return
+    owner = owner_phone_for_listing(str(row.get("land_code") or ""), lands)
+    if owner:
+        row["owner_phone"] = owner
+
+
+def _merge_visit_copies(bucket: List[Dict[str, Any]]) -> Dict[str, Any]:
+    ordered = sorted(
+        bucket,
+        key=lambda row: str(row.get("updated_at") or row.get("created_at") or ""),
+        reverse=True,
+    )
+    primary = dict(ordered[0])
+    history = [dict(item) for item in (primary.get("history") or []) if isinstance(item, dict)]
+    count = _as_int(primary.get("revisit_count"))
+    for older in ordered[1:]:
+        for past in older.get("history") or []:
+            if isinstance(past, dict):
+                history.append(dict(past))
+        history.append(_history_snapshot(older))
+        count += 1 + _as_int(older.get("revisit_count"))
+    primary["history"] = history
+    primary["revisit_count"] = count
+    return primary
+
+
+def collapse_visit_rows(rows: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
+    """ردیف‌های تکراری یک کارت را در حافظه یکی می‌کند. فایل دست نمی‌خورد."""
+    lands = _visit_lands()
+    groups: List[Tuple[str, str, str]] = []
+    index: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        key = visit_identity(row, lands)
+        if key not in index:
+            index[key] = []
+            groups.append(key)
+        index[key].append(row)
+    out: List[Dict[str, Any]] = []
+    for key in groups:
+        bucket = index[key]
+        item = dict(bucket[0]) if len(bucket) == 1 else _merge_visit_copies(bucket)
+        _stamp_owner_phone(item, lands)
+        out.append(item)
+    return out
+
+
+def _fold_duplicate_visits(
+    requests: List[Dict[str, Any]],
+    primary: Dict[str, Any],
+    lands: List[Dict[str, Any]],
+) -> None:
+    extras = [
+        row for row in requests
+        if isinstance(row, dict) and row is not primary and _same_visit_card(row, primary, lands)
+    ]
+    if not extras:
+        return
+    history = [dict(item) for item in (primary.get("history") or []) if isinstance(item, dict)]
+    count = _as_int(primary.get("revisit_count"))
+    for older in extras:
+        for past in older.get("history") or []:
+            if isinstance(past, dict):
+                history.append(dict(past))
+        history.append(_history_snapshot(older))
+        count += 1 + _as_int(older.get("revisit_count"))
+        requests.remove(older)
+    primary["history"] = history
+    primary["revisit_count"] = count
+
+
+def _apply_revisit(
+    rec: Dict[str, Any],
+    *,
+    visit_day: date,
+    hour: int,
+    note: str,
+    stored_title: str,
+    first: str,
+    last: str,
+    full_name: str,
+    cust_phone: str,
+    plus_phone: str,
+    plus_name: str,
+    owner_phone: str,
+    auto: bool,
+    now_iso: str,
+) -> None:
+    history = [dict(item) for item in (rec.get("history") or []) if isinstance(item, dict)]
+    history.append(_history_snapshot(rec))
+    rec["history"] = history
+    rec["revisit_count"] = _as_int(rec.get("revisit_count")) + 1
+    rec["visit_date"] = visit_day.isoformat()
+    rec["visit_time"] = format_visit_time_stored(hour)
+    rec["status"] = APPROVED_STATUS if auto else PENDING_STATUS
+    rec["updated_at"] = now_iso
+    rec["auto_approved"] = bool(auto)
+    if stored_title:
+        rec["land_title"] = stored_title
+    if first:
+        rec["customer_first_name"] = first
+    if last:
+        rec["customer_last_name"] = last
+    if full_name:
+        rec["customer_name"] = full_name
+    if cust_phone:
+        rec["customer_phone"] = cust_phone
+    if note:
+        rec["notes"] = note
+    if plus_phone:
+        rec["plus_user_phone"] = plus_phone
+        rec["plus_user_name"] = plus_name or plus_phone
+    if owner_phone:
+        rec["owner_phone"] = owner_phone
+    for key in (
+        "visit_outcome",
+        "deal_decision",
+        "completed_at",
+        "visit_done_requested_at",
+        "cancelled_at",
+        "no_show_at",
+    ):
+        rec.pop(key, None)
+    if auto:
+        rec["approved_at"] = now_iso
+    else:
+        rec.pop("approved_at", None)
+
+
+@contextmanager
+def visit_store_lock(app=None):
+    """قفل فایل درخواست بازدید تا دو ثبت هم‌زمان دو کارت نسازند."""
+    global _VISIT_LOCK_DEPTH, _VISIT_LOCK_HANDLE
+    import fcntl
+
+    with _VISIT_GUARD:
+        _VISIT_LOCK_DEPTH += 1
+        try:
+            if _VISIT_LOCK_DEPTH == 1:
+                from app.utils.storage import ensure_file
+
+                path = ensure_file(
+                    "EXPRESS_VISIT_REQUESTS_FILE",
+                    "express_visit_requests.json",
+                    [],
+                    app,
+                ) + ".lock"
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                handle = open(path, "a+", encoding="utf-8")
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                except Exception:
+                    handle.close()
+                    raise
+                _VISIT_LOCK_HANDLE = handle
+            yield
+        finally:
+            _VISIT_LOCK_DEPTH -= 1
+            if _VISIT_LOCK_DEPTH == 0 and _VISIT_LOCK_HANDLE is not None:
+                fcntl.flock(_VISIT_LOCK_HANDLE.fileno(), fcntl.LOCK_UN)
+                _VISIT_LOCK_HANDLE.close()
+                _VISIT_LOCK_HANDLE = None
+
+
+def load_visit_requests_fresh(app=None) -> List[Dict[str, Any]]:
+    from app.utils.storage import _load, ensure_file
+
+    path = ensure_file("EXPRESS_VISIT_REQUESTS_FILE", "express_visit_requests.json", [], app)
+    data = _load(path)
+    return data if isinstance(data, list) else []
+
+
 def create_visit_request(
     requests: List[Dict[str, Any]],
     *,
@@ -1666,8 +2000,27 @@ def create_visit_request(
     if not is_visit_weekday_allowed(vd, plus_user_phone=plus_phone):
         return None, "weekday_not_allowed"
     requested_hour = parse_visit_hour(visit_time)
+    lands = _visit_lands()
+    probe = {
+        "land_code": code,
+        "partner_phone": ph,
+        "customer_phone": cust_phone,
+    }
+    matches = [
+        row for row in requests
+        if isinstance(row, dict) and code and _same_visit_card(row, probe, lands)
+    ]
+    match = None
+    if matches:
+        match = max(
+            matches,
+            key=lambda row: str(row.get("updated_at") or row.get("created_at") or ""),
+        )
+    # ردیف‌های همین کارت نباید ساعت خودشان را اشغال کنند.
+    match_ids = {id(row) for row in matches}
+    slot_rows = [row for row in requests if id(row) not in match_ids] if match_ids else requests
     picked = resolve_free_visit_slot(
-        requests,
+        slot_rows,
         visit_day=vd,
         visit_hour=requested_hour,
         plus_user_phone=plus_phone,
@@ -1675,8 +2028,6 @@ def create_visit_request(
     if not picked:
         return None, "no_hours"
     vd, hour = picked
-    if code and partner_open_visit(requests, ph, code):
-        return None, "already_pending"
 
     now_iso = datetime.utcnow().isoformat() + "Z"
     full_name = f"{first} {last}".strip()
@@ -1716,8 +2067,33 @@ def create_visit_request(
             rec["visit_presence_address"] = addr
     if auto:
         rec["approved_at"] = now_iso
-    requests.append(rec)
-    _record_listing_visit_requested(rec)
+    owner_phone = owner_phone_for_listing(code, lands)
+    if owner_phone:
+        rec["owner_phone"] = owner_phone
+    rec["revisit_count"] = 0
+    rec["history"] = []
+    if match is not None:
+        _fold_duplicate_visits(requests, match, lands)
+        _apply_revisit(
+            match,
+            visit_day=vd,
+            hour=hour,
+            note=note,
+            stored_title=stored_title,
+            first=first,
+            last=last,
+            full_name=full_name,
+            cust_phone=cust_phone,
+            plus_phone=plus_phone,
+            plus_name=plus_name,
+            owner_phone=owner_phone,
+            auto=auto,
+            now_iso=now_iso,
+        )
+        rec = match
+    else:
+        requests.append(rec)
+        _record_listing_visit_requested(rec)
     try:
         from .special_visit_inbox import notify_special_owner_new_visit
 
@@ -1729,6 +2105,25 @@ def create_visit_request(
     except Exception:
         pass
     return rec, None
+
+
+def submit_visit_request(**kwargs: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """ثبت یا به‌روزرسانی کارت زیر قفل فایل. همان آرگومان‌های create_visit_request بدون لیست."""
+    from app.utils.storage import save_express_visit_requests
+
+    held: Dict[str, Any] = {}
+
+    def _mutate(rows: List[Dict[str, Any]]) -> bool:
+        rec, err = create_visit_request(rows, **kwargs)
+        held["rec"] = rec
+        held["err"] = err
+        return rec is not None
+
+    with visit_store_lock():
+        rows = load_visit_requests_fresh()
+        if _mutate(rows):
+            save_express_visit_requests(rows)
+    return held.get("rec"), held.get("err")
 
 
 def _record_listing_visit_requested(rec: Dict[str, Any] | None) -> None:

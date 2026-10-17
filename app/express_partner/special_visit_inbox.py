@@ -72,11 +72,19 @@ def _canon_phone(phone: str) -> str:
 
 
 def owned_land_codes(phone: str) -> Set[str]:
-    return {
-        str(land.get("code") or "").strip()
-        for land in listings_owned_by(phone)
-        if str(land.get("code") or "").strip()
-    }
+    """کد فعلی و previous_code آگهی‌های منتشرشدهٔ این شماره."""
+    from .special_listings import _code_key
+
+    codes: Set[str] = set()
+    for land in listings_owned_by(phone):
+        code = _code_key(land)
+        if code:
+            codes.add(code)
+        extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+        prev = _code_key({"code": extras.get("previous_code")})
+        if prev:
+            codes.add(prev)
+    return codes
 
 
 def _visit_row_for_plus_owner(
@@ -94,8 +102,13 @@ def _visit_row_for_plus_owner(
     if requester and requester == me:
         return False
     land_codes = codes if codes is not None else owned_land_codes(owner_phone)
-    code = str(row.get("land_code") or "").strip()
+    from .special_listings import _code_key
+
+    code = _code_key({"code": row.get("land_code")})
     if code and code in land_codes:
+        return True
+    stamped = _canon_phone(str(row.get("owner_phone") or ""))
+    if stamped and stamped == me:
         return True
     plus = _canon_phone(str(row.get("plus_user_phone") or ""))
     return bool(plus) and plus == me
@@ -211,13 +224,30 @@ def _mark_land_sold(land_code: str) -> None:
         save_ads(lands)
 
 
+def _phone_is_active_plus(phone: str) -> bool:
+    """معامله و پیشنهاد قیمت بج فقط برای پلاس فعال است."""
+    try:
+        from .partner_roles import partner_is_special
+        from .special_listings import _same_phone
+
+        partners = load_express_partners() or []
+        for rec in partners if isinstance(partners, list) else []:
+            if isinstance(rec, dict) and _same_phone(str(rec.get("phone") or ""), phone):
+                return bool(partner_is_special(rec))
+    except Exception:
+        return False
+    return False
+
+
 def visit_inbox_badge_count(phone: str) -> int:
-    """بازدید باز + فروش نهایی در انتظار تأیید مالک — برای بج منو."""
+    """بازدید باز روی آگهی مالک. فروش و پیشنهاد قیمت فقط برای پلاس فعال شمرده می‌شود."""
     codes = owned_land_codes(phone)
     me = _norm_phone(phone)
     if not codes and not me:
         return 0
-    rows = load_express_visit_requests() or []
+    from .visit_requests import collapse_visit_rows
+
+    rows = collapse_visit_rows(load_express_visit_requests() or [])
     need: Set[str] = set()
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
@@ -228,6 +258,8 @@ def visit_inbox_badge_count(phone: str) -> int:
         if st in OPEN_VISIT_STATUSES:
             vid = str(row.get("id") or "").strip() or f"v:{row.get('land_code')}:{row.get('partner_phone')}"
             need.add(f"visit:{vid}")
+    if not _phone_is_active_plus(phone):
+        return len(need)
     try:
         commissions = load_express_commissions_cached() or []
     except Exception:
@@ -269,17 +301,26 @@ def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
         lands = load_ads_cached() or []
     except Exception:
         lands = []
+    from .special_listings import _code_key, _owner_phone
+
+    want = _code_key({"code": code})
     land = None
     for item in lands if isinstance(lands, list) else []:
-        if isinstance(item, dict) and str(item.get("code") or "").strip() == code:
+        if not isinstance(item, dict):
+            continue
+        extras = item.get("extras") if isinstance(item.get("extras"), dict) else {}
+        if _code_key(item) == want or _code_key({"code": extras.get("previous_code")}) == want:
             land = item
             break
     if not isinstance(land, dict) or not land.get("is_express"):
         return
-    owner = _norm_phone(str(land.get("owner") or land.get("user_phone") or ""))
-    if not owner or len(owner) != 11 or owner == requester:
+
+    owner = _canon_phone(_owner_phone(land))
+    requester_canon = _canon_phone(requester)
+    if not owner or owner == requester_canon:
         return
-    if code not in owned_land_codes(owner):
+    aliases = owned_land_codes(owner)
+    if _code_key({"code": code}) not in aliases and code not in aliases:
         return
     title = str(rec.get("land_title") or land.get("title") or code).strip() or code
     partner_name = str(rec.get("partner_name") or "").strip() or "یک همکار"
@@ -323,12 +364,20 @@ def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
             pass
 
 
-def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
+def visits_for_special_owner(
+    phone: str,
+    visit_rows: List[Dict[str, Any]] | None = None,
+) -> List[Dict[str, Any]]:
     codes = owned_land_codes(phone)
     me = _norm_phone(phone)
     if not codes and not me:
         return []
-    rows = load_express_visit_requests() or []
+    if visit_rows is None:
+        from .visit_requests import collapse_visit_rows
+
+        rows = collapse_visit_rows(load_express_visit_requests() or [])
+    else:
+        rows = visit_rows
     try:
         commissions = load_express_commissions_cached() or []
     except Exception:
@@ -412,7 +461,12 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
         )
         can_register_result = st == COMPLETED_STATUS
 
-        owned_listing = bool(code) and code in codes
+        from .special_listings import _code_key
+
+        keyed = _code_key({"code": code})
+        stamped_owner = _canon_phone(str(row.get("owner_phone") or ""))
+        me_owner = _canon_phone(phone)
+        owned_listing = bool(keyed and keyed in codes) or bool(stamped_owner and stamped_owner == me_owner)
         if not owned_listing:
             can_approve = False
             can_reject = False
@@ -617,7 +671,10 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
             "call_visitor_phone": calls["call_visitor_phone"],
             "call_marketer_phone": calls["call_marketer_phone"],
             "call_customer_phone": calls["call_customer_phone"],
-            "updated_at": str(row.get("updated_at") or ""),
+            "updated_at": str(row.get("updated_at") or row.get("created_at") or ""),
+            "revisit_count": int(row.get("revisit_count") or 0) if str(row.get("revisit_count") or "").strip().lstrip("-").isdigit() else 0,
+            "history": [dict(item) for item in (row.get("history") or []) if isinstance(item, dict)],
+            "owner_phone": str(row.get("owner_phone") or ""),
             "needs_action": needs_action,
             "has_actions": needs_action
             or can_start_deal
@@ -643,6 +700,47 @@ def visits_for_special_owner(phone: str) -> List[Dict[str, Any]]:
 
     out.sort(key=_sort_key)
     return out
+
+
+_PLUS_INBOX_ACTIONS = (
+    "can_approve",
+    "can_reject",
+    "can_reject_done",
+    "can_complete",
+    "can_no_show",
+    "can_start_deal",
+    "can_approve_deal",
+    "can_reject_deal",
+    "can_confirm_deal",
+    "can_close_deal",
+    "can_register_result",
+)
+
+
+def visits_for_listing_owner(
+    phone: str,
+    visit_rows: List[Dict[str, Any]] | None = None,
+    *,
+    manage: bool = True,
+) -> List[Dict[str, Any]]:
+    """صندوق دریافتی هر مالک آگهی منتشرشده.
+
+    دیدن درخواست برای همه است. تأیید، معامله و تقویم پلاس فقط وقتی manage روشن است.
+    """
+    items = visits_for_special_owner(phone, visit_rows=visit_rows)
+    if manage:
+        return items
+    visible: List[Dict[str, Any]] = []
+    for item in items:
+        if str(item.get("inbox_origin") or "") != "listing":
+            continue
+        copy = dict(item)
+        for flag in _PLUS_INBOX_ACTIONS:
+            copy[flag] = False
+        copy["needs_action"] = False
+        copy["has_actions"] = False
+        visible.append(copy)
+    return visible
 
 
 def special_can_manage_visit(owner_phone: str, visit_row: Dict[str, Any] | None) -> bool:

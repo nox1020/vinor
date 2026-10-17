@@ -3006,18 +3006,6 @@ def _validate_visit_proposal(args: dict[str, Any], *, phone: str) -> dict[str, A
             "error": "فایل در حال معامله است؛ ابتدا معامله را رفع کنید.",
         }
 
-    if not partner_can_request_new_visit(current_status, visit_requests, me, str(code)):
-        return {"ok": False, "error": "الان امکان ثبت بازدید جدید برای این فایل نیست."}
-    if partner_visit_completed(visit_requests, me, str(code)):
-        tx_revisit = _partner_land_tx_payload(
-            code,
-            me,
-            is_partner_approved=True,
-            global_assignment_status=current_status,
-        )
-        if not tx_revisit.get("can_revisit"):
-            return {"ok": False, "error": "تا تأیید ادمین، بازدید مجدد ممکن نیست."}
-
     lands_all = load_ads_cached() or []
     land = next((l for l in lands_all if str(l.get("code")) == str(code)), None)
     land_title = (land.get("title") if land else None) or code
@@ -4214,12 +4202,9 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         _sync_visit_customer_to_club,
     )
     from app.express_partner.visit_requests import (
-        create_visit_request as record_visit_request,
+        submit_visit_request as record_visit_request,
     )
-    from app.utils.storage import (
-        load_express_visit_requests,
-        save_express_visit_requests,
-    )
+    from app.utils.storage import load_express_visit_requests
 
     me = (phone or "").strip()
     pending = _load_pending_action(token)
@@ -4246,20 +4231,18 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         },
         phone=me,
     )
-    if not recheck.get("ok"):
+    if recheck.get("status") == "open_visit" and str(payload.get("visit_date") or "").strip():
+        fresh = payload
+    elif not recheck.get("ok"):
         return {"ok": False, "error": str(recheck.get("error") or "امکان ثبت وجود ندارد.")}
-
-    fresh = recheck.get("payload") if isinstance(recheck.get("payload"), dict) else payload
-    visit_requests = load_express_visit_requests() or []
-    if not isinstance(visit_requests, list):
-        visit_requests = []
+    else:
+        fresh = recheck.get("payload") if isinstance(recheck.get("payload"), dict) else payload
 
     partner_name = str(fresh.get("partner_name") or me)
     land_title = str(fresh.get("land_title") or code)
     visit_date = str(fresh.get("visit_date") or "")
 
     rec, err = record_visit_request(
-        visit_requests,
         partner_phone=me,
         partner_name=partner_name,
         land_code=code,
@@ -4278,7 +4261,8 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         try:
             from app.express_partner.visit_requests import partner_open_visit as _pov
 
-            open_rec = _pov(visit_requests, me, code)
+            fresh_rows = load_express_visit_requests() or []
+            open_rec = _pov(fresh_rows if isinstance(fresh_rows, list) else [], me, code)
         except Exception:
             open_rec = None
         if isinstance(open_rec, dict):
@@ -4320,7 +4304,6 @@ def confirm_visit_from_token(*, phone: str, token: str) -> dict[str, Any]:
         }
         return {"ok": False, "error": msg_map.get(str(err), "ثبت بازدید ممکن نشد.")}
 
-    save_express_visit_requests(visit_requests)
     try:
         _sync_visit_customer_to_club(
             customer_phone=str(fresh.get("customer_phone") or ""),

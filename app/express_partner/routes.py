@@ -100,6 +100,7 @@ from .routine_auto import (
 )
 from .visit_requests import (
     create_visit_request as record_visit_request,
+    submit_visit_request,
     partner_open_visit,
     partner_active_visit_record,
     partner_can_request_new_visit,
@@ -3563,10 +3564,14 @@ def _build_partner_sales_pipeline(
     """آیتم‌ها و شمارش تب‌های پیگیری — مشترک بین /requests و badge خانه."""
     from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance
     from .visit_requests import (
+        DIRECTION_INCOMING,
+        DIRECTION_OUTGOING,
         OPEN_VISIT_STATUSES,
         PIPELINE_DEALS,
         PIPELINE_REQUESTS,
         PIPELINE_VISITS,
+        annotate_follow_card,
+        collapse_visit_rows,
         partner_request_feed_item,
         partner_requests_can_revisit,
         partner_visits_for_phone,
@@ -3576,9 +3581,10 @@ def _build_partner_sales_pipeline(
     is_approved = _is_partner_approved(profile)
     is_special = _is_partner_special(profile) if is_approved else False
 
-    rows = visit_rows if visit_rows is not None else (load_express_visit_requests() or [])
-    if not isinstance(rows, list):
-        rows = []
+    raw_rows = visit_rows if visit_rows is not None else (load_express_visit_requests() or [])
+    if not isinstance(raw_rows, list):
+        raw_rows = []
+    rows = collapse_visit_rows(raw_rows)
     mine = partner_visits_for_phone(rows, ph)
 
     if land_status is None:
@@ -3642,9 +3648,15 @@ def _build_partner_sales_pipeline(
     visit_allowed_weekdays_summary = ''
     visit_allowed_hours_summary = ''
     visit_presence_address = ''
+    try:
+        from .special_visit_inbox import visits_for_listing_owner
+
+        inbox_items = visits_for_listing_owner(ph, rows, manage=is_special) or []
+    except Exception:
+        current_app.logger.exception('sales pipeline inbox load failed')
+        inbox_items = []
     if is_special:
         try:
-            from .special_visit_inbox import visits_for_special_owner
             from .visit_requests import (
                 VISIT_WEEKDAY_LABELS,
                 VISIT_WEEKDAY_ORDER,
@@ -3655,7 +3667,6 @@ def _build_partner_sales_pipeline(
                 visit_hour_rows,
             )
 
-            inbox_items = visits_for_special_owner(ph) or []
             visit_weekday_labels = VISIT_WEEKDAY_LABELS
             visit_weekday_order = VISIT_WEEKDAY_ORDER
             visit_allowed_weekdays = get_visit_allowed_weekdays(plus_user_phone=ph)
@@ -3664,8 +3675,7 @@ def _build_partner_sales_pipeline(
             visit_allowed_hours_summary = _hours_summary(plus_user_phone=ph)
             visit_presence_address = get_plus_visit_presence_address(ph)
         except Exception:
-            current_app.logger.exception('sales pipeline inbox load failed')
-            inbox_items = []
+            current_app.logger.exception('sales pipeline schedule load failed')
         try:
             from app.commercial.config import commercial_ui_enabled
             if commercial_ui_enabled():
@@ -3674,7 +3684,7 @@ def _build_partner_sales_pipeline(
         except Exception:
             offers = []
 
-    if is_special and inbox_items:
+    if inbox_items:
         inbox_ids = {
             str(i.get('id') or '').strip()
             for i in inbox_items
@@ -3686,17 +3696,27 @@ def _build_partner_sales_pipeline(
                 if str(it.get('id') or '').strip() not in inbox_ids
             ]
 
+    for it in items:
+        annotate_follow_card(it, DIRECTION_OUTGOING)
+    for it in inbox_items:
+        annotate_follow_card(it, DIRECTION_INCOMING)
+    seen_ids = set()
+    cards: List[Dict[str, Any]] = []
+    for it in list(inbox_items) + list(items):
+        cid = str(it.get('id') or '').strip()
+        if cid and cid in seen_ids:
+            continue
+        if cid:
+            seen_ids.add(cid)
+        cards.append(it)
+    cards.sort(key=lambda card: str(card.get('updated_at') or card.get('created_at') or ''), reverse=True)
     tab_counts = {
         PIPELINE_REQUESTS: 0,
         PIPELINE_VISITS: 0,
         PIPELINE_DEALS: 0,
     }
-    for it in items:
+    for it in cards:
         key = str(it.get('pipeline_tab') or PIPELINE_REQUESTS)
-        if key in tab_counts:
-            tab_counts[key] += 1
-    for it in inbox_items:
-        key = str(it.get('pipeline_tab') or PIPELINE_VISITS)
         if key in tab_counts:
             tab_counts[key] += 1
     if offers:
@@ -3705,6 +3725,7 @@ def _build_partner_sales_pipeline(
     return {
         'items': items,
         'inbox_items': inbox_items,
+        'cards': cards,
         'offers': offers,
         'tab_counts': tab_counts,
         'open_count': open_count,
@@ -6353,6 +6374,7 @@ def requests_page():
         visit_allowed_hours_summary=visit_allowed_hours_summary,
         visit_presence_address=visit_presence_address,
         schedule_open=(request.args.get('schedule') or '').strip() == '1',
+        cards=pipe.get('cards') or [],
     ))
     if is_approved:
         _append_partner_tab_prefetch(resp)
@@ -6437,13 +6459,7 @@ def requests_revisit(vid: str):
         return _requests_action_json(False, error='حساب همکاری تأیید نشده است.')
 
     from .visit_requests import (
-        COMPLETED_STATUS,
-        CANCELLED_STATUS,
-        NO_SHOW_STATUS,
-        create_visit_request as record_visit_request,
         next_auto_visit_date,
-        partner_can_request_new_visit,
-        partner_cancel_own_visit,
         partner_requests_can_revisit,
     )
 
@@ -6477,25 +6493,6 @@ def requests_revisit(vid: str):
     ):
         return _requests_action_json(False, error='برای این مورد بازدید مجدد ممکن نیست.')
 
-    st = str(prev.get('status') or '').strip()
-    past_open = st not in (COMPLETED_STATUS, CANCELLED_STATUS, NO_SHOW_STATUS)
-    if past_open:
-        closed, cerr = partner_cancel_own_visit(
-            visit_rows, request_id=rid, partner_phone=me_phone
-        )
-        if not closed:
-            return _requests_action_json(
-                False,
-                error={
-                    'not_cancellable': 'این درخواست قابل بستن نیست.',
-                    'forbidden': 'دسترسی ندارید.',
-                    'not_found': 'درخواست پیدا نشد.',
-                }.get(cerr or '', 'بازدید قبلی بسته نشد.'),
-            )
-
-    if not partner_can_request_new_visit(gs, visit_rows, me_phone, land_code):
-        return _requests_action_json(False, error='الان امکان بازدید مجدد نیست.')
-
     next_slot = next_auto_visit_date(
         plus_user_phone=str(prev.get('plus_user_phone') or ''),
     )
@@ -6504,8 +6501,7 @@ def requests_revisit(vid: str):
 
     land_title = str(land.get('title') or prev.get('land_title') or land_code)
     partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
-    rec, err = record_visit_request(
-        visit_rows,
+    rec, err = submit_visit_request(
         partner_phone=me_phone,
         partner_name=partner_name,
         land_code=land_code,
@@ -6526,12 +6522,6 @@ def requests_revisit(vid: str):
         return _requests_action_json(False, error='وقت مجاز بازدید برای ثبت مجدد پیدا نشد.')
     if err or not rec:
         return _requests_action_json(False, error='ثبت بازدید مجدد ممکن نشد.')
-
-    try:
-        save_express_visit_requests(visit_rows)
-    except Exception:
-        current_app.logger.exception('requests_revisit save failed id=%s', vid)
-        return _requests_action_json(False, error='ذخیره نشد.')
 
     try:
         _send_visit_schedule_admin_sms(
@@ -7001,43 +6991,10 @@ def home_register_customer():
         if st == 'in_transaction' or land.get('_in_transaction'):
             return _fail('این فایل در حال معامله است.')
         land_title = str(land.get('title') or land_code)
-        open_rec = partner_open_visit(visit_requests, me_phone, land_code)
-        if open_rec:
-            open_st = str(open_rec.get('status') or '').strip()
-            if (
-                open_st in (PENDING_STATUS, APPROVED_STATUS)
-                and visit_slot_has_passed(open_rec)
-            ):
-                closed, _cerr = partner_cancel_own_visit(
-                    visit_requests,
-                    request_id=str(open_rec.get('id') or ''),
-                    partner_phone=me_phone,
-                )
-                if not closed:
-                    return _fail('بازدید قبلی این فایل بسته نشد.')
-            elif not partner_can_request_new_visit(st, visit_requests, me_phone, land_code):
-                already_msg = 'برای این فایل بازدید باز از قبل دارید.'
-                chat_msgs = _inject_visit_registered_into_chat(
-                    me_phone,
-                    land_code=land_code,
-                    land_title=land_title,
-                    visit_id=str((open_rec or {}).get('id') or ''),
-                    already=True,
-                    fallback_message=already_msg,
-                )
-                return jsonify({
-                    'ok': True,
-                    'already_pending': True,
-                    'message': already_msg,
-                    'messages': chat_msgs,
-                    'land_code': land_code,
-                    'redirect_url': url_for('express_partner.requests', tab='requests'),
-                })
 
     partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
 
-    rec, err = record_visit_request(
-        visit_requests,
+    rec, err = submit_visit_request(
         partner_phone=me_phone,
         partner_name=partner_name,
         land_code=land_code,
@@ -7076,7 +7033,6 @@ def home_register_customer():
     if err or not rec:
         return _fail('ثبت درخواست بازدید ممکن نشد.')
 
-    save_express_visit_requests(visit_requests)
     if customer_phone:
         _sync_visit_customer_to_club(
             customer_phone=customer_phone,
@@ -9165,31 +9121,7 @@ def create_visit_request(code: str):
     if not isinstance(visit_requests, list):
         visit_requests = []
 
-    if not partner_can_request_new_visit(current_status, visit_requests, me_phone, str(code)):
-        return _mark_in_transaction_finish(
-            code,
-            success=False,
-            message='در حال حاضر امکان ثبت بازدید جدید برای این فایل وجود ندارد.',
-            category='error',
-        )
-
-    if partner_visit_completed(visit_requests, me_phone, str(code)):
-        tx_revisit = _partner_land_tx_payload(
-            code,
-            me_phone,
-            is_partner_approved=is_pa,
-            global_assignment_status=current_status,
-        )
-        if not tx_revisit.get('can_revisit'):
-            return _mark_in_transaction_finish(
-                code,
-                success=False,
-                message='تا زمان تأیید ادمین، امکان ثبت بازدید مجدد وجود ندارد.',
-                category='error',
-            )
-
-    rec, err = record_visit_request(
-        visit_requests,
+    rec, err = submit_visit_request(
         partner_phone=me_phone,
         partner_name=partner_name,
         land_code=str(code),
@@ -9277,7 +9209,6 @@ def create_visit_request(code: str):
             category='error',
         )
 
-    save_express_visit_requests(visit_requests)
     _sync_visit_customer_to_club(
         customer_phone=customer_phone,
         customer_first_name=customer_first_name,
@@ -10694,13 +10625,12 @@ def profile_data():
     is_special = _is_partner_special(profile) if is_approved else False
     has_pending_app = _partner_has_pending_app(me_phone) if me_phone and not is_approved else False
     visit_inbox_count = 0
-    if is_special:
-        try:
-            from .special_visit_inbox import visit_inbox_badge_count
+    try:
+        from .special_visit_inbox import visit_inbox_badge_count
 
-            visit_inbox_count = int(visit_inbox_badge_count(me_phone) or 0)
-        except Exception:
-            visit_inbox_count = 0
+        visit_inbox_count = int(visit_inbox_badge_count(me_phone) or 0)
+    except Exception:
+        visit_inbox_count = 0
     plus_system_on = False
     lawyer_feature_on = False
     crm_ui_on = False
@@ -11504,10 +11434,9 @@ def get_notifications():
     visit_inbox_count = 0
     try:
         profile = getattr(g, "express_partner_profile", None)
-        if _is_partner_special(profile):
-            from .special_visit_inbox import visit_inbox_badge_count
+        from .special_visit_inbox import visit_inbox_badge_count
 
-            visit_inbox_count = int(visit_inbox_badge_count(me_phone_raw) or 0)
+        visit_inbox_count = int(visit_inbox_badge_count(me_phone_raw) or 0)
     except Exception:
         visit_inbox_count = 0
 
@@ -11531,10 +11460,9 @@ def get_unread_count():
     visit_inbox_count = 0
     try:
         profile = getattr(g, "express_partner_profile", None)
-        if _is_partner_special(profile):
-            from .special_visit_inbox import visit_inbox_badge_count
+        from .special_visit_inbox import visit_inbox_badge_count
 
-            visit_inbox_count = int(visit_inbox_badge_count(me_phone_raw) or 0)
+        visit_inbox_count = int(visit_inbox_badge_count(me_phone_raw) or 0)
     except Exception:
         visit_inbox_count = 0
     resp = jsonify({
