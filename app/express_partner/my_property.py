@@ -324,13 +324,38 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
             "price_history": [],
             "activity": _activity_from_stats(stats),
         })
+        try:
+            from app.listings.service import archive_payload
+
+            card.update(archive_payload(land))
+        except Exception:
+            card.update({
+                "archived": False,
+                "is_archived": False,
+                "archived_at": "",
+                "archived_reason": "",
+            })
         out.append(card)
     return out
 
 
-def page_payload(me_phone: str) -> Dict[str, Any]:
+def page_payload(me_phone: str, status: str = "active") -> Dict[str, Any]:
+    try:
+        from app.listings.service import sweep_inactive_listings
+
+        if me_phone:
+            sweep_inactive_listings()
+    except Exception:
+        pass
     items = property_cards(me_phone) if me_phone else []
+    want_archived = str(status or "").strip().lower() == "archived"
+    active_items = [item for item in items if not item.get("archived")]
+    archived_items = [item for item in items if item.get("archived")]
+    shown = archived_items if want_archived else active_items
+    shown_codes = {str(item.get("code") or "") for item in shown}
     prop = property_for_user(me_phone)
+    if not isinstance(prop, dict) or str(prop.get("code") or "") not in shown_codes:
+        prop = shown[0] if shown else None
     divar: List[Dict[str, Any]] = []
     try:
         from .home_ads_config import partner_divar_profile_entries
@@ -354,6 +379,8 @@ def page_payload(me_phone: str) -> Dict[str, Any]:
         "ok": True,
         "logged_in": bool(me_phone),
         "has_property": bool(items),
+        "status": "archived" if want_archived else "active",
+        "counts": {"active": len(active_items), "archived": len(archived_items)},
         "form_url": form_url,
         "publish_url": publish_url,
         "published_for_sale": bool(prop and prop.get("published_for_sale")),
@@ -366,8 +393,8 @@ def page_payload(me_phone: str) -> Dict[str, Any]:
         "published_at": stats.get("published_at"),
         "first_published_at": stats.get("first_published_at"),
         "days_since_publish": stats.get("days_since_publish"),
-        "items": items,
-        "listings": items,
+        "items": shown,
+        "listings": shown,
         "divar_profiles": divar,
         "property": prop or {},
     })

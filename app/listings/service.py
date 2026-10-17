@@ -33,6 +33,11 @@ _CYCLE_KEYS = (
     "first_published_at",
     "quiet_nudge_published_at",
 )
+ARCHIVE_MANUAL = "manual"
+ARCHIVE_INACTIVE = "inactive"
+ARCHIVE_CLOSED = "closed"
+ARCHIVE_REASONS = frozenset({ARCHIVE_MANUAL, ARCHIVE_INACTIVE, ARCHIVE_CLOSED})
+_ARCHIVE_KEYS = ("archived", "archived_at", "archived_reason", "archive_restored_at", "is_archived")
 
 
 def _digits(phone: str) -> str:
@@ -675,6 +680,8 @@ def create_listing(fields: Dict[str, Any], *, owner: str = "", app=None) -> Dict
     if owner and not str(record.get("owner") or "").strip():
         record["owner"] = owner
     record.setdefault("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    for key in _ARCHIVE_KEYS:
+        record.pop(key, None)
     specified = any(
         key in record
         for key in ("is_express", "public", "source", "owner_home", "ad_type")
@@ -718,6 +725,7 @@ def update_listing(
         "status",
         "express_status",
         *_CYCLE_KEYS,
+        *_ARCHIVE_KEYS,
     }
     with listings_lock(app):
         items = _read_json(listings_path(app))
@@ -820,6 +828,7 @@ def publish_listing(
         if err:
             return None, err, False
         if changed and target is not None:
+            _clear_archive(target)
             written = save_listings(items, app)
             saved = target
             saved_code = code_key(target)
@@ -851,8 +860,246 @@ def unpublish_listing(
             return None, err, False
         if changed:
             written = save_listings(items, app)
+            saved = target
             for land in written:
                 if isinstance(land, dict) and code_key(land) == want:
-                    return land, None, True
-            return target, None, True
+                    saved = land
+                    break
+            archived_row, _arch_err, _arch_changed = archive_listing(
+                want, reason=ARCHIVE_INACTIVE, require_owner=False, app=app,
+            )
+            return archived_row or saved, None, True
         return target, None, False
+
+
+def _archive_now() -> str:
+    """مهر زمانی قابل مقایسه. میکروثانیه می‌ماند تا دو رویداد در یک ثانیه قاطی نشوند."""
+    from app.utils.dates import utcnow
+
+    return utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def is_archived(land: Dict[str, Any] | None) -> bool:
+    """آگهی بایگانی‌شده. ردیف قدیمی بدون این فیلد فعال است."""
+    if not isinstance(land, dict):
+        return False
+    flag = land.get("archived")
+    if flag is True:
+        return True
+    return str(flag or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def archive_payload(land: Dict[str, Any] | None) -> Dict[str, Any]:
+    """فیلدهای بایگانی برای پاسخ API. آگهی فعال هم همین کلیدها را با مقدار خالی دارد."""
+    archived = is_archived(land)
+    reason = ""
+    stamp = ""
+    if archived and isinstance(land, dict):
+        raw = str(land.get("archived_reason") or "").strip().lower()
+        reason = raw if raw in ARCHIVE_REASONS else ""
+        stamp = str(land.get("archived_at") or "").strip()
+    return {
+        "archived": archived,
+        "is_archived": archived,
+        "archived_at": stamp,
+        "archived_reason": reason,
+    }
+
+
+def _clear_archive(land: Dict[str, Any]) -> bool:
+    if (
+        not is_archived(land)
+        and not str(land.get("archived_at") or "").strip()
+        and not str(land.get("archived_reason") or "").strip()
+    ):
+        return False
+    land["archived"] = False
+    land["archived_at"] = ""
+    land["archived_reason"] = ""
+    land.pop("is_archived", None)
+    land.pop("archive_restored_at", None)
+    return True
+
+
+def _stamp_archive(land: Dict[str, Any], reason: str) -> bool:
+    if is_archived(land):
+        return False
+    land["archived"] = True
+    land["archived_at"] = _archive_now()
+    land["archived_reason"] = reason if reason in ARCHIVE_REASONS else ARCHIVE_MANUAL
+    land.pop("is_archived", None)
+    land.pop("archive_restored_at", None)
+    return True
+
+
+def _was_published(land: Dict[str, Any]) -> bool:
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    if str(land.get("published_at") or extras.get("published_at") or "").strip():
+        return True
+    if str(land.get("first_published_at") or extras.get("first_published_at") or "").strip():
+        return True
+    return str(land.get("source") or "").strip().lower() == "my_property_published"
+
+
+def inactive_archive_reason(land: Dict[str, Any] | None) -> str:
+    """دلیل بایگانی خودکار. رشتهٔ خالی یعنی آگهی باید فعال بماند."""
+    if not isinstance(land, dict) or is_archived(land):
+        return ""
+    if str(land.get("archive_restored_at") or "").strip():
+        return ""
+    status = str(land.get("express_status") or "").strip().lower()
+    moderation = str(land.get("status") or "").strip().lower()
+    if status in ("sold", "closed") or moderation == "closed":
+        return ARCHIVE_CLOSED
+    if status in ("expired", "stopped"):
+        return ARCHIVE_INACTIVE
+    try:
+        from app.utils.dates import is_ad_expired
+
+        if is_ad_expired(land):
+            return ARCHIVE_INACTIVE
+    except Exception:
+        pass
+    if _was_published(land) and not is_published_for_sale(land):
+        return ARCHIVE_INACTIVE
+    return ""
+
+
+def _sync_archived_followups(code: str, reason: str, stamp: str) -> None:
+    try:
+        from app.express_partner.visit_requests import sync_archived_listing_cards
+
+        sync_archived_listing_cards(code, reason, stamp)
+    except Exception:
+        pass
+
+
+def _listing_for_code(
+    items: List[Any],
+    code: str,
+    phone: str,
+    *,
+    require_owner: bool,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    want = str(code or "").strip().translate(_FA_AR_DIGITS)
+    if not want:
+        return None, "not_found"
+    if require_owner and not canonical_mobile(phone):
+        return None, "forbidden"
+    seen = False
+    for land in items:
+        if not isinstance(land, dict) or code_key(land) != want:
+            continue
+        seen = True
+        if require_owner and not same_owner(owner_phone(land), phone):
+            return None, "forbidden"
+        return land, None
+    if seen:
+        return None, "forbidden"
+    return None, "not_found"
+
+
+def archive_listing(
+    code: str,
+    *,
+    phone: str = "",
+    reason: str = ARCHIVE_MANUAL,
+    require_owner: bool = True,
+    app=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
+    """بایگانی. تکرار روی آگهی بایگانی‌شده همان ردیف را برمی‌گرداند و ساعت را عوض نمی‌کند."""
+    clean_reason = reason if reason in ARCHIVE_REASONS else ARCHIVE_MANUAL
+    with listings_lock(app):
+        path = listings_path(app)
+        items = _read_json(path)
+        target, err = _listing_for_code(items, code, phone, require_owner=require_owner)
+        if err or target is None:
+            return None, err or "not_found", False
+        changed = _stamp_archive(target, clean_reason)
+        if changed:
+            written = save_listings(items, app)
+            saved_code = code_key(target)
+            for land in written:
+                if isinstance(land, dict) and code_key(land) == saved_code:
+                    target = land
+                    break
+        stamp = str(target.get("archived_at") or "")
+        stored_reason = str(target.get("archived_reason") or clean_reason)
+    if is_archived(target):
+        _sync_archived_followups(code_key(target), stored_reason, stamp)
+    return target, None, changed
+
+
+def restore_listing(
+    code: str,
+    *,
+    phone: str = "",
+    require_owner: bool = True,
+    app=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
+    """برگشت به فهرست فعال. انتشار را عوض نمی‌کند. تکرار روی آگهی فعال خطا نیست."""
+    with listings_lock(app):
+        items = _read_json(listings_path(app))
+        target, err = _listing_for_code(items, code, phone, require_owner=require_owner)
+        if err or target is None:
+            return None, err or "not_found", False
+        if not is_archived(target):
+            return target, None, False
+        target["archived"] = False
+        target["archived_at"] = ""
+        target["archived_reason"] = ""
+        target.pop("is_archived", None)
+        target["archive_restored_at"] = _archive_now()
+        written = save_listings(items, app)
+        saved_code = code_key(target)
+        for land in written:
+            if isinstance(land, dict) and code_key(land) == saved_code:
+                target = land
+                break
+    return target, None, True
+
+
+def sweep_inactive_listings(app=None) -> int:
+    """آگهی‌های غیرفعالِ موجود را یک‌بار بایگانی می‌کند. آگهی تازه و بازگردانده‌شده نمی‌روند."""
+    touched: List[Tuple[str, str, str]] = []
+    with listings_lock(app):
+        items = _read_json(listings_path(app))
+        changed = False
+        for land in items:
+            if not isinstance(land, dict):
+                continue
+            reason = inactive_archive_reason(land)
+            if not reason or not _stamp_archive(land, reason):
+                continue
+            changed = True
+            touched.append((
+                code_key(land),
+                str(land.get("archived_reason") or reason),
+                str(land.get("archived_at") or ""),
+            ))
+        if changed:
+            save_listings(items, app)
+    for code, reason, stamp in touched:
+        if code:
+            _sync_archived_followups(code, reason, stamp)
+    return len(touched)
+
+
+def admin_delete_listing(code: str, app=None) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """حذف دائمی یک آگهی. فقط از مسیر ادمین صدا زده شود؛ خودش نشست را چک نمی‌کند."""
+    want = str(code or "").strip().translate(_FA_AR_DIGITS)
+    if not want:
+        return None, "not_found"
+    removed: Optional[Dict[str, Any]] = None
+    with listings_lock(app):
+        items = _read_json(listings_path(app))
+        kept: List[Any] = []
+        for land in items:
+            if removed is None and isinstance(land, dict) and code_key(land) == want:
+                removed = dict(land)
+                continue
+            kept.append(land)
+        if removed is None:
+            return None, "not_found"
+        save_listings(kept, app)
+    return removed, None

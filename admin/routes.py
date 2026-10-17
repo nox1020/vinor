@@ -4628,6 +4628,18 @@ def edit_express_listing(code):
 
     return _render_express_listing_form(cities, land=land)
 
+@admin_bp.post('/api/listings/<string:code>/delete')
+@login_required
+def admin_api_delete_listing(code):
+    """حذف دائمی آگهی. فقط نشست ادمین. پنل را عوض نمی‌کند."""
+    from app.listings.service import admin_delete_listing
+
+    _removed, err = admin_delete_listing(code)
+    if err:
+        return jsonify({'ok': False, 'error': 'آگهی پیدا نشد.', 'error_code': err}), 404
+    return jsonify({'ok': True, 'code': str(code), 'deleted': True})
+
+
 @admin_bp.post('/express/<string:code>/delete')
 @login_required
 def delete_express_listing(code):

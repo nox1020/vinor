@@ -1101,6 +1101,9 @@ def partner_request_feed_item(
         "revisit_count": _as_int(row.get("revisit_count")),
         "history": [dict(item) for item in (row.get("history") or []) if isinstance(item, dict)],
         "owner_phone": str(row.get("owner_phone") or "").strip(),
+        "archived": card_is_archived(row),
+        "archived_at": str(row.get("archived_at") or "").strip(),
+        "archived_reason": str(row.get("archived_reason") or "").strip(),
         "support_phone": support,
         "status": st,
         "status_label": labels.get(st, st or "در جریان"),
@@ -1167,7 +1170,142 @@ def annotate_follow_card(item: Dict[str, Any], direction: str) -> Dict[str, Any]
     history = item.get("history")
     item["history"] = [dict(row) for row in history if isinstance(row, dict)] if isinstance(history, list) else []
     item["owner_phone"] = str(item.get("owner_phone") or "")
+    item.update(follow_archive_fields(item))
     return item
+
+
+def card_is_archived(row: Dict[str, Any] | None) -> bool:
+    if not isinstance(row, dict):
+        return False
+    flag = row.get("archived")
+    if flag is True:
+        return True
+    return str(flag or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def follow_archive_fields(row: Dict[str, Any] | None) -> Dict[str, Any]:
+    """کلیدهای بایگانی کارت. کارت فعال هم همین فیلدها را خالی برمی‌گرداند."""
+    archived = card_is_archived(row)
+    reason = ""
+    stamp = ""
+    if archived and isinstance(row, dict):
+        raw = str(row.get("archived_reason") or "").strip().lower()
+        reason = raw if raw in ("manual", "inactive", "closed") else ""
+        stamp = str(row.get("archived_at") or "").strip()
+    return {
+        "archived": archived,
+        "is_archived": archived,
+        "archived_at": stamp,
+        "archived_reason": reason,
+    }
+
+
+def _actor_can_touch_card(row: Dict[str, Any], actor: str, lands: List[Dict[str, Any]] | None = None) -> bool:
+    me = _canonical_visit_phone(actor)
+    if not me:
+        return False
+    if _canonical_visit_phone(row.get("partner_phone")) == me:
+        return True
+    if _canonical_visit_phone(row.get("owner_phone")) == me:
+        return True
+    owner = owner_phone_for_listing(str(row.get("land_code") or ""), lands)
+    return bool(owner) and owner == me
+
+
+def _touch_visit_card_archive(
+    requests: List[Dict[str, Any]],
+    visit_id: str,
+    actor: str,
+    *,
+    archived: bool,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
+    rid = str(visit_id or "").strip()
+    rec = _find_visit_request(requests, rid) if rid else None
+    if not rec:
+        return None, "not_found", False
+    lands = _visit_lands()
+    if not _actor_can_touch_card(rec, actor, lands):
+        return None, "forbidden", False
+    from app.listings.service import _archive_now
+
+    now_iso = _archive_now()
+    if archived:
+        if card_is_archived(rec):
+            return rec, None, False
+        rec["archived"] = True
+        rec["archived_at"] = now_iso
+        rec["archived_reason"] = "manual"
+        rec.pop("archive_restored_at", None)
+        rec["updated_at"] = now_iso
+        return rec, None, True
+    if not card_is_archived(rec):
+        return rec, None, False
+    rec["archived"] = False
+    rec["archived_at"] = ""
+    rec["archived_reason"] = ""
+    rec["archive_restored_at"] = now_iso
+    rec["updated_at"] = now_iso
+    return rec, None, True
+
+
+def submit_visit_card_archive(
+    visit_id: str,
+    actor: str,
+    *,
+    archived: bool,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
+    """بایگانی یا بازگردانی یک کارت پیگیری، برای مالک یا درخواست‌کننده."""
+    from app.utils.storage import save_express_visit_requests
+
+    held: Dict[str, Any] = {}
+
+    def _mutate(rows: List[Dict[str, Any]]) -> bool:
+        rec, err, changed = _touch_visit_card_archive(rows, visit_id, actor, archived=archived)
+        held["rec"] = rec
+        held["err"] = err
+        held["changed"] = changed
+        return changed
+
+    with visit_store_lock():
+        rows = load_visit_requests_fresh()
+        if _mutate(rows):
+            save_express_visit_requests(rows)
+    return held.get("rec"), held.get("err"), bool(held.get("changed"))
+
+
+def sync_archived_listing_cards(code: str, reason: str, listing_archived_at: str = "") -> int:
+    """کارت‌های همین آگهی را بایگانی می‌کند. کارتِ بازگردانده‌شده بعد از این رویداد نمی‌رود."""
+    from app.utils.storage import save_express_visit_requests
+
+    lands = _visit_lands()
+    want = canonical_land_code(code, lands)
+    if not want:
+        return 0
+    clean = reason if reason in ("manual", "inactive", "closed") else "inactive"
+    from app.listings.service import _archive_now
+
+    stamp = str(listing_archived_at or "").strip() or _archive_now()
+    with visit_store_lock():
+        rows = load_visit_requests_fresh()
+        changed = 0
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if canonical_land_code(str(row.get("land_code") or ""), lands) != want:
+                continue
+            if card_is_archived(row):
+                continue
+            restored = str(row.get("archive_restored_at") or "").strip()
+            if restored and stamp and restored >= stamp:
+                continue
+            row["archived"] = True
+            row["archived_at"] = stamp
+            row["archived_reason"] = clean
+            row.pop("archive_restored_at", None)
+            changed += 1
+        if changed:
+            save_express_visit_requests(rows)
+    return changed
 
 
 def partner_cancel_own_visit(

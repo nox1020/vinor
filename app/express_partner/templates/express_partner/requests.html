@@ -659,6 +659,16 @@
      data-csrf="{{ csrf_token() if csrf_token else '' }}"
      data-active-tab="requests">
   <main class="mx-auto w-full max-w-lg">
+    {% set _arch = archive_status|default('active') %}
+    {% set _acounts = archive_counts|default({'active': 0, 'archived': 0}, true) %}
+    <nav class="flex gap-2 px-4 pt-3" aria-label="وضعیت پیگیری‌ها">
+      <a href="{{ url_for('express_partner.requests', status='active') }}"
+         data-vinor-express-nav
+         class="rq-badge{% if _arch != 'archived' %} rq-badge--visit{% endif %}">فعال {{ (_acounts.active|default(0))|fa_digits }}</a>
+      <a href="{{ url_for('express_partner.requests', status='archived') }}"
+         data-vinor-express-nav
+         class="rq-badge{% if _arch == 'archived' %} rq-badge--visit{% endif %}">بایگانی {{ (_acounts.archived|default(0))|fa_digits }}</a>
+    </nav>
     <p class="rq-summary" data-rq-summary>
       <strong>{{ _n_cards|fa_digits }}</strong> پیگیری
     </p>
@@ -703,6 +713,13 @@
           <span class="rq-badge">بازدید {{ item.revisit_count|fa_digits }}</span>
           {% endif %}
         </p>
+        <form method="post"
+              action="{{ url_for('express_partner.apk_request_restore' if item.archived else 'express_partner.apk_request_archive', vid=item.id) }}"
+              class="px-4 pb-2"
+              data-vinor-direct-action>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="rq-badge">{{ 'بازگرداندن به پیگیری' if item.archived else 'بایگانی این پیگیری' }}</button>
+        </form>
         {% include 'express_partner/partials/visit_card_face.html' %}
         <div class="rq-vcard__body" data-rq-detail-body hidden>
           {% include 'express_partner/partials/visit_card_detail_facts.html' %}
@@ -741,7 +758,7 @@
     </section>
     {% else %}
     <div class="rq-empty">
-      <p class="rq-empty__title">پیگیری نیست</p>
+      <p class="rq-empty__title">{{ 'پیگیری بایگانی‌شده‌ای نیست' if _arch == 'archived' else 'پیگیری نیست' }}</p>
       <p class="rq-empty__sub">درخواست بازدید ارسالی و دریافتی آگهی‌های شما اینجا می‌آید.</p>
       <a class="rq-empty__cta" href="{{ url_for('express_partner.home') }}" data-vinor-express-nav>صفحه اصلی</a>
     </div>

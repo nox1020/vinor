@@ -231,18 +231,23 @@ def test_delete_removes_owner_rows_assignments_and_returns_page(client, app):
     body = gone.get_json()
     assert body["ok"] is True
     assert body["code"] == "4"
+    assert body["deleted"] is False
+    assert body["archived"] is True
+    assert body["is_archived"] is True
+    assert body["archived_reason"] == "manual"
     assert body["message"]
     page = body["page_payload"]
+    assert page["status"] == "active"
     assert all(str(item.get("code")) != "4" for item in page["items"])
     with app.app_context():
         ads = load_ads() or []
-        assert all(str(row.get("code")) != "4" for row in ads)
+        kept = next(row for row in ads if str(row.get("code")) == "4")
+        assert kept.get("archived") is True
         assert any(str(row.get("code")) == "9" for row in ads)
         left = load_express_assignments() or []
-        assert all(
-            str(row.get("status")) in ("in_transaction", "sold")
+        assert any(
+            str(row.get("land_code")) == "4" and str(row.get("status")) == "active"
             for row in left
-            if str(row.get("land_code")) == "4"
         )
         assert any(
             str(row.get("land_code")) == "4" and str(row.get("status")) == "in_transaction"
@@ -282,7 +287,12 @@ def test_api_stops_regular_listing_and_owner_can_republish(client, app):
     assert response.status_code == 200
     body = response.get_json()
     assert body["ok"] is True
-    assert body["items"][0]["published_for_sale"] is False
+    assert all(str(item.get("code")) != "9" for item in body["items"])
+    archived = client.get("/express/partner/api/my-property/data?status=archived").get_json()
+    stopped = next(item for item in archived["items"] if str(item.get("code")) == "9")
+    assert stopped["published_for_sale"] is False
+    assert stopped["archived"] is True
+    assert stopped["archived_reason"] == "inactive"
     assert client.get("/express/partner/api/lands/9/data").get_json()["published_for_sale"] is False
     _logout(client)
     assert client.get("/express/partner/api/lands/9/data").status_code == 404
@@ -290,4 +300,6 @@ def test_api_stops_regular_listing_and_owner_can_republish(client, app):
     published = client.post("/express/partner/api/my-property/publish",
                             json={"code": "9", "payment_method": "نقدی", "commission_pct": "2"})
     assert published.status_code == 200
-    assert published.get_json()["items"][0]["published_for_sale"] is True
+    again = published.get_json()["items"][0]
+    assert again["published_for_sale"] is True
+    assert again["archived"] is False

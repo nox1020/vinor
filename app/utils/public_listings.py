@@ -29,6 +29,14 @@ def is_publicly_visible_listing(land: Any) -> bool:
     """
     if not isinstance(land, dict):
         return False
+    try:
+        from app.listings.service import is_archived
+
+        if is_archived(land):
+            return False
+    except Exception:
+        if land.get("archived") is True:
+            return False
     if not land.get("is_express"):
         return False
     if not str(land.get("code") or "").strip():
@@ -62,6 +70,14 @@ def is_partner_assignment_land(land: Any) -> bool:
     """
     if not isinstance(land, dict):
         return False
+    try:
+        from app.listings.service import is_archived
+
+        if is_archived(land):
+            return False
+    except Exception:
+        if land.get("archived") is True:
+            return False
     if not land.get("is_express"):
         return False
     if land.get("public") is False:

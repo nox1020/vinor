@@ -167,6 +167,12 @@ def _mark_express_land_sold(code: str) -> bool:
             changed = True
     if changed:
         save_ads(lands)
+        try:
+            from app.listings.service import ARCHIVE_CLOSED, archive_listing
+
+            archive_listing(ck, reason=ARCHIVE_CLOSED, require_owner=False)
+        except Exception:
+            pass
     return changed
 
 
@@ -3560,6 +3566,7 @@ def _build_partner_sales_pipeline(
     visit_rows: Optional[List[Dict[str, Any]]] = None,
     *,
     land_status: Optional[Dict[str, str]] = None,
+    archive_status: str = "active",
 ) -> Dict[str, Any]:
     """آیتم‌ها و شمارش تب‌های پیگیری — مشترک بین /requests و badge خانه."""
     from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance
@@ -3571,6 +3578,7 @@ def _build_partner_sales_pipeline(
         PIPELINE_REQUESTS,
         PIPELINE_VISITS,
         annotate_follow_card,
+        card_is_archived,
         collapse_visit_rows,
         partner_request_feed_item,
         partner_requests_can_revisit,
@@ -3580,6 +3588,14 @@ def _build_partner_sales_pipeline(
     ph = (me_phone or '').strip()
     is_approved = _is_partner_approved(profile)
     is_special = _is_partner_special(profile) if is_approved else False
+    archive_status = 'archived' if str(archive_status or '').strip().lower() == 'archived' else 'active'
+    if visit_rows is None:
+        try:
+            from app.listings.service import sweep_inactive_listings
+
+            sweep_inactive_listings()
+        except Exception:
+            current_app.logger.exception('inactive listing sweep failed')
 
     raw_rows = visit_rows if visit_rows is not None else (load_express_visit_requests() or [])
     if not isinstance(raw_rows, list):
@@ -3637,6 +3653,7 @@ def _build_partner_sales_pipeline(
         1
         for r in mine
         if str(r.get('status') or '').strip() in OPEN_VISIT_STATUSES
+        and not card_is_archived(r)
     )
 
     inbox_items: list = []
@@ -3710,6 +3727,20 @@ def _build_partner_sales_pipeline(
             seen_ids.add(cid)
         cards.append(it)
     cards.sort(key=lambda card: str(card.get('updated_at') or card.get('created_at') or ''), reverse=True)
+    archive_counts = {
+        'active': sum(1 for card in cards if not card.get('archived')),
+        'archived': sum(1 for card in cards if card.get('archived')),
+    }
+    want_archived = archive_status == 'archived'
+
+    def _keep(card: Dict[str, Any]) -> bool:
+        return bool(card.get('archived')) is want_archived
+
+    cards = [card for card in cards if _keep(card)]
+    items = [card for card in items if _keep(card)]
+    inbox_items = [card for card in inbox_items if _keep(card)]
+    if want_archived:
+        offers = []
     tab_counts = {
         PIPELINE_REQUESTS: 0,
         PIPELINE_VISITS: 0,
@@ -3740,6 +3771,8 @@ def _build_partner_sales_pipeline(
         'visit_allowed_weekdays_summary': visit_allowed_weekdays_summary,
         'visit_allowed_hours_summary': visit_allowed_hours_summary,
         'visit_presence_address': visit_presence_address,
+        'archive_status': 'archived' if archive_status == 'archived' else 'active',
+        'archive_counts': archive_counts,
     }
 
 
@@ -3769,6 +3802,13 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     ph = (me_phone or '').strip()
     is_approved = _is_partner_approved(profile)
     has_pending_app = _partner_has_pending_app(ph) if ph and not is_approved else False
+    if ph:
+        try:
+            from app.listings.service import sweep_inactive_listings
+
+            sweep_inactive_listings()
+        except Exception:
+            current_app.logger.exception('home inactive listing sweep failed')
     visit_rows = load_express_visit_requests() or []
     if not isinstance(visit_rows, list):
         visit_rows = []
@@ -4486,14 +4526,144 @@ def apk_apply_submit():
 def apk_requests_data():
     from .apk_native import requests_payload, session_phone, session_profile
     tab = (request.args.get('tab') or '').strip()
-    return _apk_json(requests_payload(session_phone(), session_profile(), tab))
+    status = (request.args.get('status') or '').strip()
+    return _apk_json(requests_payload(session_phone(), session_profile(), tab, status))
+
+
+def _archive_status_arg() -> str:
+    status = (request.args.get('status') or '').strip().lower()
+    return 'archived' if status == 'archived' else 'active'
+
+
+def _browser_form_post() -> bool:
+    return bool(request.form) and not request.is_json
+
+
+def _redirect_archive_form(resp, *, listing: bool):
+    response = resp[0] if isinstance(resp, tuple) else resp
+    data = response.get_json(silent=True) or {}
+    ok = bool(data.get('ok'))
+    flash(data.get('message') or data.get('error') or 'انجام شد.', 'success' if ok else 'error')
+    status = 'archived' if data.get('archived') else 'active'
+    if listing:
+        return redirect(url_for('express_partner.my_property', status=status))
+    return redirect(url_for('express_partner.requests', status=status))
+
+
+def _listing_archive_response(phone: str, code: str, *, restore: bool):
+    from app.listings.service import archive_listing, archive_payload, restore_listing
+
+    if restore:
+        land, err, changed = restore_listing(code, phone=phone, require_owner=True)
+        message = 'آگهی به فهرست فعال برگشت.'
+    else:
+        land, err, changed = archive_listing(code, phone=phone, reason='manual', require_owner=True)
+        message = 'آگهی بایگانی شد.'
+    if err == 'forbidden':
+        return _apk_json({'ok': False, 'error': 'این آگهی برای شما نیست.', 'error_code': 'forbidden'}, 403)
+    if err or land is None:
+        return _apk_json({'ok': False, 'error': 'این آگهی پیدا نشد.', 'error_code': 'not_found'}, 404)
+    body = archive_payload(land)
+    body.update({
+        'ok': True,
+        'code': str(land.get('code') or code),
+        'already': not changed,
+        'message': message if changed else ('آگهی همین حالا فعال است.' if restore else 'آگهی از قبل بایگانی شده است.'),
+    })
+    return _apk_json(body)
+
+
+@express_partner_bp.post('/api/my-property/archive', endpoint='apk_my_property_archive')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_archive():
+    """بایگانی آگهی مالک. بدنه: ``{"code": "..."}``. تکرار همان نتیجه را می‌دهد."""
+    from .apk_native import session_phone
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    code = str(data.get('code') or request.form.get('code') or '').strip()
+    resp = _listing_archive_response(session_phone(), code, restore=False)
+    if _browser_form_post():
+        return _redirect_archive_form(resp, listing=True)
+    return resp
+
+
+@express_partner_bp.post('/api/my-property/restore', endpoint='apk_my_property_restore')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_restore():
+    """بازگرداندن آگهی بایگانی‌شده به فهرست فعال. انتشار را عوض نمی‌کند."""
+    from .apk_native import session_phone
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+    code = str(data.get('code') or request.form.get('code') or '').strip()
+    resp = _listing_archive_response(session_phone(), code, restore=True)
+    if _browser_form_post():
+        return _redirect_archive_form(resp, listing=True)
+    return resp
+
+
+def _card_archive_response(vid: str, *, restore: bool):
+    from app.listings.service import get_listing, is_archived
+    from .apk_native import session_phone
+    from .visit_requests import follow_archive_fields, submit_visit_card_archive
+
+    rec, err, changed = submit_visit_card_archive(vid, session_phone(), archived=not restore)
+    if err == 'forbidden':
+        return _apk_json({'ok': False, 'error': 'دسترسی ندارید.', 'error_code': 'forbidden'}, 403)
+    if err or not isinstance(rec, dict):
+        return _apk_json({'ok': False, 'error': 'این پیگیری پیدا نشد.', 'error_code': 'not_found'}, 404)
+    body = follow_archive_fields(rec)
+    body.update({
+        'ok': True,
+        'id': str(rec.get('id') or vid),
+        'already': not changed,
+        'message': (
+            'پیگیری به فهرست فعال برگشت.' if restore else 'پیگیری بایگانی شد.'
+        ) if changed else (
+            'پیگیری همین حالا فعال است.' if restore else 'پیگیری از قبل بایگانی شده است.'
+        ),
+    })
+    if restore:
+        from .visit_requests import canonical_land_code
+
+        land = get_listing(canonical_land_code(str(rec.get('land_code') or '')))
+        listing_archived = is_archived(land)
+        if land is not None and not listing_archived:
+            from app.listings.service import inactive_archive_reason
+
+            listing_archived = bool(inactive_archive_reason(land))
+        body['listing_archived'] = listing_archived
+    return _apk_json(body)
+
+
+@express_partner_bp.post('/api/requests/<vid>/archive', endpoint='apk_request_archive')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_request_archive(vid: str):
+    """بایگانی یک کارت پیگیری. مالک و درخواست‌کننده هر دو می‌توانند."""
+    resp = _card_archive_response(vid, restore=False)
+    if _browser_form_post():
+        return _redirect_archive_form(resp, listing=False)
+    return resp
+
+
+@express_partner_bp.post('/api/requests/<vid>/restore', endpoint='apk_request_restore')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_request_restore(vid: str):
+    """بازگرداندن کارت به پیگیری فعال. آگهی بایگانی یا غیرفعال مانع این کار نیست."""
+    resp = _card_archive_response(vid, restore=True)
+    if _browser_form_post():
+        return _redirect_archive_form(resp, listing=False)
+    return resp
 
 
 @express_partner_bp.get('/api/listings/data', endpoint='apk_listings_data')
 @require_special_partner(json_response=True)
 def apk_listings_data():
     from .apk_native import listings_payload, session_phone
-    return _apk_json(listings_payload(session_phone()))
+    return _apk_json(listings_payload(session_phone(), status=_archive_status_arg()))
 
 
 @express_partner_bp.route('/my-property', methods=['GET', 'POST'], endpoint='my_property')
@@ -4523,7 +4693,7 @@ def my_property_page():
         flash(f'ملک شما با کد {rec.get("code")} ثبت شد. از همین صفحه می‌توانید برای فروش منتشر کنید.', 'success')
         return redirect(url_for('express_partner.my_property'))
 
-    payload = page_payload(me_phone)
+    payload = page_payload(me_phone, status=_archive_status_arg())
     if request.args.get('register') == '1':
         return _render_owner_home_form(me_phone, is_special=is_special)
     if not payload.get('has_property'):
@@ -4546,6 +4716,8 @@ def my_property_page():
         items=payload.get('items') or payload.get('listings') or [],
         listings=payload.get('items') or payload.get('listings') or [],
         divar_profile_entries=payload.get('divar_profiles') or [],
+        archive_status=payload.get('status') or 'active',
+        archive_counts=payload.get('counts') or {'active': 0, 'archived': 0},
     )
 
 
@@ -4590,7 +4762,7 @@ def _render_owner_home_form(me_phone: str = '', *, is_special: bool = False):
 def apk_my_property_data():
     from .my_property import page_payload
     from .apk_native import session_phone
-    return _apk_json(page_payload(session_phone()))
+    return _apk_json(page_payload(session_phone(), status=_archive_status_arg()))
 
 
 @express_partner_bp.get('/api/my-property/form', endpoint='apk_my_property_form')
@@ -4789,27 +4961,33 @@ def apk_my_property_publish():
 @express_partner_bp.post('/api/my-property/delete', endpoint='apk_my_property_delete')
 @require_partner_access(allow_pending=True, json_response=True)
 def apk_my_property_delete():
-    """حذف ملک منِ خودِ کاربر. بدنه JSON است: ``{"code": "..."}``."""
+    """حذف مالک دیگر ردیف را پاک نمی‌کند؛ آگهی به بایگانی می‌رود تا اپ قدیمی نشکند."""
+    from app.listings.service import archive_listing, archive_payload
     from .apk_native import session_phone
     from .my_property import page_payload
-    from .special_listings import delete_owner_property
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         data = {}
     code = str(data.get('code') or '').strip()
     phone = session_phone()
-    removed, err = delete_owner_property(phone, code)
-    if err:
-        message = 'این ملک پیدا نشد.' if err == 'not_found' else 'حذف ملک ناموفق بود.'
-        status = 404 if err == 'not_found' else 400
-        return _apk_json({'ok': False, 'error': message, 'error_code': err}, status)
-    return _apk_json({
+    land, err, _changed = archive_listing(code, phone=phone, reason='manual', require_owner=True)
+    if err == 'forbidden' or err == 'not_found' or land is None:
+        return _apk_json({
+            'ok': False,
+            'error': 'این ملک پیدا نشد.',
+            'error_code': 'not_found',
+        }, 404)
+    payload = page_payload(phone, status='active')
+    body = archive_payload(land)
+    body.update({
         'ok': True,
-        'code': removed or code,
-        'message': 'ملک حذف شد.',
-        'page_payload': page_payload(phone),
+        'code': str(land.get('code') or code),
+        'deleted': False,
+        'message': 'آگهی به بایگانی منتقل شد.',
+        'page_payload': payload,
     })
+    return _apk_json(body)
 
 
 @express_partner_bp.post('/api/listings/submit', endpoint='apk_listings_submit')
@@ -6307,7 +6485,10 @@ def requests_page():
         PIPELINE_VISITS,
     )
 
-    pipe = _build_partner_sales_pipeline(me_phone, profile)
+    archive_status = (request.args.get('status') or '').strip().lower()
+    if archive_status not in ('active', 'archived'):
+        archive_status = 'active'
+    pipe = _build_partner_sales_pipeline(me_phone, profile, archive_status=archive_status)
     items = pipe['items']
     inbox_items = pipe['inbox_items']
     offers = pipe['offers']
@@ -6375,6 +6556,8 @@ def requests_page():
         visit_presence_address=visit_presence_address,
         schedule_open=(request.args.get('schedule') or '').strip() == '1',
         cards=pipe.get('cards') or [],
+        archive_status=pipe.get('archive_status') or archive_status,
+        archive_counts=pipe.get('archive_counts') or {'active': 0, 'archived': 0},
     ))
     if is_approved:
         _append_partner_tab_prefetch(resp)

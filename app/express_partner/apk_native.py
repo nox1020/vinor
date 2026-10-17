@@ -23,7 +23,9 @@ def land_card(land: Dict[str, Any] | None) -> Dict[str, Any]:
     item = land if isinstance(land, dict) else {}
     code = str(item.get('code') or '').strip()
     price = int(item.get('price_total') or item.get('price') or 0)
-    return {
+    from app.listings.service import archive_payload
+
+    card = {
         'code': code,
         'title': str(item.get('title') or '—').strip() or '—',
         'city': str(item.get('city') or '').strip(),
@@ -35,6 +37,8 @@ def land_card(land: Dict[str, Any] | None) -> Dict[str, Any]:
         'assignment_status': str(item.get('_assignment_status') or 'active').strip() or 'active',
         'image_url': partner_card_image_url(item) or None,
     }
+    card.update(archive_payload(item))
+    return card
 
 
 def training_payload() -> Dict[str, Any]:
@@ -203,11 +207,12 @@ def apply_payload(me_phone: str) -> Dict[str, Any]:
     }
 
 
-def requests_payload(me_phone: str, profile, tab: str = '') -> Dict[str, Any]:
+def requests_payload(me_phone: str, profile, tab: str = '', status: str = '') -> Dict[str, Any]:
     from .routes import _build_partner_sales_pipeline
     from .visit_requests import PIPELINE_TABS
 
-    pipe = _build_partner_sales_pipeline(me_phone, profile)
+    archive_status = 'archived' if str(status or '').strip().lower() == 'archived' else 'active'
+    pipe = _build_partner_sales_pipeline(me_phone, profile, archive_status=archive_status)
     requested = str(tab or '').strip().lower()
     if requested not in PIPELINE_TABS:
         requested = str(pipe.get('default_tab') or 'requests')
@@ -236,6 +241,8 @@ def requests_payload(me_phone: str, profile, tab: str = '') -> Dict[str, Any]:
     out.update({
         'ok': True,
         'active_tab': requested,
+        'status': archive_status,
+        'archive_counts': pipe.get('archive_counts') or {'active': 0, 'archived': 0},
         'tabs': [
             {'id': 'requests', 'title': 'درخواست'},
             {'id': 'visits', 'title': 'بازدید'},
@@ -245,11 +252,32 @@ def requests_payload(me_phone: str, profile, tab: str = '') -> Dict[str, Any]:
     return out
 
 
-def listings_payload(me_phone: str) -> Dict[str, Any]:
+def listings_payload(me_phone: str, status: str = 'active') -> Dict[str, Any]:
     from .special_listings import listings_owned_by
     from .home_ads_config import partner_divar_profile_entries
+    from app.listings.service import archive_payload, is_archived, sweep_inactive_listings
 
-    items = [land_card(land) for land in listings_owned_by(me_phone)]
+    try:
+        if me_phone:
+            sweep_inactive_listings()
+    except Exception:
+        pass
+    rows = listings_owned_by(me_phone)
+    want_archived = str(status or '').strip().lower() == 'archived'
+    visible = []
+    active_count = 0
+    archived_count = 0
+    for land in rows:
+        archived = is_archived(land)
+        if archived:
+            archived_count += 1
+        else:
+            active_count += 1
+        if archived is want_archived:
+            card = land_card(land)
+            card.update(archive_payload(land))
+            visible.append(card)
+    items = visible
     divar = []
     for entry in partner_divar_profile_entries(me_phone) or []:
         if not isinstance(entry, dict):
@@ -258,7 +286,13 @@ def listings_payload(me_phone: str) -> Dict[str, Any]:
             'url': str(entry.get('url') or '').strip(),
             'commission_pct': entry.get('commission_pct'),
         })
-    return {'ok': True, 'items': items, 'divar_profiles': divar}
+    return {
+        'ok': True,
+        'status': 'archived' if want_archived else 'active',
+        'counts': {'active': active_count, 'archived': archived_count},
+        'items': items,
+        'divar_profiles': divar,
+    }
 
 
 def favorites_items(codes: List[str], me_phone: str) -> Dict[str, Any]:

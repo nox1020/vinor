@@ -1045,7 +1045,11 @@ def resolve_listing_for_viewer(
             if is_published_for_sale(land):
                 return land, "owner"
         return owned[0], "owner"
+    from app.listings.service import is_archived
+
     for land in matches:
+        if is_archived(land):
+            continue
         if land.get("is_express") and not is_owner_home(land):
             return land, "public"
     return None, "missing"

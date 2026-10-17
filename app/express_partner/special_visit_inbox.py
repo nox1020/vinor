@@ -222,6 +222,12 @@ def _mark_land_sold(land_code: str) -> None:
         break
     if changed:
         save_ads(lands)
+        try:
+            from app.listings.service import ARCHIVE_CLOSED, archive_listing
+
+            archive_listing(code, reason=ARCHIVE_CLOSED, require_owner=False)
+        except Exception:
+            pass
 
 
 def _phone_is_active_plus(phone: str) -> bool:
@@ -245,12 +251,14 @@ def visit_inbox_badge_count(phone: str) -> int:
     me = _norm_phone(phone)
     if not codes and not me:
         return 0
-    from .visit_requests import collapse_visit_rows
+    from .visit_requests import card_is_archived, collapse_visit_rows
 
     rows = collapse_visit_rows(load_express_visit_requests() or [])
     need: Set[str] = set()
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
+            continue
+        if card_is_archived(row):
             continue
         if not _visit_row_for_plus_owner(row, phone, codes):
             continue
@@ -685,6 +693,9 @@ def visits_for_special_owner(
             or can_reject
             or can_reject_done,
         })
+        from .visit_requests import follow_archive_fields
+
+        out[-1].update(follow_archive_fields(row))
         out[-1]["pipeline_tab"] = special_inbox_pipeline_tab(out[-1])
 
     def _sort_key(item: Dict[str, Any]) -> tuple:

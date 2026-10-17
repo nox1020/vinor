@@ -48,10 +48,34 @@
 {% endwith %}
 
 <div class="partner-page-scroll-pad mx-auto w-full max-w-lg pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+  {% set _arch = archive_status|default('active') %}
+  {% set _counts = archive_counts|default({'active': 0, 'archived': 0}, true) %}
+  <nav class="flex gap-2 px-3.5 pt-3" aria-label="وضعیت آگهی‌ها">
+    <a href="{{ url_for('express_partner.my_property', status='active') }}"
+       data-vinor-express-nav
+       class="inline-flex min-h-9 items-center rounded-full px-3 text-[13px] font-bold {% if _arch != 'archived' %}bg-white text-black{% else %}bg-white/10 text-zinc-300{% endif %}">فعال {{ (_counts.active|default(0))|fa_digits }}</a>
+    <a href="{{ url_for('express_partner.my_property', status='archived') }}"
+       data-vinor-express-nav
+       class="inline-flex min-h-9 items-center rounded-full px-3 text-[13px] font-bold {% if _arch == 'archived' %}bg-white text-black{% else %}bg-white/10 text-zinc-300{% endif %}">بایگانی {{ (_counts.archived|default(0))|fa_digits }}</a>
+  </nav>
   <section class="border-t border-white/10" aria-label="ملک‌های من">
     {% for land in items or listings or [] %}
       {% set tour_land_card = loop.first %}
       {% include 'express_partner/partials/land_dashboard_card.html' %}
+      <form method="post"
+            action="{{ url_for('express_partner.apk_my_property_restore' if land.archived else 'express_partner.apk_my_property_archive') }}"
+            class="px-3.5 pb-3"
+            data-vinor-direct-action>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="code" value="{{ land.code }}">
+        <button type="submit" class="text-[13px] font-bold text-slate-300">
+          {{ 'بازگرداندن به فعال' if land.archived else 'بایگانی' }}
+        </button>
+      </form>
+    {% else %}
+      <p class="px-3.5 py-8 text-center text-sm text-slate-400">
+        {{ 'آگهی بایگانی‌شده‌ای نیست.' if _arch == 'archived' else 'آگهی فعالی نیست.' }}
+      </p>
     {% endfor %}
   </section>
 

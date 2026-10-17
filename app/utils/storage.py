@@ -197,9 +197,14 @@ def load_express_lands_cached(app=None):
 
     # بارگذاری فایل‌های اکسپرس (شامل فروخته‌شده — مرتب‌سازی در UI همکار)
     all_lands = load_ads_cached(app)
+    from app.listings.service import is_archived
+
     express_lands = [
         l for l in all_lands
-        if isinstance(l, dict) and l.get('is_express', False) and not _is_owner_home_land(l)
+        if isinstance(l, dict)
+        and l.get('is_express', False)
+        and not _is_owner_home_land(l)
+        and not is_archived(l)
     ]
     # مرتب‌سازی بر اساس تاریخ ایجاد (جدیدترین اول)
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
@@ -235,9 +240,14 @@ def _update_ads_cache_after_save(path, items):
         size = None
     _ADS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": items})
     # به‌روزرسانی کش اکسپرس
+    from app.listings.service import is_archived
+
     express_lands = [
         l for l in items
-        if isinstance(l, dict) and l.get('is_express', False) and not _is_owner_home_land(l)
+        if isinstance(l, dict)
+        and l.get('is_express', False)
+        and not _is_owner_home_land(l)
+        and not is_archived(l)
     ]
     express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
     _EXPRESS_LANDS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": express_lands})
