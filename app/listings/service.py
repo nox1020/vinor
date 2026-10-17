@@ -28,6 +28,11 @@ _EXTRAS_PUBLISH_KEYS = (
     "listed_by_owner",
     "listed_by_special",
 )
+_CYCLE_KEYS = (
+    "published_at",
+    "first_published_at",
+    "quiet_nudge_published_at",
+)
 
 
 def _digits(phone: str) -> str:
@@ -140,6 +145,11 @@ def mark_private(target: Dict[str, Any]) -> None:
     target["source"] = "my_property"
 
 
+def _cycle_stamp(land: Dict[str, Any], key: str) -> str:
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    return str(land.get(key) or extras.get(key) or "").strip()
+
+
 def mark_published(
     target: Dict[str, Any],
     *,
@@ -147,7 +157,16 @@ def mark_published(
     commission_pct: float,
     amount: int,
 ) -> None:
-    """انتشار فروش. وضعیت فروخته‌شدهٔ express_status حفظ می‌شود."""
+    """انتشار فروش. وضعیت فروخته‌شدهٔ express_status حفظ می‌شود.
+
+    اولین انتشار ``first_published_at`` را می‌نویسد و هر چرخهٔ انتشار
+    ``published_at`` را تازه می‌کند. انتشار دوبارهٔ ردیفی که همین حالا زنده است
+    ساعت چرخه را عوض نمی‌کند.
+    """
+    from app.utils.dates import iso_z, utcnow
+
+    already_live = is_published_for_sale(target)
+    now = iso_z(utcnow())
     extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
     extras.update({
         "express_commission_pct": commission_pct,
@@ -158,7 +177,26 @@ def mark_published(
         "public": True,
         "published_for_sale": True,
     })
+    first = _cycle_stamp(target, "first_published_at")
+    current = _cycle_stamp(target, "published_at")
+    if not already_live:
+        stamp = now
+        if stamp == current:
+            stamp = utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        extras["published_at"] = stamp
+        extras["first_published_at"] = first or stamp
+    else:
+        if first:
+            extras["first_published_at"] = first
+        if current:
+            extras["published_at"] = current
+        elif first:
+            extras["published_at"] = first
     target["extras"] = extras
+    if extras.get("first_published_at"):
+        target["first_published_at"] = extras["first_published_at"]
+    if extras.get("published_at"):
+        target["published_at"] = extras["published_at"]
     target["public"] = True
     target["is_express"] = True
     target["ad_type"] = "express"
@@ -679,6 +717,7 @@ def update_listing(
         "ad_type",
         "status",
         "express_status",
+        *_CYCLE_KEYS,
     }
     with listings_lock(app):
         items = _read_json(listings_path(app))
@@ -698,7 +737,7 @@ def update_listing(
             if key == "extras" and isinstance(value, dict):
                 extras = dict(target.get("extras") or {}) if isinstance(target.get("extras"), dict) else {}
                 for extra_key, extra_value in value.items():
-                    if extra_key in _EXTRAS_PUBLISH_KEYS:
+                    if extra_key in _EXTRAS_PUBLISH_KEYS or extra_key in _CYCLE_KEYS:
                         continue
                     extras[extra_key] = extra_value
                 target["extras"] = extras
@@ -710,6 +749,30 @@ def update_listing(
         if isinstance(land, dict) and code_key(land) == want:
             return land
     return target
+
+
+def _record_listing_published(land: Dict[str, Any]) -> None:
+    """فعالیت listing_published. شکست ثبت، انتشار را برنمی‌گرداند."""
+    try:
+        from app.foundation.activity_store import append_activity
+
+        code = code_key(land)
+        append_activity(
+            action="listing_published",
+            actor_key=owner_phone(land),
+            actor_role="owner",
+            entity_type="listing",
+            entity_id=code,
+            land_code=code,
+            summary="آگهی برای فروش منتشر شد",
+            payload={
+                "published_at": str(land.get("published_at") or ""),
+                "first_published_at": str(land.get("first_published_at") or ""),
+            },
+            source="listings",
+        )
+    except Exception:
+        pass
 
 
 def publish_listing(
@@ -758,10 +821,14 @@ def publish_listing(
             return None, err, False
         if changed and target is not None:
             written = save_listings(items, app)
+            saved = target
             saved_code = code_key(target)
             for land in written:
                 if isinstance(land, dict) and code_key(land) == saved_code:
-                    return land, None, True
+                    saved = land
+                    break
+            _record_listing_published(saved)
+            return saved, None, True
         return target, None, bool(changed)
 
 

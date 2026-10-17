@@ -44,6 +44,9 @@ def compute_os_kpis(*, limit: int = 5000) -> dict[str, Any]:
         "visits_completed_count": 0,
         "deals_count": 0,
         "deals_closed_count": 0,
+        "publish_to_visit_7d_rate": 0.0,
+        "published_measured_count": 0,
+        "published_with_visit_7d_count": 0,
     }
     if not hardening_os_kpis_enabled():
         return dict(empty)
@@ -155,4 +158,10 @@ def compute_os_kpis(*, limit: int = 5000) -> dict[str, Any]:
         out["visit_to_deal_rate"] = 0.0
     out["sales_volume_count"] = deals_closed or deals_n
     out["sales_volume_amount"] = sales_amount
+    try:
+        from app.listings.performance import publish_to_visit_7d_kpi
+
+        out.update(publish_to_visit_7d_kpi(limit=limit))
+    except Exception:
+        pass
     return out

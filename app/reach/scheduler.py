@@ -20,19 +20,38 @@ _lazy_last_attempt = 0.0
 _LAZY_MIN_INTERVAL_SEC = 90
 
 
+def run_listing_quiet_nudge() -> None:
+    """همان نوبت رسدکننده، آگهی ساکت ۷۲ساعته را هم یک‌بار بررسی می‌کند."""
+    try:
+        from app.listings.quiet_nudge import maybe_send_quiet_listing_nudges
+
+        maybe_send_quiet_listing_nudges()
+    except Exception:
+        try:
+            from flask import current_app
+
+            current_app.logger.exception("listing quiet nudge failed")
+        except Exception:
+            pass
+
+
 def _loop(app: Flask) -> None:
     last_slot: int | None = None
     while True:
         try:
             with app.app_context():
-                from app.reach.service import _active_slot_hour, maybe_run_reach_followup
+                try:
+                    from app.reach.service import _active_slot_hour, maybe_run_reach_followup
 
-                due = _active_slot_hour()
-                if due is not None and due != last_slot:
-                    maybe_run_reach_followup()
-                    last_slot = due
-                if due is None:
-                    last_slot = None
+                    due = _active_slot_hour()
+                    if due is not None and due != last_slot:
+                        maybe_run_reach_followup()
+                        last_slot = due
+                    if due is None:
+                        last_slot = None
+                except Exception:
+                    app.logger.exception("Reach scheduler tick failed")
+                run_listing_quiet_nudge()
         except Exception:
             try:
                 app.logger.exception("Reach scheduler tick failed")
@@ -74,7 +93,11 @@ def _install_lazy_tick(app: Flask) -> None:
                 def _worker() -> None:
                     try:
                         with app.app_context():
-                            maybe_run_reach_followup()
+                            try:
+                                maybe_run_reach_followup()
+                            except Exception:
+                                app.logger.exception("Reach lazy tick failed")
+                            run_listing_quiet_nudge()
                     except Exception:
                         try:
                             app.logger.exception("Reach lazy tick failed")

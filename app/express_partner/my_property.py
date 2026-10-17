@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from flask import url_for
@@ -17,33 +16,10 @@ def feature_enabled() -> bool:
 
 
 _FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
-_MONTHS_FA = (
-    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
-    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
-)
 
 
 def fa_digits(value: Any) -> str:
     return str(value).translate(_FA_DIGITS)
-
-
-def fa_pct(value: Any, digits: int = 1) -> str:
-    try:
-        n = float(value)
-    except (TypeError, ValueError):
-        n = 0.0
-    text = f"{n:.{digits}f}".rstrip("0").rstrip(".")
-    return fa_digits(text.replace(".", "٫"))
-
-
-def _as_int(value: Any, default: int = 0) -> int:
-    try:
-        raw = str(value or "").replace(",", "").replace("،", "").strip()
-        if not raw:
-            return default
-        return int(float(raw))
-    except (TypeError, ValueError):
-        return default
 
 
 def _cover_url(land: Dict[str, Any] | None) -> str:
@@ -67,83 +43,139 @@ def _gallery_count(land: Dict[str, Any] | None) -> int:
     return 0
 
 
-def _price_history(current: int, months: int = 60, monthly_pct: float = 0.42) -> List[Dict[str, Any]]:
-    now = datetime.now()
-    series: List[Dict[str, Any]] = []
-    for i in range(months):
-        age = months - 1 - i
-        factor = (1.0 - (monthly_pct / 100.0)) ** age
-        month_i = (now.month - 1 - (months - 1 - i)) % 12
-        label = _MONTHS_FA[month_i]
-        v = max(1, int(round(current * factor)))
-        n = max(1, int(round(current * 0.94 * factor)))
-        series.append({"month": label, "value": v, "neighborhood": n})
-    if series:
-        series[-1]["value"] = current
-        series[-1]["neighborhood"] = int(round(current * 0.94))
-    return series
+def _optional_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    raw = str(value).replace(",", "").replace("،", "").strip()
+    if not raw:
+        return None
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _unknown_market() -> Dict[str, Any]:
+    """کلیدهای قدیمی نمودار قیمت می‌مانند، ولی دیگر عدد ساختگی ندارند."""
+    return {
+        "monthly_change_pct": None,
+        "monthly_change_label": None,
+        "yearly_change_pct": None,
+        "yearly_change_label": None,
+        "neighborhood_avg": None,
+        "equity": {"total": None, "paid_off_pct": None},
+        "price_history": [],
+    }
+
+
+def _activity_from_stats(stats: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    published_at = stats.get("published_at")
+    if published_at:
+        rows.append({
+            "type": "publish",
+            "text": "برای فروش منتشر شد",
+            "date": published_at,
+        })
+    weekly = int(stats.get("weekly_views") or 0)
+    if weekly:
+        rows.append({
+            "type": "view",
+            "text": f"{fa_digits(weekly)} بازدید همکار در ۷ روز اخیر",
+            "date": "",
+        })
+    week_visits = int(stats.get("visit_requests_7d") or 0)
+    total_visits = int(stats.get("visit_requests_total") or 0)
+    if week_visits:
+        rows.append({
+            "type": "visit",
+            "text": f"{fa_digits(week_visits)} درخواست بازدید در ۷ روز اخیر",
+            "date": "",
+        })
+    elif total_visits:
+        rows.append({
+            "type": "visit",
+            "text": f"{fa_digits(total_visits)} درخواست بازدید از زمان انتشار",
+            "date": "",
+        })
+    return rows
+
+
+def _performance(land: Dict[str, Any] | None) -> Dict[str, Any]:
+    try:
+        from app.listings.performance import listing_performance
+
+        stats = listing_performance(land if isinstance(land, dict) else None)
+    except Exception:
+        stats = {
+            "weekly_views": 0,
+            "views_since_publish": 0,
+            "visit_requests_7d": 0,
+            "visit_requests_total": 0,
+            "published_at": None,
+            "first_published_at": None,
+            "days_since_publish": None,
+        }
+    return stats
 
 
 def demo_property() -> Dict[str, Any]:
-    value = 12_500_000_000
-    history = _price_history(value, 60, 0.35)
-    return {
+    stats = _performance(None)
+    card = {
         "id": "demo-home",
         "is_demo": True,
         "cover_image": "",
-        "gallery_count": 8,
-        "address": "بلوار کاوه، کوچهٔ نرگس، پلاک ۲۴",
-        "city": "تهران",
-        "state": "تهران",
-        "zip": "19197",
-        "beds": 3,
-        "baths": 2,
-        "sqm": 120,
-        "built_year": 1395,
-        "beds_label": fa_digits(3),
-        "baths_label": fa_digits(2),
-        "sqm_label": fa_digits(120),
-        "built_year_label": fa_digits(1395),
-        "zip_label": fa_digits("19197"),
-        "gallery_label": fa_digits(8),
-        "estimated_value": value,
-        "price_per_sqm": 104_166_667,
-        "monthly_change_pct": 4.2,
-        "monthly_change_label": fa_pct(4.2),
-        "yearly_change_pct": 11.8,
-        "yearly_change_label": fa_pct(11.8),
-        "weekly_views": 0,
-        "is_claimed": True,
+        "gallery_count": 0,
+        "address": "",
+        "city": "",
+        "state": "",
+        "zip": "",
+        "beds": None,
+        "baths": None,
+        "sqm": None,
+        "built_year": None,
+        "beds_label": "",
+        "baths_label": "",
+        "sqm_label": "",
+        "built_year_label": "",
+        "zip_label": "",
+        "gallery_label": fa_digits(0),
+        "estimated_value": None,
+        "price_per_sqm": None,
+        "weekly_views": stats["weekly_views"],
+        "views_since_publish": stats["views_since_publish"],
+        "visit_requests_7d": stats["visit_requests_7d"],
+        "visit_requests_total": stats["visit_requests_total"],
+        "published_at": stats["published_at"],
+        "first_published_at": stats["first_published_at"],
+        "days_since_publish": stats["days_since_publish"],
+        "is_claimed": False,
         "badge_label": "خصوصی",
-        "privacy_note": "فقط شما این قیمت را می‌بینید · بعد از ثبت می‌توانید برای فروش منتشر کنید",
+        "privacy_note": "بعد از ثبت ملک، آمار واقعی انتشار اینجا می‌آید",
         "published_for_sale": False,
-        "neighborhood_avg": 11_750_000_000,
-        "equity": {"total": 7_800_000_000, "paid_off_pct": 62},
-        "price_history": history,
         "nearby_listings": [],
-        "activity": [
-            {"type": "price", "text": "قیمت تخمینی به‌روز شد", "date": "۳ روز پیش"},
-            {"type": "price", "text": "تغییر ماهانه محاسبه شد", "date": "۱ هفته پیش"},
-        ],
+        "activity": [],
         "edit_url": "",
         "photos_url": "",
         "settings_url": "",
         "sell_url": "",
     }
+    card.update(_unknown_market())
+    return card
 
 
 def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, Any]:
-    price = _as_int(land.get("price_total") or land.get("price"))
-    sqm = _as_int(land.get("size") or land.get("sqm") or 120, 120) or 120
-    if price <= 0:
-        price = 12_500_000_000
-    ppm = int(round(price / max(sqm, 1)))
-    monthly = 4.2
-    yearly = 11.8
-    history = _price_history(price, 60, 0.35)
-    equity_pct = 62
+    price = _optional_int(land.get("price_total") if land.get("price_total") not in (None, "") else land.get("price"))
+    sqm = _optional_int(land.get("size") if land.get("size") not in (None, "") else land.get("sqm"))
+    ppm = int(round(price / sqm)) if price and sqm else None
+    beds = _optional_int(land.get("beds") if land.get("beds") not in (None, "") else land.get("rooms"))
+    baths = _optional_int(land.get("baths"))
+    built_year = _optional_int(
+        land.get("built_year") if land.get("built_year") not in (None, "") else land.get("year_built")
+    )
     code = str(land.get("code") or "").strip()
-    nearby_rows = []
+    stats = _performance(land)
+    gallery = _gallery_count(land)
     try:
         from .special_listings import is_published_for_sale
         published = is_published_for_sale(land)
@@ -157,48 +189,44 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
         detail_url = url_for("express_partner.land_detail", code=code) if published and code else ""
     except Exception:
         detail_url = f"/express/partner/lands/{code}" if published and code else ""
-    return {
+    card = {
         "id": code or "claimed-home",
         "is_demo": False,
         "cover_image": _cover_url(land),
-        "gallery_count": _gallery_count(land) or 1,
-        "gallery_label": fa_digits(_gallery_count(land) or 1),
-        "address": str(land.get("title") or land.get("location") or "ملک شما").strip() or "ملک شما",
-        "city": str(land.get("city") or "تهران").strip() or "تهران",
-        "state": str(land.get("province") or land.get("state") or land.get("city") or "تهران").strip(),
+        "gallery_count": gallery,
+        "gallery_label": fa_digits(gallery),
+        "address": str(land.get("title") or land.get("location") or "").strip(),
+        "city": str(land.get("city") or "").strip(),
+        "state": str(land.get("province") or land.get("state") or "").strip(),
         "zip": str(land.get("zip") or land.get("postal_code") or "").strip(),
         "zip_label": fa_digits(str(land.get("zip") or land.get("postal_code") or "").strip()),
-        "beds": _as_int(land.get("beds") or land.get("rooms") or 3, 3),
-        "baths": _as_int(land.get("baths") or 2, 2),
+        "beds": beds,
+        "baths": baths,
         "sqm": sqm,
-        "built_year": _as_int(land.get("built_year") or land.get("year_built") or 1395, 1395),
-        "beds_label": fa_digits(_as_int(land.get("beds") or land.get("rooms") or 3, 3)),
-        "baths_label": fa_digits(_as_int(land.get("baths") or 2, 2)),
-        "sqm_label": fa_digits(sqm),
-        "built_year_label": fa_digits(_as_int(land.get("built_year") or land.get("year_built") or 1395, 1395)),
+        "built_year": built_year,
+        "beds_label": fa_digits(beds) if beds is not None else "",
+        "baths_label": fa_digits(baths) if baths is not None else "",
+        "sqm_label": fa_digits(sqm) if sqm is not None else "",
+        "built_year_label": fa_digits(built_year) if built_year is not None else "",
         "estimated_value": price,
         "price_per_sqm": ppm,
-        "monthly_change_pct": monthly,
-        "monthly_change_label": fa_pct(monthly),
-        "yearly_change_pct": yearly,
-        "yearly_change_label": fa_pct(yearly),
-        "weekly_views": 0,
+        "weekly_views": stats["weekly_views"],
+        "views_since_publish": stats["views_since_publish"],
+        "visit_requests_7d": stats["visit_requests_7d"],
+        "visit_requests_total": stats["visit_requests_total"],
+        "published_at": stats["published_at"],
+        "first_published_at": stats["first_published_at"],
+        "days_since_publish": stats["days_since_publish"],
         "is_claimed": True,
         "badge_label": "منتشرشده" if published else "خصوصی",
         "privacy_note": (
             "این ملک برای فروش در آگهی‌های وینور منتشر شده است"
             if published else
-            "فقط شما این قیمت را می‌بینید · برای فروش هنوز منتشر نشده"
+            "فقط شما این ملک را می‌بینید · برای فروش هنوز منتشر نشده"
         ),
         "published_for_sale": published,
-        "neighborhood_avg": int(round(price * 0.94)),
-        "equity": {"total": int(round(price * equity_pct / 100.0)), "paid_off_pct": equity_pct},
-        "price_history": history,
-        "nearby_listings": nearby_rows,
-        "activity": [
-            {"type": "price", "text": "قیمت تخمینی به‌روز شد", "date": "۳ روز پیش"},
-            {"type": "price", "text": f"تغییر ماهانه {fa_pct(monthly)}٪ ثبت شد", "date": "۱ هفته پیش"},
-        ],
+        "nearby_listings": list(nearby or []),
+        "activity": _activity_from_stats(stats),
         "edit_url": edit_url,
         "photos_url": edit_url,
         "settings_url": "",
@@ -206,6 +234,8 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
         "detail_url": detail_url,
         "code": code,
     }
+    card.update(_unknown_market())
+    return card
 
 
 def property_for_user(me_phone: str) -> Optional[Dict[str, Any]]:
@@ -266,6 +296,7 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
             detail_url = url_for("express_partner.land_detail", code=code)
         except Exception:
             detail_url = f"/express/partner/lands/{code}"
+        stats = _performance(land)
         card.update({
             "images": images,
             "image_count": len(images),
@@ -277,6 +308,21 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
             "detail_url": detail_url,
             "video": land.get("video") or "",
             "_commission_amount": int(card.get("commission_amount") or 0),
+            "weekly_views": stats["weekly_views"],
+            "views_since_publish": stats["views_since_publish"],
+            "visit_requests_7d": stats["visit_requests_7d"],
+            "visit_requests_total": stats["visit_requests_total"],
+            "published_at": stats["published_at"],
+            "first_published_at": stats["first_published_at"],
+            "days_since_publish": stats["days_since_publish"],
+            "monthly_change_pct": None,
+            "monthly_change_label": None,
+            "yearly_change_pct": None,
+            "yearly_change_label": None,
+            "neighborhood_avg": None,
+            "equity": {"total": None, "paid_off_pct": None},
+            "price_history": [],
+            "activity": _activity_from_stats(stats),
         })
         out.append(card)
     return out
@@ -303,6 +349,7 @@ def page_payload(me_phone: str) -> Dict[str, Any]:
         publish_url = url_for("express_partner.apk_my_property_publish")
     except Exception:
         publish_url = "/express/partner/api/my-property/publish"
+    stats = prop or _performance(None)
     return json_ready({
         "ok": True,
         "logged_in": bool(me_phone),
@@ -312,6 +359,13 @@ def page_payload(me_phone: str) -> Dict[str, Any]:
         "published_for_sale": bool(prop and prop.get("published_for_sale")),
         "payment_methods": ["نقدی", "توافقی", "معاوضه"],
         "default_commission_pct": "2",
+        "weekly_views": stats.get("weekly_views", 0),
+        "views_since_publish": stats.get("views_since_publish", 0),
+        "visit_requests_7d": stats.get("visit_requests_7d", 0),
+        "visit_requests_total": stats.get("visit_requests_total", 0),
+        "published_at": stats.get("published_at"),
+        "first_published_at": stats.get("first_published_at"),
+        "days_since_publish": stats.get("days_since_publish"),
         "items": items,
         "listings": items,
         "divar_profiles": divar,

@@ -1717,6 +1717,7 @@ def create_visit_request(
     if auto:
         rec["approved_at"] = now_iso
     requests.append(rec)
+    _record_listing_visit_requested(rec)
     try:
         from .special_visit_inbox import notify_special_owner_new_visit
 
@@ -1728,6 +1729,32 @@ def create_visit_request(
     except Exception:
         pass
     return rec, None
+
+
+def _record_listing_visit_requested(rec: Dict[str, Any] | None) -> None:
+    """فعالیت listing_visit_requested. شکست ثبت، درخواست بازدید را برنمی‌گرداند."""
+    if not isinstance(rec, dict):
+        return
+    try:
+        from app.foundation.activity_store import append_activity
+
+        code = str(rec.get("land_code") or "").strip()
+        append_activity(
+            action="listing_visit_requested",
+            actor_key=str(rec.get("partner_phone") or "").strip(),
+            actor_role="partner",
+            entity_type="visit_request",
+            entity_id=str(rec.get("id") or "").strip(),
+            land_code=code,
+            summary="درخواست بازدید ثبت شد",
+            payload={
+                "visit_date": str(rec.get("visit_date") or ""),
+                "created_at": str(rec.get("created_at") or ""),
+            },
+            source="visit_requests",
+        )
+    except Exception:
+        pass
 
 
 def _notify_plus_user_new_visit(rec: Dict[str, Any] | None) -> None:
