@@ -7,27 +7,38 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from app.listings.service import _cycle_stamp, code_key
-from app.utils.dates import parse_iso_to_naive_utc, utcnow
+from app.utils.dates import utcnow
 
 _WEEK = timedelta(days=7)
 
 
+def as_utc_naive(value: datetime) -> datetime:
+    """همیشه naive UTC. آفست را قبل از حذف tzinfo به UTC برگردان."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def parse_ts(value: Any) -> Optional[datetime]:
+    """تاریخ بازدید/انتشار. Z و آفست به UTC می‌روند؛ تاریخ خراب None است."""
     if isinstance(value, datetime):
-        return value.replace(tzinfo=None) if value.tzinfo else value
+        return as_utc_naive(value)
     text = str(value or "").strip()
     if not text:
         return None
-    parsed = parse_iso_to_naive_utc(text)
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        parsed = None
     if parsed is not None:
-        return parsed
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        return as_utc_naive(parsed)
+    for fmt, size in (("%Y-%m-%d %H:%M:%S", 19), ("%Y-%m-%d", 10)):
         try:
-            return datetime.strptime(text[:19] if " " in text else text[:10], fmt)
+            return datetime.strptime(text[:size], fmt)
         except (TypeError, ValueError):
             continue
     return None
@@ -66,6 +77,8 @@ def _unique_viewers(
 ) -> int:
     seen: set[str] = set()
     for row in views:
+        if not isinstance(row, dict):
+            continue
         if not _same_code(row.get("code"), code):
             continue
         when = parse_ts(row.get("timestamp") or row.get("created_at"))
@@ -89,12 +102,14 @@ def _visit_count(
 ) -> int:
     total = 0
     for row in visits:
+        if not isinstance(row, dict):
+            continue
         if not _same_code(row.get("land_code") or row.get("code"), code):
             continue
         when = parse_ts(row.get("created_at") or row.get("timestamp"))
         if when is None or when < start:
             continue
-        if end is not None and when >= end:
+        if end is not None and when > end:
             continue
         total += 1
     return total
@@ -120,16 +135,15 @@ def listing_performance(
     }
     if not isinstance(land, dict):
         return dict(empty)
-    published_at = _cycle_stamp(land, "published_at") or None
-    first = _cycle_stamp(land, "first_published_at") or None
-    empty["published_at"] = published_at
-    empty["first_published_at"] = first
-    start = parse_ts(published_at) if published_at else None
+    published_raw = _cycle_stamp(land, "published_at") or None
+    first_raw = _cycle_stamp(land, "first_published_at") or None
+    start = parse_ts(published_raw) if published_raw else None
+    first = parse_ts(first_raw) if first_raw else None
+    empty["published_at"] = published_raw if start is not None else None
+    empty["first_published_at"] = first_raw if first is not None else None
     if start is None:
         return empty
-    ref = now or utcnow()
-    if ref.tzinfo is not None:
-        ref = ref.replace(tzinfo=None)
+    ref = as_utc_naive(now) if now is not None else utcnow()
     code = code_key(land)
     view_rows = load_view_rows(app) if views is None else views
     visit_rows = load_visit_rows(app) if visits is None else visits
@@ -168,9 +182,7 @@ def publish_to_visit_7d_kpi(
             listings = raw if isinstance(raw, list) else []
         if visits is None:
             visits = load_visit_rows(app)
-        ref = now or utcnow()
-        if ref.tzinfo is not None:
-            ref = ref.replace(tzinfo=None)
+        ref = as_utc_naive(now) if now is not None else utcnow()
         measured = 0
         hits = 0
         seen: set[str] = set()

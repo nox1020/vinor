@@ -2,7 +2,8 @@
 """آمار هفتهٔ اول، پیامک ۷۲ساعته، و سهم بازدید ظرف ۷ روز."""
 from __future__ import annotations
 
-from datetime import timedelta
+import threading
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -335,6 +336,217 @@ def test_publish_to_visit_kpi_uses_completed_seven_day_window(home):
     assert kpis["published_measured_count"] == 2
     assert kpis["published_with_visit_7d_count"] == 1
     assert kpis["publish_to_visit_7d_rate"] == 0.5
+
+
+def _write_store(home, name, text):
+    folder = home / "data"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_text(text, encoding="utf-8")
+
+
+def test_legacy_listing_without_published_at_stays_quiet(home):
+    from app.express_partner.my_property import page_payload
+    from app.listings.performance import listing_performance
+    from app.listings.quiet_nudge import maybe_send_quiet_listing_nudges
+    from app.listings.service import create_listing, load_listings, save_listings
+
+    private = create_listing({"title": "قدیمی", "price_total": 10}, owner="09120000000")
+    stats = listing_performance(private)
+    assert stats["published_at"] is None
+    assert stats["first_published_at"] is None
+    assert stats["days_since_publish"] is None
+    assert stats["weekly_views"] == 0
+    assert stats["visit_requests_total"] == 0
+
+    rows = load_listings()
+    rows.append({
+        "code": "legacy",
+        "owner": "09120000000",
+        "title": "منتشرِ بی‌تاریخ",
+        "source": "my_property_published",
+        "public": True,
+        "is_express": True,
+        "extras": {"published_for_sale": True, "listed_by_owner": True, "published_at": "not-a-date"},
+    })
+    save_listings(rows)
+    legacy = next(row for row in load_listings() if str(row.get("code")) == "legacy")
+    quiet = listing_performance(legacy, views=[{"code": "legacy", "ip": "1.1.1.1", "timestamp": "2026-10-01T00:00:00Z"}])
+    assert quiet["published_at"] is None
+    assert quiet["views_since_publish"] == 0
+    sent = []
+    assert maybe_send_quiet_listing_nudges(
+        now=utcnow() + timedelta(days=30),
+        sender=lambda phone, message: sent.append(phone) or {"ok": True},
+    ) == []
+    assert sent == []
+    page = page_payload("09120000000")
+    assert page["items"]
+    assert all(item["published_at"] is None or item["code"] != "legacy" for item in page["items"])
+
+
+def test_missing_and_corrupt_view_and_visit_files(home):
+    from app.listings.performance import listing_performance
+    from app.listings.quiet_nudge import maybe_send_quiet_listing_nudges
+
+    land = _publish(images=["a.jpg", "b.jpg"])
+    code = str(land["code"])
+    now = utcnow()
+    _stamp(code, iso_z(now - timedelta(hours=80)))
+    land = __import__("app.listings.service", fromlist=["get_listing"]).get_listing(code)
+
+    assert listing_performance(land, now=now)["weekly_views"] == 0
+    assert listing_performance(land, now=now)["visit_requests_total"] == 0
+
+    _write_store(home, "express_partner_views.json", "{not json")
+    _write_store(home, "express_visit_requests.json", "")
+    assert listing_performance(land, now=now)["views_since_publish"] == 0
+    sent = []
+    assert maybe_send_quiet_listing_nudges(
+        now=now,
+        sender=lambda phone, message: sent.append(message) or {"ok": True},
+    ) == []
+    assert sent == []
+
+    _write_store(home, "express_visit_requests.json", '{"no": "list"}')
+    _write_store(home, "express_partner_views.json", '{"1.1.1.1": 3}')
+    assert listing_performance(land, now=now)["weekly_views"] == 0
+    assert maybe_send_quiet_listing_nudges(now=now, sender=lambda *a: {"ok": True}) == []
+
+    _write_store(home, "express_partner_views.json", json_dup(code))
+    _write_store(home, "express_visit_requests.json", "[]")
+    from_file = listing_performance(land, now=now)
+    assert from_file["views_since_publish"] == 1
+    assert from_file["visit_requests_total"] == 0
+    stats = listing_performance(
+        land,
+        now=now,
+        views=[
+            {"code": code, "ip": "1.1.1.1", "timestamp": iso_z(now - timedelta(hours=2))},
+            {"code": code, "ip": "1.1.1.1", "timestamp": iso_z(now - timedelta(hours=1))},
+            {"code": code, "ip": " 1.1.1.1 ", "timestamp": iso_z(now - timedelta(hours=1))},
+            {"code": code, "ip": "", "timestamp": iso_z(now)},
+            "not-a-row",
+            {"code": code, "ip": "8.8.8.8", "timestamp": iso_z(now - timedelta(days=8))},
+            {"code": code, "ip": "9.9.9.9", "timestamp": iso_z(now - timedelta(hours=3))},
+        ],
+    )
+    assert stats["views_since_publish"] == 2
+    assert stats["weekly_views"] == 2
+
+
+def json_dup(code):
+    import json
+    return json.dumps([
+        {"code": code, "ip": "1.1.1.1", "timestamp": "2026-10-17T00:00:00Z"},
+        {"code": code, "ip": "1.1.1.1", "timestamp": "2026-10-17T01:00:00Z"},
+    ])
+
+
+def test_timezone_offset_counts_as_utc(home):
+    from app.listings.performance import listing_performance
+    from app.listings.quiet_nudge import maybe_send_quiet_listing_nudges
+    from app.listings.service import get_listing
+
+    land = _publish(images=["a.jpg", "b.jpg"])
+    code = str(land["code"])
+    # ۱۲:۰۰ به وقت تهران = ۰۸:۳۰ UTC
+    _stamp(code, "2026-10-14T12:00:00+03:30", first_published_at="2026-10-14T12:00:00+03:30")
+    land = get_listing(code)
+    now = datetime(2026, 10, 17, 8, 30, tzinfo=timezone.utc)
+    stats = listing_performance(
+        land,
+        now=now,
+        views=[
+            {"code": code, "ip": "1.1.1.1", "timestamp": "2026-10-16T12:00:00+03:30"},
+            {"code": code, "ip": "2.2.2.2", "timestamp": "2026-10-13T12:00:00+03:30"},
+        ],
+        visits=[],
+    )
+    assert stats["days_since_publish"] == 3
+    assert stats["views_since_publish"] == 1
+    assert stats["weekly_views"] == 1
+    assert stats["published_at"] == "2026-10-14T12:00:00+03:30"
+
+    almost = datetime(2026, 10, 17, 8, 29, 59, tzinfo=timezone.utc)
+    assert maybe_send_quiet_listing_nudges(now=almost, sender=lambda *a: {"ok": True}) == []
+    sent = maybe_send_quiet_listing_nudges(now=now, sender=lambda *a: {"ok": True})
+    assert len(sent) == 1
+
+
+def test_unpublish_before_72h_and_failed_sender_can_retry(home):
+    from app.listings.quiet_nudge import maybe_send_quiet_listing_nudges
+    from app.listings.service import get_listing, unpublish_listing
+
+    land = _publish(images=["a.jpg", "b.jpg"])
+    code = str(land["code"])
+    now = utcnow()
+    _stamp(code, iso_z(now - timedelta(hours=80)))
+
+    hidden, err, changed = unpublish_listing("09120000000", land_code=code)
+    assert err is None and changed is True
+    assert get_listing(code)["published_at"]
+    assert maybe_send_quiet_listing_nudges(now=now, sender=lambda *a: {"ok": True}) == []
+
+    from app.listings.service import publish_listing
+
+    again, again_err, again_changed = publish_listing(
+        "09120000000",
+        payment_method="نقدی",
+        commission_pct=2,
+        land_code=code,
+    )
+    assert again_err is None and again_changed is True
+    cycle = iso_z(now - timedelta(hours=73))
+    _stamp(code, cycle, first_published_at=get_listing(code)["first_published_at"])
+
+    def boom(phone, message):
+        raise RuntimeError("sms down")
+
+    assert maybe_send_quiet_listing_nudges(now=now, sender=boom) == []
+    assert "quiet_nudge_published_at" not in (get_listing(code).get("extras") or {})
+
+    assert maybe_send_quiet_listing_nudges(now=now, sender=lambda *a: {"ok": False}) == []
+    assert "quiet_nudge_published_at" not in (get_listing(code).get("extras") or {})
+
+    sent = maybe_send_quiet_listing_nudges(now=now, sender=lambda *a: {"ok": True})
+    assert len(sent) == 1
+    assert get_listing(code)["extras"]["quiet_nudge_published_at"] == cycle
+
+
+def test_two_scheduler_ticks_send_one_sms(home):
+    from app.listings.quiet_nudge import maybe_send_quiet_listing_nudges
+
+    land = _publish(images=["a.jpg", "b.jpg"])
+    code = str(land["code"])
+    now = utcnow()
+    _stamp(code, iso_z(now - timedelta(hours=80)))
+    sent = []
+    gate = threading.Barrier(2)
+
+    def sender(phone, message):
+        sent.append(phone)
+        try:
+            gate.wait(timeout=3)
+        except threading.BrokenBarrierError:
+            pass
+        return {"ok": True}
+
+    errors = []
+
+    def run():
+        try:
+            maybe_send_quiet_listing_nudges(now=now, sender=sender)
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert errors == []
+    assert sent == ["09120000000"]
 
 
 def test_quiet_nudge_is_on_the_reach_scheduler():

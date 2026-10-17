@@ -6,11 +6,12 @@
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from app.listings.performance import listing_performance, load_visit_rows, parse_ts
+from app.listings.performance import as_utc_naive, listing_performance, parse_ts
 from app.listings.service import (
     _cycle_stamp,
     _read_json,
@@ -112,6 +113,29 @@ def _owner_mobile(land: Dict[str, Any]) -> str:
     return ""
 
 
+def read_visit_store(app=None) -> Tuple[bool, List[dict]]:
+    """فایل نبود یعنی لیست خالی. JSON خراب یا غیرلیست یعنی نخواندنی.
+
+    پیامک در حالت نخواندنی ارسال نمی‌شود تا خرابی فایل مثل «صفر بازدید» دیده نشود.
+    """
+    try:
+        from app.utils.storage import data_dir
+
+        path = os.path.join(data_dir(app), "express_visit_requests.json")
+    except Exception:
+        return False, []
+    if not os.path.exists(path):
+        return True, []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        return False, []
+    if not isinstance(data, list):
+        return False, []
+    return True, [row for row in data if isinstance(row, dict)]
+
+
 def _due(land: Dict[str, Any], now: datetime, visits: List[dict]) -> bool:
     if not is_published_for_sale(land):
         return False
@@ -138,7 +162,9 @@ def _claim(
         items = _read_json(listings_path(app))
         if not isinstance(items, list):
             return None
-        visits = load_visit_rows(app)
+        readable, visits = read_visit_store(app)
+        if not readable:
+            return None
         matched = [
             land
             for land in items
@@ -199,9 +225,7 @@ def maybe_send_quiet_listing_nudges(
     """آگهی‌های ساکت را یک‌بار در هر چرخه پیامک کن. ارسال ناموفق نشانه را برمی‌دارد."""
     if not quiet_nudge_enabled():
         return []
-    ref = now or utcnow()
-    if ref.tzinfo is not None:
-        ref = ref.replace(tzinfo=None)
+    ref = as_utc_naive(now) if now is not None else utcnow()
     send = sender or _default_sender
     sent: List[Dict[str, Any]] = []
     try:
@@ -210,7 +234,9 @@ def maybe_send_quiet_listing_nudges(
         return []
     if not isinstance(items, list):
         return []
-    visits = load_visit_rows(app)
+    readable, visits = read_visit_store(app)
+    if not readable:
+        return []
     seen: set[str] = set()
     for land in items:
         if not isinstance(land, dict):
