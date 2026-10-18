@@ -134,6 +134,88 @@ def test_guest_reaches_the_inventory_without_the_landing_redirect(tmp_path, monk
     assert "users" in body
 
 
+def test_shapes_describe_routes_without_values_or_rewriting_the_db(tmp_path, monkeypatch):
+    import urllib.request
+
+    instance = tmp_path / "instance"
+    phone = "09120001301"
+    user = instance / "invest" / "users" / phone
+    user.mkdir(parents=True)
+    db_path = user / "invest.db"
+    import invest.backend  # noqa: F401 — puts invest_app on sys.path
+    from invest_app.database.connection import init_database
+
+    init_database(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        INSERT INTO assets (name, symbol, quantity, avg_buy_price, current_price, notes, created_at, updated_at)
+        VALUES ('طلا۱۲۳', 'X', 1.5, 10, 12, '', 't', 't')
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO trades (
+            asset_id, status, quantity, buy_price, buy_date, created_at, updated_at
+        ) VALUES (1, 'open', 1.5, 10, '2024-01-01', 't', 't')
+        """
+    )
+    conn.commit()
+    conn.close()
+    before = _stamp(db_path)
+
+    def _offline(*_args, **_kwargs):
+        raise OSError("offline")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _offline)
+    monkeypatch.setenv("VINOR_WEBHOOK_SECRET", SECRET)
+    app = Flask(__name__, instance_path=str(instance))
+    app.secret_key = "test-session-secret"
+    app.config["TESTING"] = True
+    from app.routes.public import healthz_invest_data
+
+    app.add_url_rule("/healthz/invest-data", view_func=healthz_invest_data)
+    client = app.test_client()
+    missing = client.get(
+        "/healthz/invest-data?shapes=1",
+        headers={"X-Vinor-Otp-Diag": SECRET},
+    )
+    assert missing.status_code == 400
+
+    response = client.get(
+        "/healthz/invest-data?phone_last4=1301&shapes=1",
+        headers={"X-Vinor-Otp-Diag": SECRET},
+    )
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert phone not in text
+    assert "طلا" not in text
+    assert "999" not in text
+    body = response.get_json()
+    shape = body["shapes"][0]
+    assert shape["phone_last4"] == "1301"
+    assert shape["source_changed"] is False
+    assert shape["tables"]["assets"]["name"]["persian_digits"] is True
+    assert shape["tables"]["assets"]["name"]["types"]["string"] == 1
+    assert shape["tables"]["trades"]["sell_price"]["nulls"] == 1
+    assert shape["tables"]["trades"]["quantity"]["types"]["float"] == 1
+    assets = shape["routes"]["/invest/api/v1/assets"]
+    assert assets["status"] == 200
+    assert assets["error"] is None
+    assert assets["fields"]["items[].id"]["types"] == {"int": 1}
+    assert assets["fields"]["items[].name"]["persian_digits"] is True
+    assert "str_len" in assets["fields"]["items[].name"]
+    assert shape["routes"]["/invest/api/v1/dashboard"]["status"] == 200
+    assert shape["routes"]["/invest/api/v1/trades/open"]["status"] == 200
+    assert shape["routes"]["/invest/api/v1/checks"]["status"] == 200
+    assert _stamp(db_path) == before
+
+
+def _stamp(path: Path):
+    st = path.stat()
+    return (st.st_size, st.st_mtime_ns)
+
+
 def test_missing_root_is_empty_and_not_created(tmp_path, monkeypatch):
     instance = tmp_path / "empty-instance"
     instance.mkdir()

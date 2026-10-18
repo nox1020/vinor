@@ -544,7 +544,17 @@ def healthz_invest_data():
         return resp
     from invest.backend.data_diag import invest_data_report
 
-    payload = invest_data_report(Path(current_app.instance_path), phone_last4=last4)
+    shapes = (request.args.get("shapes") or "").strip().lower() in ("1", "true", "yes", "on")
+    if shapes and not last4:
+        resp = jsonify({"ok": False, "error": "phone_last4"})
+        resp.status_code = 400
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    payload = invest_data_report(
+        Path(current_app.instance_path),
+        phone_last4=last4,
+        shapes=shapes,
+    )
     resp = jsonify(payload)
     resp.headers["Cache-Control"] = "no-store"
     return resp

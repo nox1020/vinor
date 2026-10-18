@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 from invest_app.models.asset import Asset
 from invest_app.models.settings import AppSettings
 
-from ..config import invest_api_version, market_index_db_path
+from ..config import diag_override, invest_api_version, market_index_db_path
 from ..auth import current_invest_phone, require_invest_auth
 from ..context import close_request_context, get_request_context
 from ..serializers import asset_to_dict, metrics_to_dict, settings_to_dict, trade_to_dict
@@ -20,6 +20,9 @@ _market_index_service = None
 
 def _market_index():
     """Process-wide shared market index service."""
+    override = diag_override() or {}
+    if override.get("market") is not None:
+        return override["market"]
     global _market_index_service
     if _market_index_service is None:
         from invest_app.services.market_index_service import MarketIndexService
