@@ -1,5 +1,6 @@
 # app/routes/public.py
 import os
+from pathlib import Path
 from urllib.parse import quote
 
 from flask import (
@@ -522,6 +523,28 @@ def healthz_otp():
         "lines": account.get("lines"),
         "attempts": attempts,
     }
+    resp = jsonify(payload)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@main_bp.route("/healthz/invest-data", methods=("GET",), endpoint="healthz_invest_data")
+def healthz_invest_data():
+    """Read-only Invest file inventory. Token is VINOR_WEBHOOK_SECRET."""
+    if not _otp_diag_authorized():
+        resp = jsonify({"ok": False})
+        resp.status_code = 401
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    last4 = (request.args.get("phone_last4") or "").strip()
+    if last4 and (len(last4) != 4 or not last4.isdigit()):
+        resp = jsonify({"ok": False, "error": "phone_last4"})
+        resp.status_code = 400
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    from invest.backend.data_diag import invest_data_report
+
+    payload = invest_data_report(Path(current_app.instance_path), phone_last4=last4)
     resp = jsonify(payload)
     resp.headers["Cache-Control"] = "no-store"
     return resp
