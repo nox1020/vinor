@@ -114,6 +114,26 @@ def test_inventory_reports_sizes_without_values_or_creating_files(tmp_path, monk
     assert after == before
 
 
+def test_guest_reaches_the_inventory_without_the_landing_redirect(tmp_path, monkeypatch):
+    monkeypatch.setenv("INSTANCE_PATH", str(tmp_path / "instance"))
+    monkeypatch.setenv("VINOR_WEBHOOK_SECRET", SECRET)
+    from app import create_app
+
+    client = create_app().test_client()
+    guest = client.get("/healthz/invest-data", follow_redirects=False)
+    assert guest.status_code == 401
+    assert guest.is_json
+    allowed = client.get(
+        "/healthz/invest-data",
+        headers={"X-Vinor-Otp-Diag": SECRET},
+        follow_redirects=False,
+    )
+    assert allowed.status_code == 200
+    body = allowed.get_json()
+    assert body["ok"] is True
+    assert "users" in body
+
+
 def test_missing_root_is_empty_and_not_created(tmp_path, monkeypatch):
     instance = tmp_path / "empty-instance"
     instance.mkdir()

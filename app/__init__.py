@@ -950,6 +950,8 @@ def create_app() -> Flask:
             return
 
         safe_prefixes = ("/static", "/api", "/uploads", "/auth", "/invest")
+        if path_now == "/healthz" or path_now.startswith("/healthz/"):
+            return
         if path_now.startswith(safe_prefixes):
             if debug:
                 current_app.logger.debug("PASS (prefix): %s", path_now)
