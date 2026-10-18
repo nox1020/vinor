@@ -475,6 +475,58 @@ def enamad_seal():
         abort(502)
 
 
+def _otp_diag_authorized() -> bool:
+    import hmac
+
+    from app.utils.secrets import get_webhook_secret
+
+    secret = (get_webhook_secret() or "").strip()
+    presented = (
+        request.headers.get("X-Vinor-Otp-Diag") or request.args.get("token") or ""
+    ).strip()
+    if not secret or not presented:
+        return False
+    try:
+        return hmac.compare_digest(presented, secret)
+    except Exception:
+        return False
+
+
+@main_bp.route("/healthz/otp", methods=("GET",), endpoint="healthz_otp")
+def healthz_otp():
+    """Last OTP gateway attempts. Token is VINOR_WEBHOOK_SECRET, never echoed."""
+    if not _otp_diag_authorized():
+        resp = jsonify({"ok": False})
+        resp.status_code = 401
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    from app.auth.otp.config import expose_otp_in_dev, sms_health
+    from app.auth.otp.send_log import fetch_sms_ir_account, recent_attempts
+    from app.utils.secrets import get_sms_line_number, get_sms_template_id
+
+    try:
+        account = fetch_sms_ir_account()
+    except Exception:
+        account = {"credit": {"http": 0, "body": {"error": "unavailable"}}, "lines": None}
+    try:
+        attempts = recent_attempts()
+    except Exception:
+        attempts = []
+    payload = {
+        "ok": True,
+        "sms": sms_health(),
+        "expose_in_dev": bool(expose_otp_in_dev()),
+        "template_id": get_sms_template_id(),
+        "line": get_sms_line_number(),
+        "credit": account.get("credit"),
+        "lines": account.get("lines"),
+        "attempts": attempts,
+    }
+    resp = jsonify(payload)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @main_bp.route("/healthz", methods=("GET", "HEAD"), endpoint="healthz")
 def healthz():
     """پین سلامت برای تشخیص آنلاین/آفلاین در کلاینت.

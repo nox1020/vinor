@@ -436,6 +436,93 @@ class AuthApiTests(_OtpStoreCase):
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.get_json().get("logged_in"))
 
+    def test_delivery_failure_includes_gateway(self) -> None:
+        failed = OTPDeliveryResult(
+            success=False,
+            provider="sms",
+            failure_kind=KIND_FAILED,
+            error_code="FAILED",
+            gateway={
+                "attempts": [
+                    {
+                        "path": "verify",
+                        "http": 200,
+                        "status": 113,
+                        "message": "قالب پیدا نشد",
+                        "message_id": "",
+                        "duration_ms": 40,
+                    }
+                ]
+            },
+        )
+        app = self._app()
+        with mock.patch("app.auth.otp.dispatch.dispatch_otp", return_value=failed):
+            resp = app.test_client().post("/auth/request-otp", json={"phone": "09120000009"})
+        self.assertEqual(resp.status_code, 502)
+        body = resp.get_json()
+        self.assertEqual(body["error"], "OTP_DELIVERY_FAILED")
+        self.assertEqual(body["gateway"]["attempts"][0]["status"], 113)
+        self.assertNotIn("لطفاً کمی صبر کنید و دوباره تلاش کنید.", body["message"])
+
+    def test_gateway_log_scrubs_the_code(self) -> None:
+        from app.auth.otp.send_log import recent_attempts
+        from app.services.sms import send_sms_code
+
+        body = {"status": 16, "message": "bad 12345 for 09121234567", "data": {"messageId": 99887766}}
+        with mock.patch("app.services.sms.get_sms_api_key", return_value="test-key"):
+            with mock.patch(
+                "app.services.sms._send_otp_verify",
+                return_value={"ok": False, "status": 400, "body": body},
+            ):
+                with mock.patch(
+                    "app.services.sms.send_sms_direct",
+                    return_value={"ok": False, "status": 200, "body": {"status": 102, "message": "credit"}},
+                ):
+                    result = send_sms_code("09121234567", "12345", record_history=False)
+        dumped = str(result["attempts"])
+        self.assertNotIn("12345", dumped)
+        self.assertNotIn("09121234567", dumped)
+        self.assertEqual(result["attempts"][0]["path"], "verify")
+        self.assertEqual(result["attempts"][1]["path"], "service_line")
+        logged = str(recent_attempts())
+        self.assertNotIn("12345", logged)
+        self.assertNotIn("09121234567", logged)
+        self.assertIn("4567", logged)
+
+    def test_healthz_otp_requires_the_webhook_secret(self) -> None:
+        from flask import Flask
+
+        from app.routes.public import healthz_otp
+
+        app = Flask(__name__, instance_path=self.tmp)
+        app.config["TESTING"] = True
+        app.add_url_rule("/healthz/otp", view_func=healthz_otp)
+        client = app.test_client()
+        with mock.patch.dict(os.environ, {"VINOR_WEBHOOK_SECRET": "ci-only-not-secret"}):
+            denied = client.get("/healthz/otp")
+            self.assertEqual(denied.status_code, 401)
+            with mock.patch(
+                "app.auth.otp.send_log.fetch_sms_ir_account",
+                return_value={"credit": {"http": 200, "body": {"status": 1, "data": 12}}, "lines": None},
+            ):
+                allowed = client.get("/healthz/otp", headers={"X-Vinor-Otp-Diag": "ci-only-not-secret"})
+        self.assertEqual(allowed.status_code, 200)
+        text = allowed.get_data(as_text=True)
+        self.assertNotIn("ci-only-not-secret", text)
+        self.assertIn("attempts", allowed.get_json())
+
+    def test_partner_wait_copy_names_the_reason(self) -> None:
+        from app.auth.otp.errors import OTP_COOLDOWN, OTP_RATE_LIMITED
+        from app.express_partner.routes import _partner_otp_fail_payload
+
+        cooldown, status = _partner_otp_fail_payload(OTP_COOLDOWN, 45)
+        limited, limited_status = _partner_otp_fail_payload(OTP_RATE_LIMITED)
+        self.assertEqual(status, 429)
+        self.assertEqual(limited_status, 429)
+        self.assertIn("45", cooldown)
+        self.assertNotIn("لطفاً کمی صبر کنید و دوباره تلاش کنید.", cooldown)
+        self.assertNotIn("لطفاً کمی صبر کنید و دوباره تلاش کنید.", limited)
+
 
 class DeliveryAndE2ETests(_OtpStoreCase):
     def test_rejected_send_does_not_start_cooldown(self) -> None:

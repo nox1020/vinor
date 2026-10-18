@@ -6,6 +6,7 @@ sms.ir — ارسال OTP و پیامک قالب‌دار/مستقیم.
 """
 import re
 import threading
+import time
 
 import requests
 from flask import current_app
@@ -280,6 +281,25 @@ def _log_otp_failure(mobile: str, result: dict) -> None:
         pass
 
 
+def _note_gateway_attempt(path: str, result: dict, started: float, digits: str, mobile: str) -> dict:
+    """Remember one sms.ir call. Never keep the code or the full number."""
+    from app.auth.otp.send_log import public_attempt, record_attempt, summarize_attempt
+
+    view = summarize_attempt(
+        phone=mobile,
+        http_status=(result or {}).get("status"),
+        path=path,
+        duration_ms=int((time.perf_counter() - started) * 1000),
+        body=(result or {}).get("body"),
+        code=digits,
+    )
+    try:
+        record_attempt(view)
+    except Exception:
+        pass
+    return public_attempt(view)
+
+
 def send_sms_code(
     phone: str,
     code: str,
@@ -312,11 +332,15 @@ def send_sms_code(
         }
 
     template_id = get_sms_template_id()
+    attempts: list[dict] = []
+    started = time.perf_counter()
     result = _send_otp_verify(mobile, digits)
+    attempts.append(_note_gateway_attempt("verify", result, started, digits, mobile))
     used_template = bool(result.get("ok"))
     if not used_template and _verify_explicitly_rejected(result):
         # The template was refused, so no SMS left. One direct send on the service line.
         _log_otp_failure(mobile, result)
+        started = time.perf_counter()
         result = send_sms_direct(
             mobile,
             format_otp_sms_message(digits),
@@ -325,10 +349,14 @@ def send_sms_code(
             recipient_name=recipient_name,
             record_history=False,
         )
+        attempts.append(_note_gateway_attempt("service_line", result, started, digits, mobile))
         used_template = False
 
     if not result.get("ok"):
         _log_otp_failure(mobile, result)
+    if isinstance(result, dict):
+        result = dict(result)
+        result["attempts"] = attempts
 
     if record_history and mobile:
         try:

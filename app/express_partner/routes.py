@@ -847,7 +847,7 @@ def _store_otp_session(phone: str, code: str | None = None) -> None:
         pass
 
 
-def _partner_otp_fail_payload(issued_err: str) -> tuple[str, int]:
+def _partner_otp_fail_payload(issued_err: str, retry_after: int = 0) -> tuple[str, int]:
     from app.auth.otp.errors import (
         OTP_COOLDOWN,
         OTP_INVALID_PHONE,
@@ -856,13 +856,19 @@ def _partner_otp_fail_payload(issued_err: str) -> tuple[str, int]:
 
     if issued_err == OTP_INVALID_PHONE:
         return "شماره موبایل معتبر نیست.", 400
-    if issued_err in (OTP_RATE_LIMITED, OTP_COOLDOWN):
-        return "لطفاً کمی صبر کنید و دوباره تلاش کنید.", 429
+    if issued_err == OTP_COOLDOWN:
+        seconds = max(1, int(retry_after or 60))
+        return (
+            f"کد تأیید ارسال شده است. همان را وارد کنید، یا {seconds} ثانیه دیگر دوباره درخواست کنید.",
+            429,
+        )
+    if issued_err == OTP_RATE_LIMITED:
+        return "سقف ارسال کد برای این شماره پر شده. حدود یک ساعت دیگر دوباره تلاش کنید.", 429
     return "ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.", 502
 
 
-def _issue_partner_login_otp(phone: str) -> tuple[bool, str]:
-    """Generate + hash-store + SMS dispatch. Returns (ok, error_code)."""
+def _issue_partner_login_otp(phone: str) -> tuple[bool, str, int]:
+    """Generate + hash-store + SMS dispatch. Returns (ok, error_code, retry_after)."""
     from app.auth.otp.errors import OTP_RATE_LIMITED
     from app.auth.otp.request_meta import client_ip, client_user_agent
     from app.auth.otp.service import PURPOSE_PARTNER, partner_login_digits, request_otp
@@ -878,8 +884,8 @@ def _issue_partner_login_otp(phone: str) -> tuple[bool, str]:
     if issued.accepted or issued.challenge_id:
         _store_otp_session(phone)
     if not issued.accepted:
-        return False, issued.error or OTP_RATE_LIMITED
-    return True, ""
+        return False, issued.error or OTP_RATE_LIMITED, int(issued.retry_after or 0)
+    return True, "", 0
 
 
 def _ensure_user_record_background(phone: str) -> None:
@@ -8126,9 +8132,9 @@ def login():
             flash(msg, FLASH_AUTH_ERROR)
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
-        issued_ok, issued_err = _issue_partner_login_otp(phone)
+        issued_ok, issued_err, retry_after = _issue_partner_login_otp(phone)
         if not issued_ok:
-            msg, status = _partner_otp_fail_payload(issued_err)
+            msg, status = _partner_otp_fail_payload(issued_err, retry_after)
             if wants_json:
                 return jsonify({'ok': False, 'error': msg}), status
             flash(msg, FLASH_AUTH_WARNING if status == 429 else FLASH_AUTH_ERROR)
@@ -10086,9 +10092,9 @@ def api_login_request():
     if not is_valid_iran_mobile(phone):
         return jsonify({'success': False, 'error': 'شماره موبایل معتبر نیست.'}), 400
 
-    issued_ok, issued_err = _issue_partner_login_otp(phone)
+    issued_ok, issued_err, retry_after = _issue_partner_login_otp(phone)
     if not issued_ok:
-        msg, status = _partner_otp_fail_payload(issued_err)
+        msg, status = _partner_otp_fail_payload(issued_err, retry_after)
         return jsonify({'success': False, 'error': msg}), status
     return jsonify({'success': True, 'message': 'کد تأیید ارسال شد.'})
 
@@ -10149,9 +10155,9 @@ def otp_resend():
             return jsonify({'ok': False, 'error': 'شماره معتبر نیست.'}), 400
         return jsonify({'ok': False, 'error': 'شماره معتبر نیست.'}), 400
     try:
-        issued_ok, issued_err = _issue_partner_login_otp(phone)
+        issued_ok, issued_err, retry_after = _issue_partner_login_otp(phone)
         if not issued_ok:
-            msg, status = _partner_otp_fail_payload(issued_err)
+            msg, status = _partner_otp_fail_payload(issued_err, retry_after)
             return jsonify({'ok': False, 'error': msg}), status
         if request.is_json:
             return jsonify({'ok': True, 'message': 'کد تأیید مجدد ارسال شد.'})

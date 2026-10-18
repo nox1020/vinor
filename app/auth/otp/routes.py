@@ -106,13 +106,15 @@ def request_otp_view():
         return resp
 
     if result.error in (OTP_DELIVERY_FAILED, OTP_PROVIDER_UNAVAILABLE):
-        return jsonify(
-            {
-                "success": False,
-                "error": result.error,
-                "message": "ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.",
-            }
-        ), _VERIFY_HTTP.get(result.error, 502)
+        payload = {
+            "success": False,
+            "error": result.error,
+            "message": "ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.",
+        }
+        gateway = (result.extra or {}).get("gateway")
+        if gateway:
+            payload["gateway"] = gateway
+        return jsonify(payload), _VERIFY_HTTP.get(result.error, 502)
 
     payload = {
         "success": True,

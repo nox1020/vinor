@@ -66,8 +66,11 @@ class SmsOTPProvider:
                 failure_kind=KIND_UNEXPECTED,
             )
 
-        kind = _kind_from_sms_result(result if isinstance(result, dict) else {})
+        payload = result if isinstance(result, dict) else {}
+        kind = _kind_from_sms_result(payload)
         ok = kind == KIND_SUCCESS
+        attempts = payload.get("attempts") if isinstance(payload.get("attempts"), list) else None
+        gateway = {"attempts": attempts} if attempts else None
         if ok:
             _log.info(
                 "otp requested phone_hash=%s provider=sms_ir request_id=%s result=success",
@@ -80,7 +83,7 @@ class SmsOTPProvider:
                 hash_identifier(phone),
                 request_id,
                 kind,
-                (result or {}).get("status") if isinstance(result, dict) else None,
+                payload.get("status"),
             )
         return OTPDeliveryResult(
             success=ok,
@@ -90,4 +93,5 @@ class SmsOTPProvider:
             retryable=kind in (KIND_TIMEOUT, KIND_SERVER_ERROR),
             configured=True,
             failure_kind=kind,
+            gateway=gateway,
         )

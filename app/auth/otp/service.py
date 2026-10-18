@@ -163,11 +163,15 @@ def request_otp(
             err = OTP_PROVIDER_UNAVAILABLE
         else:
             err = OTP_DELIVERY_FAILED
+        extra = {}
+        if delivery.gateway:
+            extra["gateway"] = delivery.gateway
         return OTPRequestResult(
             accepted=False,
             error=err,
             challenge_id=rec["id"],
             debug_code=debug_code,
+            extra=extra,
         )
     return OTPRequestResult(accepted=True, challenge_id=rec["id"], debug_code=debug_code)
 

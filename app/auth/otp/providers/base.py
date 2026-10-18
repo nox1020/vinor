@@ -23,6 +23,7 @@ class OTPDeliveryResult:
     retryable: bool = False
     configured: bool = True
     failure_kind: str = ""
+    gateway: dict | None = None
 
 
 class SMSProvider(Protocol):
