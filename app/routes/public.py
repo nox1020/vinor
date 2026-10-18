@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from flask import (
-    render_template, send_from_directory, request, abort,
+    render_template, send_from_directory, send_file, request, abort,
     redirect, url_for, session, make_response, current_app,
     has_app_context, has_request_context, jsonify,
 )
@@ -558,6 +558,61 @@ def healthz_invest_data():
     resp = jsonify(payload)
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+@main_bp.route("/healthz/invest-backup", methods=("GET",), endpoint="healthz_invest_backup")
+def healthz_invest_backup():
+    """Zip of Invest user databases. Token is VINOR_WEBHOOK_SECRET, never logged."""
+    import shutil
+    import tempfile
+
+    if not _otp_diag_authorized():
+        resp = jsonify({"ok": False})
+        resp.status_code = 401
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    from invest.backend.backup_export import build_invest_backup, reserve_backup_slot
+
+    allowed, retry_after = reserve_backup_slot()
+    if not allowed:
+        resp = jsonify({"ok": False, "error": "rate_limited", "retry_after": retry_after})
+        resp.status_code = 429
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["Retry-After"] = str(retry_after)
+        return resp
+    work = tempfile.mkdtemp(prefix="vinor-invest-backup-")
+
+    def _stream_zip(path: Path):
+        with open(path, "rb") as handle:
+            while True:
+                chunk = handle.read(1024 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+
+    try:
+        built = build_invest_backup(Path(current_app.instance_path), Path(work))
+        response = current_app.response_class(
+            _stream_zip(Path(built["zip_path"])),
+            mimetype="application/zip",
+        )
+    except Exception:
+        shutil.rmtree(work, ignore_errors=True)
+        current_app.logger.exception("invest backup export failed")
+        resp = jsonify({"ok": False, "error": "backup_failed"})
+        resp.status_code = 500
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    download_name = built["download_name"]
+    response.headers["Content-Length"] = str(built["bytes"])
+    response.headers["Content-Disposition"] = f'attachment; filename="{download_name}"'
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Backup-Users"] = str(built["users"])
+    response.headers["X-Backup-Bytes"] = str(built["bytes"])
+    response.headers["X-Backup-Sha256"] = built["sha256"]
+    # direct passthrough would skip this callback; a normal body is closed by WSGI.
+    response.call_on_close(lambda: shutil.rmtree(work, ignore_errors=True))
+    return response
 
 
 @main_bp.route("/healthz", methods=("GET", "HEAD"), endpoint="healthz")
