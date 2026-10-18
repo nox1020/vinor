@@ -56,3 +56,31 @@ CREATE TABLE IF NOT EXISTS capital_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_date ON capital_snapshots (date);
+
+CREATE TABLE IF NOT EXISTS checks (
+    id            INTEGER PRIMARY KEY,
+    direction     TEXT NOT NULL,
+    amount        REAL NOT NULL,
+    issue_date    TEXT NOT NULL,
+    due_date      TEXT NOT NULL,
+    check_number  TEXT NOT NULL DEFAULT '',
+    sayad_id      TEXT NOT NULL DEFAULT '',
+    bank_name     TEXT NOT NULL DEFAULT '',
+    branch        TEXT NOT NULL DEFAULT '',
+    counterparty  TEXT NOT NULL DEFAULT '',
+    purpose       TEXT NOT NULL DEFAULT '',
+    note          TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    settled_date  TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_checks_due ON checks (due_date);
+CREATE INDEX IF NOT EXISTS idx_checks_status ON checks (status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_checks_sayad_active
+    ON checks (sayad_id)
+    WHERE sayad_id != '' AND status != 'cancelled';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_checks_number_active
+    ON checks (direction, bank_name, check_number)
+    WHERE check_number != '' AND status != 'cancelled';

@@ -392,7 +392,12 @@ def create_app() -> Flask:
     # Enable CORS for /api/* (mobile app consumption)
     try:
         from flask_cors import CORS  # type: ignore
-        CORS(app, resources={r"/api/*": {"origins": "*"}})
+        CORS(app, resources={
+            r"/api/*": {"origins": "*"},
+            # اپ وب کوکی نشست را می‌فرستد؛ مبدأ درخواست برمی‌گردد، نه ستاره.
+            r"/invest/api/*": {"origins": "*", "supports_credentials": True},
+            r"/auth/*": {"origins": "*", "supports_credentials": True},
+        })
     except Exception as e:
         app.logger.warning(f"CORS not enabled: {e}")
 

@@ -451,7 +451,40 @@ def get_settings():
             payload["gold_tmn_per_gram"] = float(gold)
     except (TypeError, ValueError):
         pass
+    _attach_client_checks(ctx, payload, None)
     return _json_ok(settings=payload)
+
+
+def _attach_client_checks(ctx, payload: dict, incoming) -> None:
+    """آینهٔ client_checks برای اپ فعلی. دفتر خالی تا اولین همگام‌سازی برنمی‌گردد."""
+    from invest_app.services.check_service import CheckError, CheckService
+
+    service = CheckService(ctx.conn)
+    if isinstance(incoming, dict) and "client_checks" in incoming:
+        raw = incoming.get("client_checks")
+        if isinstance(raw, str):
+            try:
+                import json
+                raw = json.loads(raw)
+            except (TypeError, ValueError):
+                raw = None
+        if not isinstance(raw, list):
+            payload["client_checks_error"] = {
+                "error": "validation",
+                "message": "فهرست چک‌ها نامعتبر است.",
+            }
+            if service.synced():
+                payload["client_checks"] = service.list_public()
+            return
+        try:
+            payload["client_checks"] = service.replace_snapshot(raw)
+        except CheckError as exc:
+            payload["client_checks_error"] = {"error": exc.code, "message": exc.message}
+            if service.synced():
+                payload["client_checks"] = service.list_public()
+        return
+    if service.synced():
+        payload["client_checks"] = service.list_public()
 
 
 @invest_api_bp.put("/settings")
@@ -525,7 +558,14 @@ def put_settings():
     phone = current_invest_phone()
     if phone and "first_run_done" in data:
         update_profile(phone, first_run_done=bool(data["first_run_done"]))
-    return _json_ok(settings=settings_to_dict(ctx.settings))
+    payload = settings_to_dict(ctx.settings)
+    _attach_client_checks(ctx, payload, data)
+    return _json_ok(settings=payload)
+
+
+from ..checks_api import register_check_routes
+
+register_check_routes()
 
 
 @invest_api_bp.get("/insights")

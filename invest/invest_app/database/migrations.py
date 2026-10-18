@@ -17,7 +17,37 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
+
+_MIGRATION_4_SQL = """
+CREATE TABLE IF NOT EXISTS checks (
+    id            INTEGER PRIMARY KEY,
+    direction     TEXT NOT NULL,
+    amount        REAL NOT NULL,
+    issue_date    TEXT NOT NULL,
+    due_date      TEXT NOT NULL,
+    check_number  TEXT NOT NULL DEFAULT '',
+    sayad_id      TEXT NOT NULL DEFAULT '',
+    bank_name     TEXT NOT NULL DEFAULT '',
+    branch        TEXT NOT NULL DEFAULT '',
+    counterparty  TEXT NOT NULL DEFAULT '',
+    purpose       TEXT NOT NULL DEFAULT '',
+    note          TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    settled_date  TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_checks_due ON checks (due_date);
+CREATE INDEX IF NOT EXISTS idx_checks_status ON checks (status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_checks_sayad_active
+    ON checks (sayad_id)
+    WHERE sayad_id != '' AND status != 'cancelled';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_checks_number_active
+    ON checks (direction, bank_name, check_number)
+    WHERE check_number != '' AND status != 'cancelled';
+"""
 
 _MIGRATION_2_SQL = """
 CREATE TABLE IF NOT EXISTS portfolio_snapshots (
@@ -100,6 +130,13 @@ def _migrate_2(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 2 (portfolio_snapshots)")
 
 
+def _migrate_4(conn: sqlite3.Connection) -> None:
+    """دفتر چک. جدول خالی است؛ ردیف‌های قبلی پاک نمی‌شوند."""
+    conn.executescript(_MIGRATION_4_SQL)
+    conn.commit()
+    logger.info("Applied schema migration version 4 (checks)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -128,6 +165,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 3 not in applied:
         _migrate_3(conn)
         _record(conn, 3)
+        applied = _applied_versions(conn)
+
+    if 4 not in applied:
+        _migrate_4(conn)
+        _record(conn, 4)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0
