@@ -60,8 +60,8 @@ def request_otp_view():
     """
     Request OTP (unauthenticated).
 
-    Rate limits: 1 / 60s / phone, 5 / hour / phone, 20 / hour / IP.
-    Always generic success copy except malformed phone and rate-limit.
+    Cooldown: 60s after a send the gateway accepted. Hourly: 5 / phone,
+    80 / public IP. A rejected send does not start the cooldown.
     Never returns the OTP in production.
     """
     data = request.get_json(silent=True) or {}
@@ -82,10 +82,20 @@ def request_otp_view():
             }
         ), 400
     if result.error in (OTP_RATE_LIMITED, OTP_COOLDOWN):
+        if result.error == OTP_COOLDOWN:
+            seconds = max(1, int(result.retry_after or 60))
+            message = (
+                f"کد تأیید ارسال شده است. همان را وارد کنید، "
+                f"یا {seconds} ثانیه دیگر دوباره درخواست کنید."
+            )
+            error_code = OTP_COOLDOWN
+        else:
+            message = "سقف ارسال کد برای این شماره پر شده. حدود یک ساعت دیگر دوباره تلاش کنید."
+            error_code = OTP_RATE_LIMITED
         body = {
             "success": False,
-            "error": OTP_RATE_LIMITED if result.error == OTP_RATE_LIMITED else OTP_COOLDOWN,
-            "message": "لطفاً کمی صبر کنید و دوباره تلاش کنید.",
+            "error": error_code,
+            "message": message,
         }
         if result.retry_after:
             body["retry_after"] = result.retry_after

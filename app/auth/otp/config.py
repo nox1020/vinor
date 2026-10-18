@@ -55,7 +55,10 @@ def otp_phone_hourly_limit() -> int:
 
 
 def otp_ip_hourly_limit() -> int:
-    return max(1, _env_int("VINOR_OTP_IP_HOURLY_LIMIT", 20))
+    # Carrier NAT shares one public address across many phones. The per-phone
+    # cap is the real limit; this only stops a single public address from
+    # flooding the gateway.
+    return max(1, _env_int("VINOR_OTP_IP_HOURLY_LIMIT", 80))
 
 
 def otp_digits() -> int:

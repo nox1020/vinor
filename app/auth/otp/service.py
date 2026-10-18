@@ -26,7 +26,13 @@ from .errors import (
     OTP_RATE_LIMITED,
 )
 from .phone import canonical_mobile, canonical_otp_code, is_canonical_mobile
-from .providers.base import KIND_INVALID_CREDENTIALS, KIND_TIMEOUT
+from .request_meta import ip_is_public
+from .providers.base import (
+    KIND_INVALID_CREDENTIALS,
+    KIND_RATE_LIMITED,
+    KIND_SERVER_ERROR,
+    KIND_TIMEOUT,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -61,18 +67,21 @@ def _rate_limited(phone: str, ip: str) -> tuple[bool, int]:
     phone_hash = hash_identifier(f"phone:{phone}")
     ip_hash = hash_identifier(f"ip:{ip or 'unknown'}")
     hour_ago = now - 3600
-    phone_n = store.count_rate_events("phone_send", phone_hash, since=hour_ago)
+    phone_n = store.count_rate_events("phone_sent", phone_hash, since=hour_ago)
     if phone_n >= otp_phone_hourly_limit():
         return True, 3600
-    ip_n = store.count_rate_events("ip_send", ip_hash, since=hour_ago)
-    if ip_n >= otp_ip_hourly_limit():
-        return True, 3600
+    if ip_is_public(ip):
+        ip_n = store.count_rate_events("ip_sent", ip_hash, since=hour_ago)
+        if ip_n >= otp_ip_hourly_limit():
+            return True, 3600
     return False, 0
 
 
 def _note_send(phone: str, ip: str) -> None:
-    store.record_rate_event("phone_send", hash_identifier(f"phone:{phone}"))
-    store.record_rate_event("ip_send", hash_identifier(f"ip:{ip or 'unknown'}"))
+    """Count only after the gateway accepted the SMS, or the result was ambiguous."""
+    store.record_rate_event("phone_sent", hash_identifier(f"phone:{phone}"))
+    if ip_is_public(ip):
+        store.record_rate_event("ip_sent", hash_identifier(f"ip:{ip or 'unknown'}"))
 
 
 def _cooldown_left(phone: str, purpose: str) -> int:
@@ -129,12 +138,23 @@ def request_otp(
         ip_hash=hash_identifier(ip) if ip else "",
         ua_hash=hash_identifier(user_agent) if user_agent else "",
     )
-    _note_send(mobile, ip)
 
     from .dispatch import dispatch_otp
 
     delivery = dispatch_otp(mobile, code, challenge_id=rec["id"], request_id=rec.get("request_id") or "")
     debug_code = code if expose_otp_in_dev() else ""
+    uncertain = delivery.failure_kind in (KIND_TIMEOUT, KIND_SERVER_ERROR, KIND_RATE_LIMITED)
+    # Dispatch records this too. Repeat it here so a rejected send cannot keep
+    # the last_sent_at that create_challenge stored before the gateway answered.
+    store.mark_delivery(
+        rec["id"],
+        provider=delivery.provider or "sms",
+        success=delivery.success,
+        request_id=delivery.request_id,
+        count_as_sent=uncertain,
+    )
+    if delivery.success or uncertain:
+        _note_send(mobile, ip)
     if not delivery.success:
         kind = delivery.failure_kind or ""
         if kind == KIND_TIMEOUT:

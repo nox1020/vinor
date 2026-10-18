@@ -216,11 +216,18 @@ def invalidate_active(phone: str, purpose: str) -> int:
             conn.close()
 
 
-def mark_delivery(challenge_id: str, *, provider: str, success: bool, request_id: str = "") -> None:
-    status = STATUS_PENDING if success else STATUS_DELIVERY_FAILED
-    if success:
-        # SENT then PENDING — persist the live state as PENDING
-        status = STATUS_PENDING
+def mark_delivery(
+    challenge_id: str,
+    *,
+    provider: str,
+    success: bool,
+    request_id: str = "",
+    count_as_sent: bool = False,
+) -> None:
+    """count_as_sent is for timeouts: the gateway may already have accepted the SMS."""
+    accepted = bool(success or count_as_sent)
+    status = STATUS_PENDING if accepted else STATUS_DELIVERY_FAILED
+    sent_at = time.time() if accepted else None
     with _LOCK:
         conn = _connect()
         try:
@@ -231,7 +238,7 @@ def mark_delivery(challenge_id: str, *, provider: str, success: bool, request_id
                     last_sent_at=?
                 WHERE id=? AND used_at IS NULL
                 """,
-                (status, provider, request_id, time.time(), challenge_id),
+                (status, provider, request_id, sent_at, challenge_id),
             )
         finally:
             conn.close()
@@ -256,19 +263,29 @@ def active_challenge(phone: str, purpose: str) -> dict[str, Any] | None:
             conn.close()
 
 
+_SENT_STATUSES = (
+    STATUS_PENDING,
+    STATUS_SENT,
+    STATUS_VERIFIED,
+    STATUS_USED,
+    STATUS_EXPIRED,
+    STATUS_LOCKED,
+)
+
+
 def last_sent_at(phone: str, purpose: str) -> float:
-    """آخرین صدور، حتی اگر تحویل ناموفق ثبت شده باشد (SMS ممکن است رفته باشد)."""
+    """آخرین ارسالی که درگاه قبول کرده. رد قطعی و ردیف ناتمام کول‌داون نمی‌سازند."""
     with _LOCK:
         conn = _connect()
         try:
             row = conn.execute(
                 """
                 SELECT last_sent_at, created_at FROM otp_challenges
-                WHERE phone=? AND purpose=?
+                WHERE phone=? AND purpose=? AND status IN (?, ?, ?, ?, ?, ?)
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                (phone, purpose),
+                (phone, purpose, *_SENT_STATUSES),
             ).fetchone()
             rec = _row_dict(row)
         finally:

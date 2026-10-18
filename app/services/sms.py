@@ -247,6 +247,39 @@ def _send_otp_verify(mobile: str, digits: str) -> dict:
         return {"ok": False, "status": 0, "body": {"error": str(e)}}
 
 
+def _verify_explicitly_rejected(result: dict) -> bool:
+    """sms.ir said it did not accept the template. Timeout and 5xx are not this."""
+    if not isinstance(result, dict) or result.get("ok"):
+        return False
+    try:
+        status = int(result.get("status") or 0)
+    except (TypeError, ValueError):
+        status = 0
+    if status == 0 or status == 429 or status >= 500:
+        return False
+    return True
+
+
+def _log_otp_failure(mobile: str, result: dict) -> None:
+    """Log the gateway status. Never log the code or the full number."""
+    try:
+        from app.auth.otp.crypto import mask_phone
+
+        body = result.get("body")
+        detail = sms_ir_error_message(body, fallback="")
+        digits = re.sub(r"\D+", "", detail)
+        if len(digits) >= 4:
+            detail = re.sub(r"\d{4,}", "*****", detail)
+        current_app.logger.error(
+            "OTP SMS failed | phone=%s | status=%s | provider=%s",
+            mask_phone(mobile),
+            result.get("status"),
+            (detail or "")[:180],
+        )
+    except Exception:
+        pass
+
+
 def send_sms_code(
     phone: str,
     code: str,
@@ -255,7 +288,7 @@ def send_sms_code(
     recipient_name: str | None = None,
     record_history: bool = True,
 ) -> dict:
-    """OTP از قالب Verify خدماتی sms.ir — یک درخواست، بدون ارسال تکراری bulk."""
+    """OTP from the sms.ir verify template. One bulk send only if verify refuses."""
     mobile = normalize_iran_mobile(phone)
     if not is_valid_iran_mobile(mobile):
         return {
@@ -281,18 +314,21 @@ def send_sms_code(
     template_id = get_sms_template_id()
     result = _send_otp_verify(mobile, digits)
     used_template = bool(result.get("ok"))
+    if not used_template and _verify_explicitly_rejected(result):
+        # The template was refused, so no SMS left. One direct send on the service line.
+        _log_otp_failure(mobile, result)
+        result = send_sms_direct(
+            mobile,
+            format_otp_sms_message(digits),
+            line_number=get_sms_line_number() or "09981801922",
+            history_source=history_source,
+            recipient_name=recipient_name,
+            record_history=False,
+        )
+        used_template = False
 
     if not result.get("ok"):
-        try:
-            from app.auth.otp.crypto import mask_phone
-
-            current_app.logger.error(
-                "OTP SMS failed | phone=%s | status=%s",
-                mask_phone(mobile),
-                result.get("status"),
-            )
-        except Exception:
-            pass
+        _log_otp_failure(mobile, result)
 
     if record_history and mobile:
         try:

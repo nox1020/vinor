@@ -78,6 +78,26 @@ class OtpHashTests(unittest.TestCase):
         self.assertFalse(verify_otp_hash("09121234567", "auth_api", "00000", h))
 
 
+class ClientIpTests(unittest.TestCase):
+    def test_public_peer_ignores_forwarded_header(self) -> None:
+        from app.auth.otp.request_meta import public_client_ip
+
+        seen = public_client_ip("8.8.8.8", "1.0.0.1, 1.1.1.1")
+        self.assertEqual(seen, "8.8.8.8")
+
+    def test_loopback_uses_rightmost_public_forwarded(self) -> None:
+        from app.auth.otp.request_meta import public_client_ip
+
+        seen = public_client_ip("127.0.0.1", "1.0.0.1, 8.8.8.8")
+        self.assertEqual(seen, "8.8.8.8")
+
+    def test_private_without_header_stays_private(self) -> None:
+        from app.auth.otp.request_meta import ip_is_public, public_client_ip
+
+        self.assertFalse(ip_is_public("127.0.0.1"))
+        self.assertEqual(public_client_ip("127.0.0.1", ""), "127.0.0.1")
+
+
 class PhoneNormalizationTests(unittest.TestCase):
     def test_phone_normalization(self) -> None:
         from app.auth.otp.phone import canonical_mobile, is_canonical_mobile
@@ -129,6 +149,35 @@ class SmsProviderTests(unittest.TestCase):
             result = SmsOTPProvider().send_otp("09121234567", "12345")
         self.assertFalse(result.success)
         self.assertEqual(result.failure_kind, KIND_FAILED)
+
+    def test_verify_rejection_uses_service_line_once(self) -> None:
+        from app.services.sms import send_sms_code
+
+        with mock.patch("app.services.sms.get_sms_api_key", return_value="test-key"):
+            with mock.patch(
+                "app.services.sms._send_otp_verify",
+                return_value={"ok": False, "status": 400, "body": {"message": "template"}},
+            ):
+                with mock.patch(
+                    "app.services.sms.send_sms_direct",
+                    return_value={"ok": True, "status": 200, "body": {"status": 1}},
+                ) as bulk:
+                    result = send_sms_code("09121234567", "12345", record_history=False)
+        self.assertTrue(result["ok"])
+        bulk.assert_called_once()
+
+    def test_verify_timeout_does_not_send_a_second_sms(self) -> None:
+        from app.services.sms import send_sms_code
+
+        with mock.patch("app.services.sms.get_sms_api_key", return_value="test-key"):
+            with mock.patch(
+                "app.services.sms._send_otp_verify",
+                return_value={"ok": False, "status": 0, "body": {"error": "timed out"}},
+            ):
+                with mock.patch("app.services.sms.send_sms_direct") as bulk:
+                    result = send_sms_code("09121234567", "12345", record_history=False)
+        self.assertFalse(result["ok"])
+        bulk.assert_not_called()
 
     def test_sms_timeout(self) -> None:
         from app.auth.otp.providers.sms import SmsOTPProvider
@@ -335,6 +384,19 @@ class AuthApiTests(_OtpStoreCase):
         app.register_blueprint(auth_otp_bp)
         return app
 
+    def test_cooldown_message_names_the_wait(self) -> None:
+        app = self._app()
+        with mock.patch("app.auth.otp.dispatch.dispatch_otp", return_value=SMS_OK):
+            client = app.test_client()
+            first = client.post("/auth/request-otp", json={"phone": "09120000001"})
+            second = client.post("/auth/request-otp", json={"phone": "09120000001"})
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+        body = second.get_json()
+        self.assertEqual(body["error"], "OTP_COOLDOWN")
+        self.assertIn("ثانیه", body["message"])
+        self.assertIn("retry_after", body)
+
     def test_user_enumeration(self) -> None:
         app = self._app()
         with mock.patch("app.auth.otp.dispatch.dispatch_otp", return_value=SMS_OK):
@@ -376,6 +438,39 @@ class AuthApiTests(_OtpStoreCase):
 
 
 class DeliveryAndE2ETests(_OtpStoreCase):
+    def test_rejected_send_does_not_start_cooldown(self) -> None:
+        from app.auth.otp.service import PURPOSE_AUTH_API, request_otp
+
+        with mock.patch("app.auth.otp.service.generate_otp", side_effect=["13131", "14141"]):
+            with mock.patch("app.auth.otp.dispatch.dispatch_otp", side_effect=[SMS_FAIL, SMS_OK]):
+                first = request_otp(phone="09121234567", purpose=PURPOSE_AUTH_API, digits=5, ip="203.0.113.8")
+                second = request_otp(phone="09121234567", purpose=PURPOSE_AUTH_API, digits=5, ip="203.0.113.8")
+        self.assertFalse(first.accepted)
+        self.assertTrue(second.accepted)
+
+    def test_timeout_still_starts_cooldown(self) -> None:
+        from app.auth.otp.errors import OTP_COOLDOWN, OTP_PROVIDER_UNAVAILABLE
+        from app.auth.otp.service import PURPOSE_AUTH_API, request_otp
+
+        with mock.patch("app.auth.otp.service.generate_otp", return_value="15151"):
+            with mock.patch("app.auth.otp.dispatch.dispatch_otp", side_effect=[SMS_TIMEOUT, SMS_OK]):
+                first = request_otp(phone="09121234567", purpose=PURPOSE_AUTH_API, digits=5, ip="203.0.113.9")
+                second = request_otp(phone="09121234567", purpose=PURPOSE_AUTH_API, digits=5, ip="203.0.113.9")
+        self.assertEqual(first.error, OTP_PROVIDER_UNAVAILABLE)
+        self.assertEqual(second.error, OTP_COOLDOWN)
+
+    def test_loopback_is_not_one_shared_bucket(self) -> None:
+        from app.auth.otp.service import PURPOSE_AUTH_API, request_otp
+
+        with mock.patch("app.auth.otp.service.otp_ip_hourly_limit", return_value=1):
+            with mock.patch("app.auth.otp.service.otp_resend_cooldown_seconds", return_value=0):
+                with mock.patch("app.auth.otp.service.generate_otp", return_value="16161"):
+                    with mock.patch("app.auth.otp.dispatch.dispatch_otp", return_value=SMS_OK):
+                        first = request_otp(phone="09120000001", purpose=PURPOSE_AUTH_API, digits=5, ip="127.0.0.1")
+                        second = request_otp(phone="09120000002", purpose=PURPOSE_AUTH_API, digits=5, ip="127.0.0.1")
+        self.assertTrue(first.accepted)
+        self.assertTrue(second.accepted)
+
     def test_sms_delivery_failure_not_assumed_success(self) -> None:
         from app.auth.otp.errors import OTP_DELIVERY_FAILED
         from app.auth.otp.service import PURPOSE_AUTH_API, request_otp

@@ -6,7 +6,13 @@ import logging
 import uuid
 
 from .crypto import hash_identifier
-from .providers.base import KIND_UNEXPECTED, OTPDeliveryResult
+from .providers.base import (
+    KIND_RATE_LIMITED,
+    KIND_SERVER_ERROR,
+    KIND_TIMEOUT,
+    KIND_UNEXPECTED,
+    OTPDeliveryResult,
+)
 from .providers.sms import SmsOTPProvider
 from . import store
 
@@ -28,7 +34,15 @@ def dispatch_otp(phone: str, code: str, *, challenge_id: str = "", request_id: s
             failure_kind=KIND_UNEXPECTED,
         )
     if challenge_id:
-        store.mark_delivery(challenge_id, provider="sms", success=result.success, request_id=rid)
+        # A timeout or 5xx can mean the SMS already left. A hard rejection did not.
+        uncertain = result.failure_kind in (KIND_TIMEOUT, KIND_SERVER_ERROR, KIND_RATE_LIMITED)
+        store.mark_delivery(
+            challenge_id,
+            provider="sms",
+            success=result.success,
+            request_id=rid,
+            count_as_sent=uncertain,
+        )
     _log.info(
         "otp requested phone_hash=%s provider=sms_ir request_id=%s result=%s",
         hash_identifier(phone),
