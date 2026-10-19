@@ -174,24 +174,6 @@
     color: var(--vn-ld-text);
     white-space: pre-wrap;
   }
-  #vinorListingDetail .vn-ld__desc.is-clamped {
-    display: -webkit-box;
-    -webkit-line-clamp: 5;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  #vinorListingDetail .vn-ld__more {
-    margin: 0.45rem 0 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--vn-ld-accent);
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  #vinorListingDetail .vn-ld__more[hidden] { display: none; }
 
   #vinorListingDetail .vn-ld__publish {
     margin: 1.25rem 0 0;
@@ -400,8 +382,7 @@
     {% if d.description %}
     <div class="vn-ld__desc-block">
       <p class="vn-ld__desc-label">توضیحات</p>
-      <p class="vn-ld__desc is-clamped" id="listingDetailDesc">{{ d.description }}</p>
-      <button type="button" class="vn-ld__more" id="listingDetailMore" hidden>نمایش بیشتر</button>
+      <p class="vn-ld__desc" id="listingDetailDesc">{{ d.description }}</p>
     </div>
     {% endif %}
 
@@ -483,19 +464,6 @@
     }
     gallery.addEventListener('scroll', updateCounter, { passive: true });
     updateCounter();
-  }
-
-  var desc = document.getElementById('listingDetailDesc');
-  var more = document.getElementById('listingDetailMore');
-  if (desc && more) {
-    var needsClamp = desc.scrollHeight > desc.clientHeight + 4;
-    if (needsClamp) {
-      more.hidden = false;
-      more.addEventListener('click', function () {
-        var clamped = desc.classList.toggle('is-clamped');
-        more.textContent = clamped ? 'نمایش بیشتر' : 'نمایش کمتر';
-      });
-    }
   }
 
   try {

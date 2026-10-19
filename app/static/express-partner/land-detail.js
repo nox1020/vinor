@@ -3058,7 +3058,6 @@
 
     document.querySelectorAll('[data-land-copy]').forEach(function (el) {
       function onCopy(ev) {
-        if (ev.target.closest('#landDescToggle')) return;
         ev.preventDefault();
         ev.stopPropagation();
         var kind = el.getAttribute('data-land-copy') || '';
@@ -3077,36 +3076,6 @@
     });
 
     initLandDetailDownload(cfg);
-  }
-
-  function initDescToggle() {
-    var btn = document.getElementById('landDescToggle');
-    var shortEl = document.getElementById('landDescText');
-    var fullEl = document.getElementById('landDescFull');
-    var label = document.getElementById('landDescToggleLabel');
-    var icon = document.getElementById('landDescToggleIcon');
-    if (!btn || !fullEl) return;
-    function onToggle() {
-      var expanded = !fullEl.classList.contains('hidden');
-      if (expanded) {
-        fullEl.classList.add('hidden');
-        if (shortEl) shortEl.classList.remove('hidden');
-        if (label) label.textContent = 'مشاهده بیشتر';
-        if (icon) icon.classList.remove('rotate-180');
-      } else {
-        fullEl.classList.remove('hidden');
-        if (shortEl) shortEl.classList.add('hidden');
-        if (label) label.textContent = 'بستن';
-        if (icon) icon.classList.add('rotate-180');
-      }
-      requestAnimationFrame(function () {
-        syncFooterSpacer();
-      });
-    }
-    btn.addEventListener('click', onToggle);
-    addCleanup(function () {
-      btn.removeEventListener('click', onToggle);
-    });
   }
 
   function initLandDetail() {
@@ -3147,7 +3116,6 @@
     initModals();
     initLandFlashes(cfg);
     initPartnerMarketing(cfg);
-    initDescToggle();
     initLandDetailChatCta();
 
     if (typeof window.vinorSyncFavButtons === 'function') {

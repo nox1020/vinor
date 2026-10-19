@@ -6,8 +6,6 @@
 {% set _basis = price_basis_area(land) %}
 {% set ppm = land.price_per_meter or ((_basis and price_total / _basis)|round(0)|int or 0) %}
 {% set desc = (land.description or land.desc or '')|trim %}
-{% set desc_short = desc[:320] if desc|length > 320 else desc %}
-{% set desc_long = desc|length > 320 %}
 {% set deal_label = {'sale': 'فروش', 'presale': 'پیش‌فروش', 'rent': 'اجاره'}.get((land.deal_type or '')|string|lower, land.deal_type or land.payment_method or '') %}
 {% set tx_label = {'in_transaction': 'در حال معامله', 'sold': 'فروخته شد', 'active': 'فعال', 'pending': 'در انتظار', 'approved': 'تأیید شده', 'closed': 'بسته'}.get(_st, _st) %}
 {% set cat_rows = land_category_detail_rows(land) %}
@@ -155,14 +153,7 @@
       <span class="text-[10px] font-normal ld-hint-faint">(ضربه برای کپی)</span>
       {% endif %}
     </h2>
-    <p id="landDescText" class="ld-body-text leading-relaxed whitespace-pre-line">{{ desc_short }}{% if desc_long %}…{% endif %}</p>
-    {% if desc_long %}
-    <p id="landDescFull" class="hidden ld-body-text leading-relaxed whitespace-pre-line">{{ desc }}</p>
-    <button type="button" id="landDescToggle" class="ld-desc-toggle mt-2 inline-flex items-center gap-1">
-      <span id="landDescToggleLabel">مشاهده بیشتر</span>
-      <i id="landDescToggleIcon" class="fas fa-chevron-down text-[10px] transition-transform" aria-hidden="true"></i>
-    </button>
-    {% endif %}
+    <p id="landDescText" class="ld-body-text leading-relaxed whitespace-pre-line">{{ desc }}</p>
   </section>
   {% endif %}
 
