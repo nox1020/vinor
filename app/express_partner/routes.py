@@ -10845,6 +10845,7 @@ def special_visit_action(vid: str, action: str):
         'invalid_outcome': 'یکی از سه نتیجه را انتخاب کنید.',
         'no_open_deal': 'معاملهٔ در جریانی برای این کار پیدا نشد.',
         'failed': 'ثبت معامله روی فایل ممکن نشد.',
+        'no_land': 'این پرونده به فایلی وصل نیست.',
         'already_decided': 'برای این پرونده قبلاً تصمیم ثبت شده است.',
         'invalid_decision': 'ثبت تصمیم ممکن نشد.',
     }

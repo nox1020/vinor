@@ -23,11 +23,8 @@ from app.utils.storage import (
 
 from .commissions_flow import (
     PENDING_STATUS as COMMISSION_PENDING,
-    commission_blocks_new_deal_record,
     commission_is_deal,
     commission_reject_blocked_reason,
-    has_finalized_deal_commission,
-    latest_deal_commission_for_partner,
     mark_assignments_sold_for_land,
     revert_land_assignments_after_deal_cancel,
 )
@@ -57,6 +54,44 @@ from .visit_requests import (
 
 def _norm_phone(phone: str) -> str:
     return re.sub(r"[^\d]", "", str(phone or "").strip())
+
+
+def _phone_tail(phone: str) -> str:
+    """ده رقم آخر. 09 و 989 و رقم فارسی یکی‌اند."""
+    from app.utils.dates import to_en_digits
+
+    digits = re.sub(r"\D", "", to_en_digits(str(phone or "")))
+    if digits.startswith("0098") and len(digits) >= 14 and digits[4:5] == "9":
+        digits = "0" + digits[4:]
+    elif digits.startswith("98") and len(digits) >= 12 and digits[2:3] == "9":
+        digits = "0" + digits[2:]
+    elif len(digits) == 10 and digits.startswith("9"):
+        digits = "0" + digits
+    if len(digits) > 11 and digits.startswith("09"):
+        digits = digits[:11]
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+def _same_partner_phone(left: str, right: str) -> bool:
+    a = _phone_tail(left)
+    b = _phone_tail(right)
+    return bool(a) and a == b
+
+
+def _codes_match(left: str, right: str, lands: List[Dict[str, Any]] | None = None) -> bool:
+    from .visit_requests import canonical_land_code
+
+    a = canonical_land_code(str(left or ""), lands)
+    b = canonical_land_code(str(right or ""), lands)
+    return bool(a) and a == b
+
+
+_STARTABLE_ASSIGNMENT = frozenset({"active", "pending", "approved", "closed", "in_transaction"})
+
+
+def _assignment_can_start(row: Dict[str, Any]) -> bool:
+    cur = str(row.get("status") or "active").strip().lower()
+    return cur in _STARTABLE_ASSIGNMENT
 
 
 def _canon_phone(phone: str) -> str:
@@ -120,10 +155,13 @@ def _land_tx_status(assignments: List[Dict[str, Any]] | None, land_code: str) ->
     holder = ""
     sold = False
     in_tx = False
+    from .visit_requests import _visit_lands
+
+    lands = _visit_lands()
     for a in assignments or []:
         if not isinstance(a, dict):
             continue
-        if str(a.get("land_code") or "").strip() != code:
+        if not _codes_match(str(a.get("land_code") or ""), code, lands):
             continue
         st = str(a.get("status") or "").strip().lower()
         th = str(a.get("transaction_holder") or "").strip()
@@ -144,31 +182,48 @@ def _land_tx_status(assignments: List[Dict[str, Any]] | None, land_code: str) ->
 def _partner_has_assignment(
     assignments: List[Dict[str, Any]] | None, phone: str, land_code: str
 ) -> bool:
-    ph = _norm_phone(phone)
-    code = str(land_code or "").strip()
-    if not ph or not code:
+    """انتساب قابل شروع. کد قبلی و 98/09 یکی‌اند. انتساب لغوشده حساب نمی‌شود."""
+    if not _phone_tail(phone) or not str(land_code or "").strip():
         return False
+    from .visit_requests import _visit_lands
+
+    lands = _visit_lands()
     for a in assignments or []:
-        if not isinstance(a, dict):
+        if not isinstance(a, dict) or not _assignment_can_start(a):
             continue
-        if str(a.get("land_code") or "").strip() != code:
+        if not _codes_match(str(a.get("land_code") or ""), land_code, lands):
             continue
-        if _norm_phone(str(a.get("partner_phone") or "")) == ph:
+        if _same_partner_phone(str(a.get("partner_phone") or ""), phone):
             return True
     return False
 
 
 def _partner_open_tx_count(assignments: List[Dict[str, Any]] | None, phone: str) -> int:
-    ph = _norm_phone(phone)
-    if not ph:
+    if not _phone_tail(phone):
         return 0
     n = 0
     for a in assignments or []:
         if not isinstance(a, dict):
             continue
-        if _norm_phone(str(a.get("transaction_holder") or "")) == ph:
+        if _same_partner_phone(str(a.get("transaction_holder") or ""), phone):
             n += 1
     return n
+
+
+def _matching_deal(commissions: List[Dict[str, Any]] | None, phone: str, code: str):
+    """آخرین پورسانت معامله؛ شماره و کد قبلی را هم می‌بیند."""
+    from .visit_requests import _visit_lands
+
+    lands = _visit_lands()
+    for row in reversed(commissions or []):
+        if not isinstance(row, dict) or not commission_is_deal(row):
+            continue
+        if not _same_partner_phone(str(row.get("partner_phone") or ""), phone):
+            continue
+        if not _codes_match(str(row.get("land_code") or ""), code, lands):
+            continue
+        return row
+    return None
 
 
 def special_inbox_pipeline_tab(item: Dict[str, Any] | None) -> str:
@@ -442,14 +497,14 @@ def visits_for_special_owner(
             people["visitor_name"] = owner_name
             people["visitor_phone"] = people["visitor_phone"] or str(phone or "").strip()
         partner_phone = people["partner_phone"] or str(row.get("partner_phone") or "").strip()
-        deal = latest_deal_commission_for_partner(commissions, partner_phone, code)
+        deal = _matching_deal(commissions, partner_phone, code)
         deal_st = str((deal or {}).get("status") or "").strip().lower()
         deal_pending = bool(deal) and deal_st == COMMISSION_PENDING
         deal_final = bool(deal) and deal_st in ("approved", "paid")
         deal_rejected = bool(deal) and deal_st == "rejected"
         tx_status, tx_holder = _land_tx_status(assignments, code)
         has_assignment = _partner_has_assignment(assignments, partner_phone, code)
-        holder_is_partner = bool(tx_holder) and _norm_phone(tx_holder) == _norm_phone(partner_phone)
+        holder_is_partner = bool(tx_holder) and _same_partner_phone(tx_holder, partner_phone)
         other_holder = bool(tx_holder) and not holder_is_partner
 
         can_approve = st == PENDING_STATUS
@@ -493,7 +548,8 @@ def visits_for_special_owner(
         )
 
         deal_flags = visit_deal_action_flags(row, allowed=True)
-        can_confirm_deal = bool(deal_flags.get("can_confirm_deal")) or can_start_deal
+        # تأیید نهایی همان start_deal را روی فایل می‌زند. بدون انتساب قابل شروع دکمه نمی‌آید.
+        can_confirm_deal = bool(deal_flags.get("can_confirm_deal")) and can_start_deal
         can_reject_deal = bool(deal_flags.get("can_reject_deal")) or can_reject_deal
         can_close_deal = bool(deal_flags.get("can_close_deal")) or can_approve_deal
         deal_dec = visit_deal_decision(row)
@@ -772,6 +828,7 @@ LISTING_DEAL_ERROR_FA = {
     "blocked": "رد معامله فعلاً ممکن نیست.",
     "no_open_deal": "معاملهٔ در جریانی برای این کار پیدا نشد.",
     "failed": "ثبت معامله روی فایل ممکن نشد.",
+    "no_land": "این پرونده به فایلی وصل نیست.",
     "invalid_action": "ثبت معامله روی فایل ممکن نشد.",
     "invalid_status": "این پرونده الان در مرحله معامله نیست.",
     "invalid_transition": "این پرونده الان در مرحله معامله نیست.",
@@ -1095,8 +1152,14 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
     """ثبت فروش نهایی به نام همکار بازدیدکننده — همان مسیر mark-in-transaction."""
     code = str(rec.get("land_code") or "").strip()
     partner_phone = str(rec.get("partner_phone") or "").strip()
-    if not code or not partner_phone:
+    if not code:
+        return "no_land"
+    if not partner_phone:
         return "failed"
+    from .visit_requests import _visit_lands, canonical_land_code
+
+    lands = _visit_lands()
+    code = canonical_land_code(code, lands) or code
     assignments = load_express_assignments() or []
     if not isinstance(assignments, list):
         assignments = []
@@ -1105,32 +1168,32 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
     tx_status, holder = _land_tx_status(assignments, code)
     if tx_status == "sold":
         return "already_sold"
-    holder_n = _norm_phone(holder)
-    partner_n = _norm_phone(partner_phone)
-    if holder_n and holder_n != partner_n:
+    if holder and not _same_partner_phone(holder, partner_phone):
         return "held_by_other"
     commissions = load_express_commissions() or []
     if not isinstance(commissions, list):
         commissions = []
-    if has_finalized_deal_commission(commissions, partner_phone, code):
+    existing = _matching_deal(commissions, partner_phone, code)
+    existing_status = str((existing or {}).get("status") or "").strip().lower()
+    if existing_status in ("approved", "paid"):
         return "already_sold"
-    if commission_blocks_new_deal_record(commissions, partner_phone, code):
+    if existing_status == COMMISSION_PENDING:
         return "already_pending"
-    if not holder_n and _partner_open_tx_count(assignments, partner_phone) >= 2:
+    if not holder and _partner_open_tx_count(assignments, partner_phone) >= 2:
         return "deal_limit"
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for a in assignments:
-        if not isinstance(a, dict):
+        if not isinstance(a, dict) or not _assignment_can_start(a):
             continue
-        if str(a.get("land_code") or "").strip() != code:
+        if not _codes_match(str(a.get("land_code") or ""), code, lands):
             continue
-        cur = str(a.get("status") or "active").strip().lower()
-        if cur in ("active", "pending", "approved", "closed", "in_transaction"):
-            a["status"] = "in_transaction"
-            a["updated_at"] = now
-            a["transaction_holder"] = partner_phone
-            a["transaction_started_at"] = now
+        if not _same_partner_phone(str(a.get("partner_phone") or ""), partner_phone):
+            continue
+        a["status"] = "in_transaction"
+        a["updated_at"] = now
+        a["transaction_holder"] = partner_phone
+        a["transaction_started_at"] = now
     save_express_assignments(assignments)
 
     lands = load_ads_cached() or []
@@ -1151,7 +1214,13 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
         )
     except Exception:
         price_total = 0
-    new_id = (max([int(x.get("id", 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
+    def _commission_id(row: Dict[str, Any]) -> int:
+        try:
+            return int(row.get("id") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    new_id = (max((_commission_id(x) for x in commissions if isinstance(x, dict)), default=0) or 0) + 1
     try:
         safe_amount = max(0, int(commission_amount or 0))
     except Exception:
@@ -1227,7 +1296,7 @@ def _decide_deal_commission(rec: Dict[str, Any], *, decision: str) -> Optional[s
     commissions = load_express_commissions() or []
     if not isinstance(commissions, list):
         return "failed"
-    deal = latest_deal_commission_for_partner(commissions, partner_phone, code)
+    deal = _matching_deal(commissions, partner_phone, code)
     if not deal:
         return "not_found"
     deal_st = str(deal.get("status") or "").strip().lower()
