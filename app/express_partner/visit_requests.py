@@ -2780,10 +2780,11 @@ def visit_deal_action_flags(row: Dict[str, Any] | None, *, allowed: bool) -> Dic
             "can_reject_deal": False,
             "can_close_deal": True,
         }
+    # بستن فقط بعد از تأیید معامله (پرونده در جریان). قبل از آن دکمه نیست.
     return {
         "can_confirm_deal": True,
         "can_reject_deal": True,
-        "can_close_deal": True,
+        "can_close_deal": False,
     }
 
 

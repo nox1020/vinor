@@ -6889,7 +6889,7 @@ def requests_close_deal(vid: str):
 def _partner_deal_decision_action(vid: str, *, decision: str):
     me_phone = (session.get('user_phone') or '').strip()
     from .partner_roles import partner_can_manage_deal
-    from .visit_requests import record_visit_deal_decision
+    from .special_visit_inbox import commit_deal_after_listing, listing_deal_error_fa
 
     profile = getattr(g, 'express_partner_profile', None)
     if not partner_can_manage_deal(profile):
@@ -6908,15 +6908,20 @@ def _partner_deal_decision_action(vid: str, *, decision: str):
         return _requests_action_json(False, error='درخواست پیدا نشد.')
     if str(rec.get('partner_phone') or '').strip() != me_phone:
         return _requests_action_json(False, error='دسترسی ندارید.')
-    updated, err = record_visit_deal_decision(
-        visit_rows, str(vid), decision=decision, actor_phone=me_phone
+    updated, err = commit_deal_after_listing(
+        visit_rows,
+        rec,
+        decision=decision,
+        actor_phone=me_phone,
+        owner_phone=me_phone,
     )
-    if err == 'already_decided':
-        return _requests_action_json(False, error='برای این پرونده قبلاً تصمیم ثبت شده است.')
-    if err == 'invalid_status':
-        return _requests_action_json(False, error='این پرونده الان در مرحله معامله نیست.')
+    wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if err or not updated:
-        return _requests_action_json(False, error='ثبت تصمیم ممکن نشد.')
+        message = listing_deal_error_fa(err or 'failed')
+        if wants_html:
+            flash(message, 'warning')
+            return redirect(_sales_pipeline_url('deals'))
+        return _requests_action_json(False, error=message)
     try:
         save_express_visit_requests(visit_rows)
     except Exception:
@@ -6928,21 +6933,6 @@ def _partner_deal_decision_action(vid: str, *, decision: str):
         inject_visit_deal_chat(updated, decision=decision)
     except Exception:
         current_app.logger.exception('deal decision chat failed id=%s', vid)
-    if str(rec.get('land_code') or '').strip():
-        try:
-            from .special_visit_inbox import _apply_special_deal_action
-
-            listing_act = {
-                'approved': 'start_deal',
-                'rejected': 'reject_deal',
-                'closed': 'approve_deal',
-            }.get(decision)
-            if listing_act:
-                _apply_special_deal_action(
-                    rec, owner_phone=me_phone, action=listing_act
-                )
-        except Exception:
-            pass
     msg = {
         'approved': 'معامله تأیید شد.',
         'rejected': 'معامله رد شد.',
@@ -10814,6 +10804,10 @@ def special_visit_action(vid: str, action: str):
         'blocked': 'رد معامله فعلاً ممکن نیست.',
         'invalid_status': 'اول «بازدید انجام شد» را ثبت کنید.',
         'invalid_outcome': 'یکی از سه نتیجه را انتخاب کنید.',
+        'no_open_deal': 'معاملهٔ در جریانی برای این کار پیدا نشد.',
+        'failed': 'ثبت معامله روی فایل ممکن نشد.',
+        'already_decided': 'برای این پرونده قبلاً تصمیم ثبت شده است.',
+        'invalid_decision': 'ثبت تصمیم ممکن نشد.',
     }
     if err and err in extra_err:
         flash(extra_err[err], 'warning')

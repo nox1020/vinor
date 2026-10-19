@@ -85,6 +85,7 @@ jobs:
             tests/test_vinor_man.py
             tests/test_owner_home_unpublish.py
             tests/test_sale_publish_window.py
+            tests/test_deal_decision_listing.py
             tests/test_invest_checks.py
             tests/test_invest_backup.py
             tests/test_invest_data_diag.py

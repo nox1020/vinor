@@ -761,6 +761,88 @@ def special_can_manage_visit(owner_phone: str, visit_row: Dict[str, Any] | None)
     return _visit_row_for_plus_owner(visit_row, owner_phone, codes)
 
 
+LISTING_DEAL_ERROR_FA = {
+    "forbidden": "اجازه مدیریت این درخواست را ندارید.",
+    "no_assignment": "این همکار روی فایل اختصاص ندارد؛ معامله فقط از سمت همکار اختصاص‌یافته ممکن است.",
+    "already_sold": "این فایل قبلاً فروخته شده است.",
+    "held_by_other": "فایل در حال معامله توسط همکار دیگری است.",
+    "deal_limit": "این همکار هم‌زمان روی دو فایل در حال معامله است.",
+    "already_pending": "فروش نهایی قبلاً ثبت شده و منتظر تأیید شماست.",
+    "blocked": "رد معامله فعلاً ممکن نیست.",
+    "no_open_deal": "معاملهٔ در جریانی برای این کار پیدا نشد.",
+    "failed": "ثبت معامله روی فایل ممکن نشد.",
+    "invalid_action": "ثبت معامله روی فایل ممکن نشد.",
+    "invalid_status": "این پرونده الان در مرحله معامله نیست.",
+    "invalid_transition": "این پرونده الان در مرحله معامله نیست.",
+    "invalid_decision": "ثبت تصمیم ممکن نشد.",
+    "already_decided": "برای این پرونده قبلاً تصمیم ثبت شده است.",
+    "not_found": "درخواست پیدا نشد.",
+}
+
+
+def listing_deal_error_fa(code: str) -> str:
+    return LISTING_DEAL_ERROR_FA.get(
+        str(code or "").strip(),
+        "ثبت معامله روی فایل ممکن نشد.",
+    )
+
+
+def commit_deal_after_listing(
+    requests: List[Dict[str, Any]],
+    rec: Dict[str, Any],
+    *,
+    decision: str,
+    actor_phone: str,
+    owner_phone: str,
+) -> tuple:
+    """اول اقدام روی فایل. deal_decision فقط اگر آن اقدام موفق شود نوشته می‌شود."""
+    from .visit_requests import (
+        COMPLETED_STATUS,
+        DEAL_DECISION_APPROVED,
+        DEAL_DECISION_CLOSED,
+        DEAL_DECISION_REJECTED,
+        _DEAL_DECISION_ALIASES,
+        record_visit_deal_decision,
+        visit_deal_decision,
+    )
+
+    dec = _DEAL_DECISION_ALIASES.get((decision or "").strip().lower(), "")
+    if not dec:
+        return None, "invalid_decision"
+    if str(rec.get("status") or "").strip() != COMPLETED_STATUS:
+        return None, "invalid_status"
+    current = visit_deal_decision(rec)
+    if current in (DEAL_DECISION_REJECTED, DEAL_DECISION_CLOSED):
+        return rec, "already_decided"
+    if current == DEAL_DECISION_APPROVED and dec == DEAL_DECISION_APPROVED:
+        return rec, None
+
+    listing_act = {
+        DEAL_DECISION_APPROVED: "start_deal",
+        DEAL_DECISION_REJECTED: "reject_deal",
+        DEAL_DECISION_CLOSED: "approve_deal",
+    }[dec]
+    try:
+        _listing_rec, listing_err = _apply_special_deal_action(
+            rec, owner_phone=owner_phone, action=listing_act
+        )
+    except Exception:
+        listing_err = "failed"
+    if listing_err == "not_found":
+        listing_err = "no_open_deal"
+    if listing_err:
+        return None, listing_err
+    updated, err = record_visit_deal_decision(
+        requests,
+        str(rec.get("id") or ""),
+        decision=dec,
+        actor_phone=actor_phone,
+    )
+    if err or not updated:
+        return None, err or "failed"
+    return updated, None
+
+
 def apply_special_visit_action(
     requests: List[Dict[str, Any]],
     *,
@@ -808,33 +890,18 @@ def apply_special_visit_action(
     if act in ("start_deal", "approve_deal", "reject_deal"):
         return _apply_special_deal_action(rec, owner_phone=owner_phone, action=act)
     if act in ("confirm_deal", "decline_deal", "close_deal"):
-        from .visit_requests import record_visit_deal_decision
-
         mapping = {
             "confirm_deal": "approved",
             "decline_deal": "rejected",
             "close_deal": "closed",
         }
-        updated, err = record_visit_deal_decision(
+        return commit_deal_after_listing(
             requests,
-            rid,
+            rec,
             decision=mapping[act],
             actor_phone=owner_phone,
+            owner_phone=owner_phone,
         )
-        if err and err not in ("already_decided",):
-            return None, err
-        listing_act = {
-            "confirm_deal": "start_deal",
-            "decline_deal": "reject_deal",
-            "close_deal": "approve_deal",
-        }[act]
-        try:
-            _apply_special_deal_action(
-                rec, owner_phone=owner_phone, action=listing_act
-            )
-        except Exception:
-            pass
-        return updated or rec, None
     if act == "no_show":
         from .visit_requests import record_visit_attendance
 
