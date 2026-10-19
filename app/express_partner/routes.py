@@ -3988,6 +3988,42 @@ def _partner_ai_layer_context(
     postchi_thread_id = '__postchi__'
     home_ai_open = False
     home_ai_open_thread = ''
+    chat_history_has_more = False
+    chat_history_next_cursor = ''
+    chat_has_user_messages = False
+
+    def _show_loaded(msgs: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
+        nonlocal chat_history_has_more, chat_history_next_cursor, chat_has_user_messages
+        from app.ai.chat_store import (
+            CHAT_HISTORY_PAGE_DEFAULT,
+            _thread_has_user_message,
+            slice_messages_page,
+        )
+
+        page, has_more, cursor = slice_messages_page(
+            list(msgs or []),
+            limit=CHAT_HISTORY_PAGE_DEFAULT,
+            before_id=None,
+        )
+        chat_history_has_more = bool(has_more)
+        chat_history_next_cursor = cursor or ''
+        chat_has_user_messages = _thread_has_user_message(msgs)
+        return page
+
+    def _show_stored(user_key: str, thread_id: str | None, audience: str) -> List[Dict[str, Any]]:
+        nonlocal chat_history_has_more, chat_history_next_cursor, chat_has_user_messages
+        from app.ai.chat_store import CHAT_HISTORY_PAGE_DEFAULT, messages_page_for_ui
+
+        page = messages_page_for_ui(
+            user_key,
+            thread_id,
+            audience,
+            limit=CHAT_HISTORY_PAGE_DEFAULT,
+        )
+        chat_history_has_more = bool(page.get('has_more'))
+        chat_history_next_cursor = page.get('next_cursor') or ''
+        chat_has_user_messages = bool(page.get('has_user'))
+        return list(page.get('messages') or [])
 
     if limited:
         # مهمان / کاربر عادی / متقاضی: چت عمومی محدود — بدون پستچی و ابزار فروش
@@ -3999,7 +4035,6 @@ def _partner_ai_layer_context(
             from app.ai.audience import AUDIENCE_PUBLIC
             from app.ai.chat_store import (
                 ensure_active_thread,
-                messages_for_ui,
                 threads_for_ui,
             )
             from app.ai.user_key import ai_user_key
@@ -4020,11 +4055,11 @@ def _partner_ai_layer_context(
                 active_thread_id = ensure_lawyer_thread(
                     user_key, audience=AUDIENCE_PUBLIC
                 )
-                chat_messages = messages_for_ui(
+                chat_messages = _show_stored(
                     user_key,
-                    thread_id=active_thread_id,
-                    audience=AUDIENCE_PUBLIC,
-                ) or []
+                    active_thread_id,
+                    AUDIENCE_PUBLIC,
+                )
                 home_ai_open = True
                 home_ai_open_thread = LAWYER_THREAD_ID
             elif open_tid and not (
@@ -4034,19 +4069,20 @@ def _partner_ai_layer_context(
                 active_thread_id = ensure_active_thread(user_key, audience=AUDIENCE_PUBLIC)
                 home_ai_open = True
                 home_ai_open_thread = active_thread_id
-                chat_messages, active_thread_id = ensure_vinor_opens_chat(
+                loaded, active_thread_id = ensure_vinor_opens_chat(
                     user_key,
                     audience=AUDIENCE_PUBLIC,
                     thread_id=active_thread_id or None,
                     text=ctx['ai_chat_welcome'],
                     has_pending_app=bool(has_pending_app),
                 )
+                chat_messages = _show_loaded(loaded)
                 if not chat_messages:
-                    chat_messages = messages_for_ui(
+                    chat_messages = _show_stored(
                         user_key,
-                        thread_id=active_thread_id or None,
-                        audience=AUDIENCE_PUBLIC,
-                    ) or []
+                        active_thread_id or None,
+                        AUDIENCE_PUBLIC,
+                    )
             else:
                 # بدو ورود: صفحه خالی GPT — تاریخچه پاک نمی‌شود؛ چت قبلی در کشو می‌ماند
                 active_thread_id = ensure_active_thread(
@@ -4071,6 +4107,9 @@ def _partner_ai_layer_context(
             home_ai_open_thread = ''
             lawyer_on = False
             lawyer_feature_on = False
+            chat_history_has_more = False
+            chat_history_next_cursor = ''
+            chat_has_user_messages = False
 
         guest_remaining = None
         guest_limit = None
@@ -4092,6 +4131,9 @@ def _partner_ai_layer_context(
 
         ctx.update({
             'chat_messages': chat_messages,
+            'chat_history_has_more': chat_history_has_more,
+            'chat_history_next_cursor': chat_history_next_cursor,
+            'chat_has_user_messages': chat_has_user_messages,
             'chat_threads': chat_threads,
             'active_thread_id': active_thread_id,
             'postchi_thread_id': '',
@@ -4119,7 +4161,7 @@ def _partner_ai_layer_context(
 
     try:
         from app.ai.audience import AUDIENCE_PARTNER
-        from app.ai.chat_store import ensure_active_thread, messages_for_ui
+        from app.ai.chat_store import ensure_active_thread
         from app.services.postchi import (
             POSTCHI_THREAD_ID,
             is_postchi_thread,
@@ -4140,22 +4182,27 @@ def _partner_ai_layer_context(
         if is_postchi_thread(open_tid):
             active_thread_id = POSTCHI_THREAD_ID
             chat_messages = postchi_messages_for_ui(phone) or []
+            from app.ai.chat_store import _thread_has_user_message
+
+            chat_history_has_more = False
+            chat_history_next_cursor = ''
+            chat_has_user_messages = _thread_has_user_message(chat_messages)
             open_postchi(phone)
             home_ai_open = True
             home_ai_open_thread = POSTCHI_THREAD_ID
         elif is_lawyer_thread(open_tid) or open_tid in ('lawyer', 'vakil'):
             if _lawyer_enabled():
                 active_thread_id = ensure_lawyer_thread(phone, audience=AUDIENCE_PARTNER)
-                chat_messages = messages_for_ui(
+                chat_messages = _show_stored(
                     phone,
-                    thread_id=active_thread_id,
-                    audience=AUDIENCE_PARTNER,
-                ) or []
+                    active_thread_id,
+                    AUDIENCE_PARTNER,
+                )
                 home_ai_open = True
                 home_ai_open_thread = LAWYER_THREAD_ID
             else:
                 active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-                chat_messages = messages_for_ui(phone, active_thread_id, audience=AUDIENCE_PARTNER) or []
+                chat_messages = _show_stored(phone, active_thread_id, AUDIENCE_PARTNER)
         elif open_tid:
             # لینک قدیمی مأموریت/فایل هم به همان چت واحد وینور می‌رود
             from app.ai.welcome import ensure_vinor_opens_chat
@@ -4163,19 +4210,20 @@ def _partner_ai_layer_context(
             active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
             home_ai_open = True
             home_ai_open_thread = active_thread_id
-            chat_messages, active_thread_id = ensure_vinor_opens_chat(
+            loaded, active_thread_id = ensure_vinor_opens_chat(
                 phone,
                 audience=AUDIENCE_PARTNER,
                 thread_id=active_thread_id or None,
                 text=ctx['ai_chat_welcome'],
                 is_approved=True,
             )
+            chat_messages = _show_loaded(loaded)
             if not chat_messages:
-                chat_messages = messages_for_ui(
+                chat_messages = _show_stored(
                     phone,
-                    thread_id=active_thread_id or None,
-                    audience=AUDIENCE_PARTNER,
-                ) or []
+                    active_thread_id or None,
+                    AUDIENCE_PARTNER,
+                )
         else:
             # بدو ورود: صفحه خالی GPT — تاریخچه پاک نمی‌شود؛ چت قبلی در کشو می‌ماند
             active_thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
@@ -4194,9 +4242,15 @@ def _partner_ai_layer_context(
         home_ai_open = False
         home_ai_open_thread = ''
         lawyer_thread_id = '__lawyer__'
+        chat_history_has_more = False
+        chat_history_next_cursor = ''
+        chat_has_user_messages = False
 
     ctx.update({
         'chat_messages': chat_messages,
+        'chat_history_has_more': chat_history_has_more,
+        'chat_history_next_cursor': chat_history_next_cursor,
+        'chat_has_user_messages': chat_has_user_messages,
         'chat_threads': chat_threads,
         'active_thread_id': active_thread_id,
         'postchi_thread_id': postchi_thread_id,
@@ -8526,7 +8580,6 @@ def ai_sync():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_history():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import messages_for_ui
     from app.lawyer.service import is_lawyer_thread, threads_with_lawyer_and_postchi
     from app.services.postchi import (
         is_postchi_thread,
@@ -8555,12 +8608,23 @@ def ai_history():
         if is_postchi_thread(thread_id):
             payload['messages'] = postchi_messages_for_ui(phone)
             payload['mode'] = 'postchi'
-        elif is_lawyer_thread(thread_id):
-            payload['messages'] = messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER)
-            payload['mode'] = 'lawyer'
         else:
-            payload['messages'] = messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER)
-            payload['mode'] = 'chat'
+            from app.ai.chat_store import coerce_history_page, history_messages_payload
+
+            raw_limit = request.args.get('limit')
+            if raw_limit is None:
+                raw_limit = request.args.get('page_size')
+            page_size, before_id = coerce_history_page(raw_limit, request.args.get('before_id'))
+            payload.update(
+                history_messages_payload(
+                    phone,
+                    thread_id,
+                    AUDIENCE_PARTNER,
+                    limit=page_size,
+                    before_id=before_id,
+                )
+            )
+            payload['mode'] = 'lawyer' if is_lawyer_thread(thread_id) else 'chat'
     return jsonify(payload)
 
 
@@ -8852,7 +8916,7 @@ def ai_clear():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_switch_thread():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import messages_for_ui, ensure_active_thread
+    from app.ai.chat_store import ensure_active_thread
     from app.lawyer.config import lawyer_enabled
     from app.lawyer.service import (
         LAWYER_THREAD_ID,
@@ -8867,11 +8931,17 @@ def ai_switch_thread():
         postchi_messages_for_ui,
     )
 
+    from app.ai.chat_store import coerce_history_page, history_messages_payload
+
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get('thread_id') or '').strip()
     if not thread_id:
         return jsonify({'ok': False, 'error': 'گفتگو یافت نشد.'}), 404
+    raw_limit = data.get('limit')
+    if raw_limit is None and 'page_size' in data:
+        raw_limit = data.get('page_size')
+    page_size, before_id = coerce_history_page(raw_limit, data.get('before_id'))
     if is_postchi_thread(thread_id):
         open_postchi(phone)
         return jsonify({
@@ -8889,38 +8959,56 @@ def ai_switch_thread():
         if not lawyer_enabled():
             return jsonify({'ok': False, 'error': 'وکیل ملکی فعلاً غیرفعال است.'}), 403
         tid = ensure_lawyer_thread(phone, audience=AUDIENCE_PARTNER)
-        return jsonify({
+        body = {
             'ok': True,
             'thread_id': tid,
             'mode': 'lawyer',
-            'messages': messages_for_ui(phone, tid, audience=AUDIENCE_PARTNER),
             'threads': threads_with_lawyer_and_postchi(
                 phone,
                 audience=AUDIENCE_PARTNER,
                 active_thread_id=tid,
             ),
-        })
+        }
+        body.update(
+            history_messages_payload(
+                phone,
+                tid,
+                AUDIENCE_PARTNER,
+                limit=page_size,
+                before_id=before_id,
+            )
+        )
+        return jsonify(body)
     from app.ai.chat_store import ensure_active_thread
 
     thread_id = ensure_active_thread(phone, audience=AUDIENCE_PARTNER)
-    return jsonify({
+    body = {
         'ok': True,
         'thread_id': thread_id,
         'mode': 'chat',
-        'messages': messages_for_ui(phone, thread_id, audience=AUDIENCE_PARTNER),
         'threads': threads_with_lawyer_and_postchi(
             phone,
             audience=AUDIENCE_PARTNER,
             active_thread_id=thread_id,
         ),
-    })
+    }
+    body.update(
+        history_messages_payload(
+            phone,
+            thread_id,
+            AUDIENCE_PARTNER,
+            limit=page_size,
+            before_id=before_id,
+        )
+    )
+    return jsonify(body)
 
 
 @express_partner_bp.post('/ai/thread/delete', endpoint='ai_delete_thread')
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_delete_thread():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui
+    from app.ai.chat_store import delete_thread, load_user_record
     from app.lawyer.service import is_lawyer_thread, threads_with_lawyer_and_postchi
     from app.services.postchi import is_postchi_thread
 
@@ -8931,18 +9019,33 @@ def ai_delete_thread():
         return jsonify({'ok': False, 'error': 'این گفتگو قابل حذف نیست.'}), 400
     if not thread_id or not delete_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
         return jsonify({'ok': False, 'error': 'حذف ممکن نیست.'}), 400
+    from app.ai.chat_store import coerce_history_page, history_messages_payload
+
     record = load_user_record(phone, audience=AUDIENCE_PARTNER)
     active = record.get('active_id')
-    return jsonify({
+    raw_limit = data.get('limit')
+    if raw_limit is None and 'page_size' in data:
+        raw_limit = data.get('page_size')
+    page_size, before_id = coerce_history_page(raw_limit, data.get('before_id'))
+    body = {
         'ok': True,
         'thread_id': active,
-        'messages': messages_for_ui(phone, active, audience=AUDIENCE_PARTNER),
         'threads': threads_with_lawyer_and_postchi(
             phone,
             audience=AUDIENCE_PARTNER,
             active_thread_id=active,
         ),
-    })
+    }
+    body.update(
+        history_messages_payload(
+            phone,
+            active,
+            AUDIENCE_PARTNER,
+            limit=page_size,
+            before_id=before_id,
+        )
+    )
+    return jsonify(body)
 
 
 @express_partner_bp.route('/routine/steps', methods=['POST'], endpoint='routine_steps')

@@ -9,7 +9,9 @@
          class="ai-messages ai-scroll"
          aria-live="polite"
          aria-label="گفتگو"
-         data-welcome="{{ _ai_welcome|e }}">
+         data-welcome="{{ _ai_welcome|e }}"
+         data-history-has-more="{{ '1' if chat_history_has_more|default(false) else '0' }}"
+         data-history-next-cursor="{{ chat_history_next_cursor|default('') }}">
       {% for msg in chat_messages|default([]) %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}

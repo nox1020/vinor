@@ -784,6 +784,135 @@ def messages_for_ui(
     return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience)
 
 
+CHAT_HISTORY_PAGE_DEFAULT = 10
+CHAT_HISTORY_PAGE_MAX = 50
+
+
+def coerce_history_page(limit: Any, before_id: Any) -> tuple[int | None, str]:
+    """None means the caller did not ask for a page (legacy full history)."""
+    cursor = str(before_id or "").strip()
+    missing_limit = limit is None or (isinstance(limit, str) and not str(limit).strip())
+    if missing_limit and not cursor:
+        return None, ""
+    try:
+        size = CHAT_HISTORY_PAGE_DEFAULT if missing_limit else int(limit)
+    except (TypeError, ValueError):
+        size = CHAT_HISTORY_PAGE_DEFAULT
+    if size < 1:
+        size = CHAT_HISTORY_PAGE_DEFAULT
+    if size > CHAT_HISTORY_PAGE_MAX:
+        size = CHAT_HISTORY_PAGE_MAX
+    return size, cursor
+
+
+def slice_messages_page(
+    messages: list[dict[str, Any]] | None,
+    *,
+    limit: int,
+    before_id: str | None = None,
+) -> tuple[list[dict[str, Any]], bool, str | None]:
+    """Latest ``limit`` messages before ``before_id``, oldest first.
+
+    The file stores one user's messages in chronological order. The read
+    starts at the newest end and stops after ``limit + 1`` rows — the same
+    shape as ``ORDER BY position DESC LIMIT n+1``. Ids are UUIDs, so the
+    cursor is that id, not a numeric order.
+    """
+    rows = [m for m in (messages or []) if isinstance(m, dict)]
+    end = len(rows)
+    cursor = str(before_id or "").strip()
+    if cursor:
+        end = -1
+        index = len(rows) - 1
+        while index >= 0:
+            if str(rows[index].get("id") or "").strip() == cursor:
+                end = index
+                break
+            index -= 1
+        if end < 0:
+            return [], False, None
+    cap = max(1, int(limit or CHAT_HISTORY_PAGE_DEFAULT))
+    collected: list[dict[str, Any]] = []
+    index = end - 1
+    while index >= 0 and len(collected) < cap + 1:
+        collected.append(rows[index])
+        index -= 1
+    has_more = len(collected) > cap
+    page = list(reversed(collected[:cap]))
+    next_cursor = None
+    if has_more and page:
+        oldest = str(page[0].get("id") or "").strip()
+        next_cursor = oldest or None
+    return page, has_more, next_cursor
+
+
+def _thread_has_user_message(messages: list | None) -> bool:
+    for item in messages or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("hide_ui") or item.get("hide_user"):
+            continue
+        if str(item.get("role") or "") == "user":
+            return True
+    return False
+
+
+def messages_page_for_ui(
+    user_key: str,
+    thread_id: str | None = None,
+    audience: str | None = None,
+    *,
+    limit: Any = None,
+    before_id: Any = None,
+) -> dict[str, Any]:
+    """Page of UI messages. Only the page is enriched, not the older rows."""
+    size, cursor = coerce_history_page(limit, before_id)
+    record = load_user_record(user_key, audience)
+    th = _find_thread(record, thread_id) if thread_id else _active_thread(record)
+    raw = list(th.get("messages") or []) if th else []
+    has_user = _thread_has_user_message(raw)
+    if size is None:
+        return {
+            "messages": _enrich_messages_for_ui(user_key, raw, audience) if raw else [],
+            "has_more": False,
+            "next_cursor": None,
+            "paged": False,
+            "has_user": has_user,
+        }
+    page, has_more, next_cursor = slice_messages_page(raw, limit=size, before_id=cursor)
+    enriched = _enrich_messages_for_ui(user_key, page, audience) if page else []
+    return {
+        "messages": enriched,
+        "has_more": has_more,
+        "next_cursor": next_cursor,
+        "paged": True,
+        "has_user": has_user,
+    }
+
+
+def history_messages_payload(
+    user_key: str,
+    thread_id: str | None = None,
+    audience: str | None = None,
+    *,
+    limit: Any = None,
+    before_id: Any = None,
+) -> dict[str, Any]:
+    """JSON fields for a history response. Unpaged calls omit the page keys."""
+    page = messages_page_for_ui(
+        user_key,
+        thread_id,
+        audience,
+        limit=limit,
+        before_id=before_id,
+    )
+    payload: dict[str, Any] = {"messages": page["messages"]}
+    if page["paged"]:
+        payload["has_more"] = bool(page["has_more"])
+        payload["next_cursor"] = page["next_cursor"]
+    return payload
+
+
 def _collapse_duplicate_land_detail_messages(
     messages: list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:

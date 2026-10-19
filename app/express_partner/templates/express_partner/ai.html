@@ -97,7 +97,9 @@
          class="ai-messages ai-scroll"
          aria-live="polite"
          aria-label="گفتگو"
-         data-welcome="{{ 'سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.' if (ai_audience|default('partner')) == 'partner' else 'سلام! دنبال خرید ملکی یا می‌خوای بازاریاب بشی؟' }}">
+         data-welcome="{{ 'سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.' if (ai_audience|default('partner')) == 'partner' else 'سلام! دنبال خرید ملکی یا می‌خوای بازاریاب بشی؟' }}"
+         data-history-has-more="{{ '1' if chat_history_has_more|default(false) else '0' }}"
+         data-history-next-cursor="{{ chat_history_next_cursor|default('') }}">
       {% for msg in chat_messages %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}

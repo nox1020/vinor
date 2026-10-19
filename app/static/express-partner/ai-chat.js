@@ -268,8 +268,16 @@
   var historyLoadGen = 0;
   var historyLoadSettled = Object.create(null);
   var HISTORY_CACHE_MAX = 24;
+  var HISTORY_PAGE_SIZE = 10;
   var vinorHistoryCache = Object.create(null);
+  var vinorHistoryPage = Object.create(null);
   var historyFetchPromises = Object.create(null);
+  var historyPaging = {
+    threadId: '',
+    hasMore: false,
+    nextCursor: '',
+    loading: false,
+  };
 
   function cacheVinorHistory(tid, messages) {
     tid = String(tid || '').trim();
@@ -303,6 +311,52 @@
     else vinorHistoryCache = Object.create(null);
   }
 
+  function historyPageUrl(tid, beforeId) {
+    var url = historyUrl || (form && form.getAttribute('data-history-url')) || '';
+    if (!url) return '';
+    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'thread_id=' + encodeURIComponent(tid || '');
+    url += '&limit=' + HISTORY_PAGE_SIZE;
+    if (beforeId) url += '&before_id=' + encodeURIComponent(beforeId);
+    return url;
+  }
+
+  function rememberHistoryPage(tid, data) {
+    tid = String(tid || '').trim();
+    if (!tid) return;
+    vinorHistoryPage[tid] = {
+      hasMore: !!(data && data.has_more),
+      nextCursor: (data && data.next_cursor) || '',
+    };
+  }
+
+  function applyHistoryPageMeta(tid) {
+    tid = String(tid || '').trim();
+    var meta = tid && vinorHistoryPage[tid];
+    historyPaging.threadId = tid;
+    historyPaging.hasMore = !!(meta && meta.hasMore);
+    historyPaging.nextCursor = (meta && meta.nextCursor) || '';
+    historyPaging.loading = false;
+    if (list) {
+      list.setAttribute('data-history-has-more', historyPaging.hasMore ? '1' : '0');
+      list.setAttribute('data-history-next-cursor', historyPaging.nextCursor);
+    }
+  }
+
+  function adoptRenderedHistoryPage() {
+    bindLiveChatDom();
+    if (!list) return;
+    historyPaging.threadId = String(activeThreadId() || '');
+    historyPaging.hasMore = list.getAttribute('data-history-has-more') === '1';
+    historyPaging.nextCursor = list.getAttribute('data-history-next-cursor') || '';
+    historyPaging.loading = false;
+    if (historyPaging.threadId) {
+      vinorHistoryPage[historyPaging.threadId] = {
+        hasMore: historyPaging.hasMore,
+        nextCursor: historyPaging.nextCursor,
+      };
+    }
+  }
+
   function applyVinorHistoryFromCache(tid, renderOpts) {
     renderOpts = renderOpts || {};
     bindLiveChatDom();
@@ -317,6 +371,7 @@
     } finally {
       forceShowOpeningInHome = false;
     }
+    applyHistoryPageMeta(tid);
     if (chatListHasVisibleContent()) markHistoryLoadSettled(tid);
     return chatListHasVisibleContent();
   }
@@ -327,9 +382,8 @@
     var cached = peekVinorHistoryCache(tid);
     if (cached) return Promise.resolve(cached);
     if (historyFetchPromises[tid]) return historyFetchPromises[tid];
-    var url = historyUrl || (form && form.getAttribute('data-history-url')) || '';
+    var url = historyPageUrl(tid, '');
     if (!url) return Promise.resolve([]);
-    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'thread_id=' + encodeURIComponent(tid);
     historyFetchPromises[tid] = fetch(url, {
       credentials: 'same-origin',
       headers: apiHeaders(false),
@@ -343,6 +397,7 @@
         var data = payload && payload.data;
         if (!payload || !payload.ok || !data || !data.ok) return [];
         var messages = data.messages || [];
+        rememberHistoryPage(tid, data);
         if (messages.length) cacheVinorHistory(tid, messages);
         else markHistoryLoadSettled(tid);
         return messages;
@@ -459,6 +514,7 @@
         } finally {
           if (showOpening) forceShowOpeningInHome = false;
         }
+        applyHistoryPageMeta(tid);
         if (chatListHasVisibleContent()) markHistoryLoadSettled(tid);
         return chatListHasVisibleContent();
       })
@@ -3207,7 +3263,14 @@
 
     row.appendChild(body);
     wrap.appendChild(row);
-    list.appendChild(wrap);
+    if (opts.prepend) {
+      var anchor = opts.before && opts.before.parentNode === list ? opts.before : null;
+      if (!anchor) anchor = list.querySelector('.ai-msg-wrap');
+      if (anchor) list.insertBefore(wrap, anchor);
+      else list.appendChild(wrap);
+    } else {
+      list.appendChild(wrap);
+    }
     if (!isUser && !opts.thinking && !opts.streamShell && !isSupervisor) {
       wireCopyBlocks(wrap);
       ensureMsgActions(wrap);
@@ -3219,12 +3282,111 @@
         syncHomeEmptyState();
       } catch (_) {}
     }
-    scrollChatToEnd({
-      force:
-        !landChatFocusCode &&
-        !!(homeInline && (document.getElementById('vnOpsScroll') || document.getElementById('vnHomeScroll'))),
-    });
+    if (!opts.preserveScroll) {
+      scrollChatToEnd({
+        force:
+          !landChatFocusCode &&
+          !!(homeInline && (document.getElementById('vnOpsScroll') || document.getElementById('vnHomeScroll'))),
+      });
+    }
     return wrap;
+  }
+
+  function olderHistoryLoadingEl() {
+    bindLiveChatDom();
+    if (!list) return null;
+    var el = document.getElementById('aiHistoryOlderLoading');
+    if (el && el.parentNode === list) return el;
+    el = document.createElement('div');
+    el.id = 'aiHistoryOlderLoading';
+    el.setAttribute('hidden', 'hidden');
+    el.setAttribute('aria-live', 'polite');
+    el.textContent = 'در حال بارگذاری…';
+    el.style.cssText =
+      'text-align:center;padding:8px 0;color:#a1a1aa;font-size:12px;line-height:1.4;';
+    list.insertBefore(el, list.firstChild);
+    return el;
+  }
+
+  function setOlderHistoryLoading(on) {
+    var el = olderHistoryLoadingEl();
+    if (!el) return;
+    if (on) el.removeAttribute('hidden');
+    else el.setAttribute('hidden', 'hidden');
+  }
+
+  function prependHistoryMessages(messages) {
+    bindLiveChatDom();
+    if (!list || !messages || !messages.length) return;
+    var anchor = list.querySelector('.ai-msg-wrap');
+    var scroller = chatScrollEl();
+    var beforeTop = anchor && scroller ? anchor.getBoundingClientRect().top : 0;
+    messages.forEach(function (m) {
+      if (!m || !m.role || !messageHasContent(m)) return;
+      appendMessage(m, { prepend: true, preserveScroll: true, before: anchor });
+    });
+    if (anchor && scroller && anchor.isConnected) {
+      var delta = anchor.getBoundingClientRect().top - beforeTop;
+      if (delta) scroller.scrollTop += delta;
+    }
+  }
+
+  function loadOlderChatHistory() {
+    if (typeof isPostchiMode === 'function' && isPostchiMode()) return;
+    if (historyPaging.loading || !historyPaging.hasMore || !historyPaging.nextCursor) return;
+    var tid = String(activeThreadId() || historyPaging.threadId || '').trim();
+    if (!tid || tid === postchiThreadId) return;
+    var url = historyPageUrl(tid, historyPaging.nextCursor);
+    if (!url) return;
+    historyPaging.loading = true;
+    setOlderHistoryLoading(true);
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: apiHeaders(false),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (payload) {
+        if (String(activeThreadId() || historyPaging.threadId || '') !== tid) return;
+        var data = payload && payload.data;
+        if (!payload || !payload.ok || !data || !data.ok) return;
+        var messages = data.messages || [];
+        prependHistoryMessages(messages);
+        historyPaging.hasMore = !!data.has_more && messages.length > 0;
+        historyPaging.nextCursor = data.next_cursor || '';
+        if (!historyPaging.hasMore) historyPaging.nextCursor = '';
+        rememberHistoryPage(tid, {
+          has_more: historyPaging.hasMore,
+          next_cursor: historyPaging.nextCursor,
+        });
+        if (list) {
+          list.setAttribute('data-history-has-more', historyPaging.hasMore ? '1' : '0');
+          list.setAttribute('data-history-next-cursor', historyPaging.nextCursor);
+        }
+      })
+      .catch(function () {})
+      .finally(function () {
+        historyPaging.loading = false;
+        setOlderHistoryLoading(false);
+      });
+  }
+
+  function bindOlderHistoryScroll() {
+    var el = chatScrollEl();
+    if (!el || el.getAttribute('data-history-page-bound') === '1') return;
+    el.setAttribute('data-history-page-bound', '1');
+    el.addEventListener(
+      'scroll',
+      function () {
+        if (historyPaging.loading || !historyPaging.hasMore) return;
+        if (el.scrollTop > 64) return;
+        loadOlderChatHistory();
+      },
+      { passive: true }
+    );
   }
 
   function showThinking() {
@@ -3888,7 +4050,7 @@
         method: 'POST',
         headers: apiHeaders(true),
         credentials: 'same-origin',
-        body: JSON.stringify({ thread_id: threadId }),
+        body: JSON.stringify({ thread_id: threadId, limit: HISTORY_PAGE_SIZE }),
         signal: switchAbort.signal,
       });
       var data = await resp.json();
@@ -3935,6 +4097,10 @@
       }
       if (enterVinorChat && data.messages && data.messages.length) {
         cacheVinorHistory(data.thread_id, data.messages);
+      }
+      if (data.thread_id && data.mode !== 'postchi' && data.thread_id !== postchiThreadId) {
+        rememberHistoryPage(data.thread_id, data);
+        applyHistoryPageMeta(data.thread_id);
       }
       if (enterVinorChat && chatListNeedsHistoryFetch()) {
         try {
@@ -4119,13 +4285,15 @@
         method: 'POST',
         headers: apiHeaders(true),
         credentials: 'same-origin',
-        body: JSON.stringify({ thread_id: threadId }),
+        body: JSON.stringify({ thread_id: threadId, limit: HISTORY_PAGE_SIZE }),
         signal: deleteAbort.signal,
       });
       var data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error((data && data.error) || 'حذف ممکن نیست');
       if (data.thread_id) setActiveThreadId(data.thread_id);
       renderMessages(data.messages);
+      rememberHistoryPage(data.thread_id, data);
+      applyHistoryPageMeta(data.thread_id);
       lastThreadsKey = '';
       if (data.threads) applyThreads(data.threads);
       else await refreshHistory(true);
@@ -4526,6 +4694,8 @@
   scrubLandCardsFromChatDom();
   enhanceAssistantBubbles(list);
   scanLastSyncFromDom();
+  adoptRenderedHistoryPage();
+  bindOlderHistoryScroll();
   scrollChatToLatest();
 
   list.addEventListener('click', onMsgActionsClick);

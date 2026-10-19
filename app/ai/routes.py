@@ -81,7 +81,7 @@ def sync():
 
 @ai_bp.get("/history", endpoint="history")
 def history():
-    from app.ai.chat_store import messages_for_ui, threads_for_ui
+    from app.ai.chat_store import threads_for_ui
     from app.lawyer.service import is_lawyer_thread, threads_with_lawyer
 
     key = ai_user_key()
@@ -102,7 +102,21 @@ def history():
         "audience": AUDIENCE_PUBLIC,
     }
     if not threads_only:
-        payload["messages"] = messages_for_ui(key, thread_id, audience=AUDIENCE_PUBLIC)
+        from app.ai.chat_store import coerce_history_page, history_messages_payload
+
+        raw_limit = request.args.get("limit")
+        if raw_limit is None:
+            raw_limit = request.args.get("page_size")
+        page_size, before_id = coerce_history_page(raw_limit, request.args.get("before_id"))
+        payload.update(
+            history_messages_payload(
+                key,
+                thread_id,
+                AUDIENCE_PUBLIC,
+                limit=page_size,
+                before_id=before_id,
+            )
+        )
         payload["mode"] = (
             "lawyer" if logged_in and is_lawyer_thread(thread_id) else "chat"
         )
@@ -298,7 +312,7 @@ def agent_cancel():
 
 @ai_bp.post("/thread/switch", endpoint="switch_thread")
 def switch_thread():
-    from app.ai.chat_store import messages_for_ui, ensure_active_thread, threads_for_ui
+    from app.ai.chat_store import ensure_active_thread, threads_for_ui
     from app.lawyer.config import lawyer_enabled
     from app.lawyer.service import (
         ensure_lawyer_thread,
@@ -306,12 +320,18 @@ def switch_thread():
         threads_with_lawyer,
     )
 
+    from app.ai.chat_store import coerce_history_page, history_messages_payload
+
     key = ai_user_key()
     data = request.get_json(silent=True) or {}
     thread_id = (data.get("thread_id") or "").strip()
     if not thread_id:
         return jsonify({"ok": False, "error": "گفتگو یافت نشد."}), 404
     logged_in = bool(_session_phone())
+    raw_limit = data.get("limit")
+    if raw_limit is None and "page_size" in data:
+        raw_limit = data.get("page_size")
+    page_size, before_id = coerce_history_page(raw_limit, data.get("before_id"))
 
     def _threads(active_id: str | None):
         if logged_in:
@@ -328,26 +348,44 @@ def switch_thread():
         if not lawyer_enabled():
             return jsonify({"ok": False, "error": "وکیل ملکی فعلاً غیرفعال است."}), 403
         tid = ensure_lawyer_thread(key, audience=AUDIENCE_PUBLIC)
-        return jsonify({
+        body = {
             "ok": True,
             "thread_id": tid,
             "mode": "lawyer",
-            "messages": messages_for_ui(key, tid, audience=AUDIENCE_PUBLIC),
             "threads": _threads(tid),
-        })
+        }
+        body.update(
+            history_messages_payload(
+                key,
+                tid,
+                AUDIENCE_PUBLIC,
+                limit=page_size,
+                before_id=before_id,
+            )
+        )
+        return jsonify(body)
     thread_id = ensure_active_thread(key, audience=AUDIENCE_PUBLIC)
-    return jsonify({
+    body = {
         "ok": True,
         "thread_id": thread_id,
         "mode": "chat",
-        "messages": messages_for_ui(key, thread_id, audience=AUDIENCE_PUBLIC),
         "threads": _threads(thread_id),
-    })
+    }
+    body.update(
+        history_messages_payload(
+            key,
+            thread_id,
+            AUDIENCE_PUBLIC,
+            limit=page_size,
+            before_id=before_id,
+        )
+    )
+    return jsonify(body)
 
 
 @ai_bp.post("/thread/delete", endpoint="delete_thread")
 def delete_thread():
-    from app.ai.chat_store import delete_thread, load_user_record, messages_for_ui, threads_for_ui
+    from app.ai.chat_store import delete_thread, load_user_record, threads_for_ui
     from app.ai.credits import is_guest_user_key
     from app.lawyer.service import is_lawyer_thread, threads_with_lawyer
 
@@ -373,12 +411,27 @@ def delete_thread():
         if logged_in
         else (threads_for_ui(key, audience=AUDIENCE_PUBLIC) or [])
     )
-    return jsonify({
+    from app.ai.chat_store import coerce_history_page, history_messages_payload
+
+    raw_limit = data.get("limit")
+    if raw_limit is None and "page_size" in data:
+        raw_limit = data.get("page_size")
+    page_size, before_id = coerce_history_page(raw_limit, data.get("before_id"))
+    body = {
         "ok": True,
         "thread_id": active,
-        "messages": messages_for_ui(key, active, audience=AUDIENCE_PUBLIC),
         "threads": threads,
-    })
+    }
+    body.update(
+        history_messages_payload(
+            key,
+            active,
+            AUDIENCE_PUBLIC,
+            limit=page_size,
+            before_id=before_id,
+        )
+    )
+    return jsonify(body)
 
 
 @ai_bp.post("/api/chat", endpoint="legacy_chat")

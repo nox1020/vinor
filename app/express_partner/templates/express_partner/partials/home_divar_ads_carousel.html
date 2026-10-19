@@ -194,7 +194,8 @@
     aspect-ratio: 16 / 10;
   }
 </style>
-{% set _divar_home_empty = not (chat_messages|default([])|selectattr('role', 'equalto', 'user')|list) %}
+{% set _divar_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
+{% set _divar_home_empty = not (_divar_user_msgs or chat_has_user_messages|default(false)) %}
 {% set _ads_title = divar_pro_ads_title|default('آگهی‌ها') %}
 <section id="homeDivarAdsCarousel"
          class="vn-home-divar"

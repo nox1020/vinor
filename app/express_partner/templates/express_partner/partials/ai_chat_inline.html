@@ -947,6 +947,9 @@
      data-open-on-load="{{ '1' if home_ai_open|default(false) else '0' }}"
      data-open-thread="{{ home_ai_open_thread|default('') }}">
   {% set _empty_user_msgs = chat_messages|default([])|selectattr('role', 'equalto', 'user')|list %}
+  {% if chat_has_user_messages|default(false) and not _empty_user_msgs %}
+  {% set _empty_user_msgs = ['1'] %}
+  {% endif %}
   {% set _open_land_chat = request.args.get('land') or request.args.get('divar') %}
   <div id="aiHomeEmpty"
        class="ai-home-empty"
