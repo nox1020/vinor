@@ -311,13 +311,20 @@
     else vinorHistoryCache = Object.create(null);
   }
 
-  function historyPageUrl(tid, beforeId) {
+  function historyLightUrl(tid, beforeId) {
     var url = historyUrl || (form && form.getAttribute('data-history-url')) || '';
     if (!url) return '';
     url += (url.indexOf('?') >= 0 ? '&' : '?') + 'thread_id=' + encodeURIComponent(tid || '');
-    url += '&limit=' + HISTORY_PAGE_SIZE;
-    if (beforeId) url += '&before_id=' + encodeURIComponent(beforeId);
+    url += '&light=1';
+    if (beforeId) {
+      url += '&limit=' + HISTORY_PAGE_SIZE;
+      url += '&before_id=' + encodeURIComponent(beforeId);
+    }
     return url;
+  }
+
+  function historyPageUrl(tid, beforeId) {
+    return historyLightUrl(tid, beforeId);
   }
 
   function rememberHistoryPage(tid, data) {
@@ -382,7 +389,7 @@
     var cached = peekVinorHistoryCache(tid);
     if (cached) return Promise.resolve(cached);
     if (historyFetchPromises[tid]) return historyFetchPromises[tid];
-    var url = historyPageUrl(tid, '');
+    var url = historyLightUrl(tid, '');
     if (!url) return Promise.resolve([]);
     historyFetchPromises[tid] = fetch(url, {
       credentials: 'same-origin',
@@ -411,12 +418,8 @@
     return historyFetchPromises[tid];
   }
 
-  function prefetchVinorHistory(tid) {
-    if (!homeInline) return;
-    tid = String(tid || vinorThreadIdForReturn() || activeThreadId() || '').trim();
-    if (!tid || tid === postchiThreadId || isLawyerThreadId(tid)) return;
-    if (listHasVinorHistory() || peekVinorHistoryCache(tid)) return;
-    fetchVinorHistoryMessages(tid).catch(function () {});
+  function prefetchVinorHistory() {
+    /* تاریخچه فقط وقتی خود چت باز می‌شود بارگذاری می‌شود. */
   }
 
   function markHistoryLoadSettled(tid) {
@@ -1176,6 +1179,7 @@
     var cardsHtml = buildCardsHtml(msg, { deferHomeMirror: true });
     var hasLands =
       (msg.land_cards && msg.land_cards.length) ||
+      (msg.lazy_land_codes && msg.lazy_land_codes.length) ||
       (msg.cards_html && /ai-land-cards/.test(String(msg.cards_html)));
     if (!text && !cardsHtml && !hasLands) return Promise.resolve(null);
 
@@ -1191,11 +1195,15 @@
         created_at: msg.created_at,
         escalation_id: msg.escalation_id,
         source: msg.source,
+        id: msg.id,
         cards_html: msg.cards_html,
         land_cards: msg.land_cards,
+        lazy_land_codes: msg.lazy_land_codes,
+        land_codes: msg.land_codes,
         land_detail_html: msg.land_detail_html,
         land_code: msg.land_code,
         agent_actions: msg.agent_actions,
+        meta: msg.meta,
       },
       { streamShell: true }
     );
@@ -1387,6 +1395,7 @@
     homeEmptyEntryForced = true;
     forceShowOpeningInHome = false;
     pollPaused = true;
+    stopChatPoll();
     try {
       clearLandChatFocus();
     } catch (_) {}
@@ -2390,6 +2399,9 @@
       msg.attachment ||
       (msg.meta && msg.meta.attachment) ||
       (msg.land_cards && msg.land_cards.length) ||
+      (msg.lazy_land_codes && msg.lazy_land_codes.length) ||
+      (msg.land_codes && msg.land_codes.length) ||
+      msg.land_code ||
       (msg.agent_actions && msg.agent_actions.length)
     );
   }
@@ -3054,19 +3066,191 @@
     });
   }
 
+  var landHtmlCache = Object.create(null);
+  var lazyWait = Object.create(null);
+  var lazyTimer = 0;
+  var lazyObserver = null;
+
+  function landCardsUrl() {
+    var base = String(historyUrl || (form && form.getAttribute('data-history-url')) || '').split('?')[0];
+    if (/\/history\/?$/.test(base)) return base.replace(/\/history\/?$/, '/land-cards');
+    if (base.indexOf('/express/partner/') >= 0) return '/express/partner/ai/land-cards';
+    return '/ai/land-cards';
+  }
+
+  function messageLazyCodes(msg) {
+    var raw = msg && msg.lazy_land_codes;
+    if (!raw || !raw.length) return [];
+    var out = [];
+    var seen = Object.create(null);
+    for (var i = 0; i < raw.length; i++) {
+      var code = String(raw[i] || '').trim();
+      if (!code || seen[code]) continue;
+      seen[code] = 1;
+      out.push(code);
+    }
+    return out;
+  }
+
+  function lazyLandSlot(code) {
+    var slot = document.createElement('div');
+    slot.className = 'ai-land-card-slot';
+    slot.setAttribute('data-vn-lazy-land', code);
+    slot.setAttribute('data-land-code', code);
+    var sk = document.createElement('div');
+    sk.className = 'ai-land-card-skeleton';
+    sk.setAttribute('aria-busy', 'true');
+    sk.setAttribute('aria-label', 'در حال بارگذاری فایل');
+    slot.appendChild(sk);
+    return slot;
+  }
+
+  function fillLazyLand(slot, html) {
+    slot.setAttribute('data-vn-lazy-done', '1');
+    slot.removeAttribute('data-vn-lazy-error');
+    var box = document.createElement('div');
+    box.innerHTML = html;
+    var node = box.firstElementChild;
+    if (!node) {
+      failLazyLand(slot);
+      return;
+    }
+    slot.replaceWith(node);
+    initCardsIn(node);
+    try {
+      if (typeof window.vinorSyncFavButtons === 'function') window.vinorSyncFavButtons(node);
+    } catch (_) {}
+  }
+
+  function failLazyLand(slot) {
+    if (!slot) return;
+    slot.setAttribute('data-vn-lazy-error', '1');
+    var sk = slot.querySelector('.ai-land-card-skeleton');
+    if (!sk) return;
+    sk.removeAttribute('aria-busy');
+    sk.setAttribute('aria-label', 'کارت فایل در دسترس نیست');
+  }
+
+  function queueLazyLand(el) {
+    var code = String((el && el.getAttribute('data-vn-lazy-land')) || '').trim();
+    if (!code || el.getAttribute('data-vn-lazy-done') === '1') return;
+    if (landHtmlCache[code]) {
+      fillLazyLand(el, landHtmlCache[code]);
+      return;
+    }
+    if (el.getAttribute('data-vn-lazy-queued') === '1') return;
+    el.setAttribute('data-vn-lazy-queued', '1');
+    if (!lazyWait[code]) lazyWait[code] = [];
+    lazyWait[code].push(el);
+    if (!lazyTimer) lazyTimer = window.setTimeout(flushLazyLands, 50);
+  }
+
+  function flushLazyLands() {
+    lazyTimer = 0;
+    var codes = Object.keys(lazyWait);
+    if (!codes.length) return;
+    var batch = codes.slice(0, 10);
+    if (codes.length > 10) lazyTimer = window.setTimeout(flushLazyLands, 50);
+    var waiting = Object.create(null);
+    batch.forEach(function (code) {
+      waiting[code] = lazyWait[code];
+      delete lazyWait[code];
+    });
+    var url = landCardsUrl();
+    fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'codes=' + encodeURIComponent(batch.join(',')), {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (payload) {
+        var data = (payload && payload.data) || {};
+        var byCode = Object.create(null);
+        if (payload && payload.ok && data.ok && data.cards) {
+          data.cards.forEach(function (card) {
+            if (card && card.code && card.html) byCode[String(card.code)] = String(card.html);
+          });
+        }
+        batch.forEach(function (code) {
+          var html = byCode[code];
+          if (html) landHtmlCache[code] = html;
+          (waiting[code] || []).forEach(function (el) {
+            if (!el.isConnected) return;
+            if (html) fillLazyLand(el, html);
+            else failLazyLand(el);
+          });
+        });
+      })
+      .catch(function () {
+        batch.forEach(function (code) {
+          (waiting[code] || []).forEach(function (el) {
+            if (el.isConnected) failLazyLand(el);
+          });
+        });
+      });
+  }
+
+  function lazyScrollRoot() {
+    var el = null;
+    try {
+      el = chatScrollEl();
+    } catch (_) {
+      el = null;
+    }
+    if (!el) el = document.getElementById('vnHomeScroll') || document.getElementById('vnOpsScroll');
+    return el || null;
+  }
+
+  function observeLazyLand(el) {
+    if (!el || el.getAttribute('data-vn-lazy-watched') === '1') return;
+    el.setAttribute('data-vn-lazy-watched', '1');
+    if (typeof IntersectionObserver !== 'function') {
+      queueLazyLand(el);
+      return;
+    }
+    if (!lazyObserver) {
+      lazyObserver = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            try {
+              lazyObserver.unobserve(entry.target);
+            } catch (_) {}
+            queueLazyLand(entry.target);
+          });
+        },
+        { root: lazyScrollRoot(), rootMargin: '240px 0px', threshold: 0.01 }
+      );
+    }
+    lazyObserver.observe(el);
+  }
+
+  function bindLazyLandCards(root) {
+    var scope = root || list;
+    if (!scope || !scope.querySelectorAll) return;
+    var nodes = scope.querySelectorAll('[data-vn-lazy-land]');
+    for (var i = 0; i < nodes.length; i++) observeLazyLand(nodes[i]);
+  }
+
   function appendMessage(msg, opts) {
     opts = opts || {};
     if (messageSeen(msg)) return null;
     var isLandDetailMsg =
       !!(msg && msg.land_detail_html) ||
-      String((msg && msg.source) || '').toLowerCase() === 'land_detail';
-    var earlyLandCode = String((msg && msg.land_code) || '').trim();
+      String((msg && msg.source) || '').toLowerCase() === 'land_detail' ||
+      !!(msg && msg.meta && msg.meta.land_chat_detail);
+    var earlyLandCode = String((msg && (msg.land_code || (msg.lazy_land_codes && msg.lazy_land_codes[0]))) || '').trim();
     if (isLandDetailMsg && earlyLandCode && list) {
       var earlyLand = list.querySelector(landChatCodeSelector(earlyLandCode));
       if (earlyLand) return earlyLand;
     }
     var role = msg.role || 'assistant';
     var text = (msg.content || '').trim();
+    if (isLandDetailMsg) text = '';
+    var lazyCodes = messageLazyCodes(msg);
     var msgType = String(msg.type || '').toLowerCase();
     var isSupervisor = isSupervisorMsg(msg);
     var isSystemish =
@@ -3099,6 +3283,7 @@
       !text &&
       !cardsHtml &&
       !msg.land_detail_html &&
+      !lazyCodes.length &&
       !attachment &&
       !opts.thinking &&
       !opts.streamShell
@@ -3259,6 +3444,25 @@
           window.vinorSyncFavButtons(detailHost);
         }
       } catch (_) {}
+    } else if (lazyCodes.length && !opts.thinking) {
+      var lazyHost = document.createElement('div');
+      lazyHost.className = 'ai-msg-cards ai-land-lazy w-full min-w-0 max-w-full';
+      lazyCodes.forEach(function (code) {
+        lazyHost.appendChild(lazyLandSlot(code));
+      });
+      var beforeBubble = body.querySelector('.ai-msg-bubble');
+      if (beforeBubble) body.insertBefore(lazyHost, beforeBubble);
+      else body.appendChild(lazyHost);
+      var detailCode = String(msg.land_code || lazyCodes[0] || '').trim();
+      if (
+        detailCode &&
+        (String(msg.source || '').toLowerCase() === 'land_detail' ||
+          (msg.meta && msg.meta.land_chat_detail))
+      ) {
+        wrap.setAttribute('data-land-chat-code', detailCode);
+        wrap.removeAttribute('data-ephemeral');
+      }
+      bindLazyLandCards(lazyHost);
     }
 
     row.appendChild(body);
@@ -4050,7 +4254,7 @@
         method: 'POST',
         headers: apiHeaders(true),
         credentials: 'same-origin',
-        body: JSON.stringify({ thread_id: threadId, limit: HISTORY_PAGE_SIZE }),
+        body: JSON.stringify({ thread_id: threadId, light: 1 }),
         signal: switchAbort.signal,
       });
       var data = await resp.json();
@@ -4285,7 +4489,7 @@
         method: 'POST',
         headers: apiHeaders(true),
         credentials: 'same-origin',
-        body: JSON.stringify({ thread_id: threadId, limit: HISTORY_PAGE_SIZE }),
+        body: JSON.stringify({ thread_id: threadId, light: 1 }),
         signal: deleteAbort.signal,
       });
       var data = await resp.json();
@@ -4390,7 +4594,8 @@
         'thread_id=' +
         encodeURIComponent(tid) +
         '&count=' +
-        encodeURIComponent(String(storedMessageCount()));
+        encodeURIComponent(String(storedMessageCount())) +
+        '&light=1';
       if (lastSyncAt) {
         url += '&after=' + encodeURIComponent(lastSyncAt);
       }
@@ -4424,13 +4629,34 @@
     }
   }
 
+  function chatSessionOpen() {
+    if (typeof isPostchiMode === 'function' && isPostchiMode()) return false;
+    if (homeInline && !homeChatLayerOpen) return false;
+    if (layerGated && !sheetOpen && !homeInline) return false;
+    return true;
+  }
+
+  function ensureChatPoll() {
+    if (!chatSessionOpen()) return;
+    if (pollTimer) return;
+    pollTimer = setInterval(pollSync, POLL_MS);
+  }
+
+  function stopChatPoll() {
+    if (!pollTimer) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
   function resumePoll() {
-    if (layerGated && !sheetOpen && !homeInline) {
+    if (!chatSessionOpen()) {
       pollPaused = true;
+      stopChatPoll();
       return;
     }
     pollPaused = false;
     emptyPollStreak = 0;
+    ensureChatPoll();
     pollSync();
   }
 
@@ -4693,6 +4919,7 @@
   });
   scrubLandCardsFromChatDom();
   enhanceAssistantBubbles(list);
+  bindLazyLandCards(list);
   scanLastSyncFromDom();
   adoptRenderedHistoryPage();
   bindOlderHistoryScroll();
@@ -4705,30 +4932,14 @@
     closeAllMsgMenus();
   });
 
-  pollTimer = setInterval(pollSync, POLL_MS);
+  if (chatSessionOpen()) {
+    ensureChatPoll();
+    if (typeof chatListNeedsHistoryFetch === 'function' && chatListNeedsHistoryFetch()) {
+      loadVinorHistoryIfEmpty();
+    }
+  }
   if (!embedded) {
     refreshHistory(false);
-  }
-  if (homeInline && historyUrl) {
-    try {
-      var _prefetchTid = vinorThreadIdForReturn() || activeThreadId();
-      if (
-        _prefetchTid &&
-        _prefetchTid !== postchiThreadId &&
-        !isLawyerThreadId(_prefetchTid)
-      ) {
-        prefetchVinorHistory(_prefetchTid);
-      }
-    } catch (_) {}
-  }
-  if (menuBtn && homeInline) {
-    menuBtn.addEventListener(
-      'pointerenter',
-      function () {
-        prefetchVinorHistory();
-      },
-      { passive: true }
-    );
   }
   onVisChange = function () {
     if (document.hidden) return;
@@ -4958,7 +5169,7 @@
 
     try {
       var intent = takePendingChipIntent();
-      var body = { message: msg, thread_id: activeThreadId() };
+      var body = { message: msg, thread_id: activeThreadId(), light: 1 };
       if (intent) body.intent = intent;
       if (silentUser) body.hide_user = true;
       if (isLawyerMode()) body.mode = 'lawyer';

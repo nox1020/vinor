@@ -62,6 +62,8 @@ def sync():
         for x in (request.args.get("exclude_esc") or "").split(",")
         if x.strip()
     ]
+    from app.ai.chat_store import include_land_cards_from_request
+
     msgs = messages_since(
         key,
         thread_id,
@@ -69,6 +71,7 @@ def sync():
         audience=AUDIENCE_PUBLIC,
         after_count=max(0, after_count),
         exclude_escalation_ids=exclude_esc,
+        include_land_cards=include_land_cards_from_request(request),
     )
     return jsonify({
         "ok": True,
@@ -107,6 +110,8 @@ def history():
         raw_limit = request.args.get("limit")
         if raw_limit is None:
             raw_limit = request.args.get("page_size")
+        from app.ai.chat_store import include_land_cards_from_request
+
         page_size, before_id = coerce_history_page(raw_limit, request.args.get("before_id"))
         payload.update(
             history_messages_payload(
@@ -115,12 +120,32 @@ def history():
                 AUDIENCE_PUBLIC,
                 limit=page_size,
                 before_id=before_id,
+                include_land_cards=include_land_cards_from_request(request),
             )
         )
         payload["mode"] = (
             "lawyer" if logged_in and is_lawyer_thread(thread_id) else "chat"
         )
     return jsonify(payload)
+
+
+@ai_bp.get("/land-cards", endpoint="land_cards")
+def land_cards():
+    """Batch land-card HTML for codes this viewer may see. Max 10."""
+    from app.ai.land_cards import (
+        LAND_CARDS_BATCH_MAX,
+        land_cards_batch,
+        parse_land_code_list,
+    )
+
+    codes = parse_land_code_list(request.args.get("codes") or "")
+    if len(codes) > LAND_CARDS_BATCH_MAX:
+        return jsonify({
+            "ok": False,
+            "error": "too_many_codes",
+            "max": LAND_CARDS_BATCH_MAX,
+        }), 400
+    return jsonify(land_cards_batch(ai_user_key(), codes, audience=AUDIENCE_PUBLIC))
 
 
 @ai_bp.post("/chat", endpoint="chat")
@@ -186,8 +211,11 @@ def chat():
     if not result.get("ok"):
         return jsonify(result), ai_chat_http_status(result)
 
+    from app.ai.chat_store import include_land_cards_from_request
+
     land_codes = [] if voice == VOICE_LAWYER else (result.get("land_codes") or [])
     agent_actions = [] if voice == VOICE_LAWYER else (result.get("agent_actions") or [])
+    include_cards = include_land_cards_from_request(request)
     msgs, tid = append_exchange(
         key,
         message,
@@ -197,6 +225,7 @@ def chat():
         assistant_agent_actions=agent_actions,
         audience=AUDIENCE_PUBLIC,
         hide_user=hide_user,
+        include_land_cards=include_cards,
     )
     used = record_guest_assistant_reply(key)
     remaining = guest_replies_remaining(key)
@@ -208,6 +237,9 @@ def chat():
     # اگر همین پاسخ سقف را پر کرد، فلگ برای UI
     if remaining == 0 and is_guest_user_key(key):
         result["guest_limit_reached"] = True
+    if not include_cards and not agent_actions:
+        result.pop("cards_html", None)
+        result.pop("land_cards", None)
     result["messages"] = msgs
     result["thread_id"] = tid
     result["audience"] = AUDIENCE_PUBLIC
@@ -237,7 +269,14 @@ def clear():
     tid = out.get("thread_id")
     msgs = out.get("messages")
     if msgs is None:
-        msgs = messages_for_ui(key, thread_id=tid, audience=AUDIENCE_PUBLIC)
+        from app.ai.chat_store import include_land_cards_from_request
+
+        msgs = messages_for_ui(
+            key,
+            thread_id=tid,
+            audience=AUDIENCE_PUBLIC,
+            include_land_cards=include_land_cards_from_request(request),
+        )
     return jsonify({"ok": True, "thread_id": tid, "messages": msgs})
 
 
@@ -354,6 +393,8 @@ def switch_thread():
             "mode": "lawyer",
             "threads": _threads(tid),
         }
+        from app.ai.chat_store import include_land_cards_from_request
+
         body.update(
             history_messages_payload(
                 key,
@@ -361,6 +402,7 @@ def switch_thread():
                 AUDIENCE_PUBLIC,
                 limit=page_size,
                 before_id=before_id,
+                include_land_cards=include_land_cards_from_request(request),
             )
         )
         return jsonify(body)
@@ -371,6 +413,8 @@ def switch_thread():
         "mode": "chat",
         "threads": _threads(thread_id),
     }
+    from app.ai.chat_store import include_land_cards_from_request
+
     body.update(
         history_messages_payload(
             key,
@@ -378,6 +422,7 @@ def switch_thread():
             AUDIENCE_PUBLIC,
             limit=page_size,
             before_id=before_id,
+            include_land_cards=include_land_cards_from_request(request),
         )
     )
     return jsonify(body)
@@ -422,6 +467,8 @@ def delete_thread():
         "thread_id": active,
         "threads": threads,
     }
+    from app.ai.chat_store import include_land_cards_from_request
+
     body.update(
         history_messages_payload(
             key,
@@ -429,6 +476,7 @@ def delete_thread():
             AUDIENCE_PUBLIC,
             limit=page_size,
             before_id=before_id,
+            include_land_cards=include_land_cards_from_request(request),
         )
     )
     return jsonify(body)

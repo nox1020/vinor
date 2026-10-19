@@ -274,3 +274,48 @@ def land_cards_payload(
             continue
         payload.append({"code": code, "html": _slot_html(inner, full=full)})
     return payload
+
+
+LAND_CARDS_BATCH_MAX = 10
+
+
+def parse_land_code_list(raw: str) -> list[str]:
+    """Comma-separated codes, order kept, duplicates dropped."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for bit in str(raw or "").replace("،", ",").split(","):
+        code = bit.strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        out.append(code)
+    return out
+
+
+def land_cards_batch(
+    phone: str,
+    codes: list[str],
+    *,
+    audience: str | None = None,
+) -> dict[str, Any]:
+    """On-demand card HTML for codes the viewer is allowed to see.
+
+    The chat message cap of two cards does not apply here. Callers enforce
+    ``LAND_CARDS_BATCH_MAX``. Codes outside ``accessible_lands_map`` are listed
+    in ``missing`` and their HTML is not built.
+    """
+    aud = audience if audience in (AUDIENCE_PARTNER, AUDIENCE_PUBLIC) else AUDIENCE_PARTNER
+    lands_map = accessible_lands_map(phone, aud)
+    cards: list[dict[str, str]] = []
+    missing: list[str] = []
+    for code in codes:
+        land = lands_map.get(str(code).strip())
+        if not land:
+            missing.append(code)
+            continue
+        inner = _full_land_card_html(code)
+        if not inner:
+            missing.append(code)
+            continue
+        cards.append({"code": code, "html": _slot_html(inner, full=True)})
+    return {"ok": True, "cards": cards, "missing": missing}

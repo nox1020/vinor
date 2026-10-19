@@ -80,6 +80,7 @@ jobs:
             tests/test_public_listings_all_regions.py
             tests/test_service_area_copy.py
             tests/test_chat_history_page.py
+            tests/test_chat_light_load.py
             tests/test_seo_listing_price_sitemap.py
             tests/test_vinor_man.py
             tests/test_owner_home_unpublish.py

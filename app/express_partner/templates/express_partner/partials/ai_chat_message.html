@@ -12,6 +12,7 @@
      {% if msg.created_at %}data-created-at="{{ msg.created_at }}"{% endif %}
      {% if msg.escalation_id %}data-escalation-id="{{ msg.escalation_id }}"{% endif %}
      {% if msg.source %}data-source="{{ msg.source }}"{% endif %}
+     {% if msg.source == 'land_detail' or (msg.meta and msg.meta.land_chat_detail) %}data-land-chat-code="{{ msg.land_code or ((msg.lazy_land_codes or [''])[0]) }}"{% endif %}
      {% if is_supervisor and msg.meta %}
        {% if msg.meta.report_category %}data-report-category="{{ msg.meta.report_category }}"{% endif %}
        {% if msg.meta.land_code %}data-land-code="{{ msg.meta.land_code }}"{% endif %}
@@ -39,6 +40,15 @@
           {{ lc.html|safe }}
           {% endfor %}
         </div>
+      </div>
+      {% endif %}
+      {% if msg.lazy_land_codes %}
+      <div class="ai-msg-cards ai-land-lazy">
+        {% for code in msg.lazy_land_codes %}
+        <div class="ai-land-card-slot" data-vn-lazy-land="{{ code }}" data-land-code="{{ code }}">
+          <div class="ai-land-card-skeleton" aria-busy="true" aria-label="در حال بارگذاری فایل"></div>
+        </div>
+        {% endfor %}
       </div>
       {% endif %}
       {% if is_supervisor and msg.content %}

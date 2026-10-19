@@ -124,6 +124,7 @@ def emit_chat_event(
         agent_actions=agent_actions,
         event=ev,
         meta=meta,
+        include_land_cards=False,
     )
 
     case = None

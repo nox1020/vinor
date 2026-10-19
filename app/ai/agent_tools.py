@@ -5194,6 +5194,7 @@ def cancel_pending_action(
         note=note,
         actor=me,
         result={"cancelled": True},
+        include_land_cards=False,
     )
     # Soft timeline (avoid duplicate if card not found — still ok)
     try:
@@ -5261,6 +5262,7 @@ def apply_confirm_result_to_chat(
         lines=lines,
         note=note,
         actor=me,
+        include_land_cards=False,
     )
     event_key = "card_confirmed"
     # Prefer domain-specific timeline labels when possible
@@ -5285,7 +5287,9 @@ def apply_confirm_result_to_chat(
             )
             from app.ai.chat_store import messages_for_ui
 
-            msgs = messages_for_ui(me, tid or thread_id, aud)
+            msgs = messages_for_ui(
+                me, tid or thread_id, aud, include_land_cards=False
+            )
         elif not updated:
             # Backward-compatible fallback: plain assistant note
             from app.ai.chat_store import append_exchange
@@ -5296,6 +5300,7 @@ def apply_confirm_result_to_chat(
                 note,
                 thread_id=tid or thread_id,
                 audience=aud,
+                include_land_cards=False,
             )
     except Exception:
         if not msgs:
@@ -5303,7 +5308,12 @@ def apply_confirm_result_to_chat(
                 from app.ai.chat_store import append_exchange
 
                 msgs, tid = append_exchange(
-                    me, "", note, thread_id=thread_id, audience=aud
+                    me,
+                    "",
+                    note,
+                    thread_id=thread_id,
+                    audience=aud,
+                    include_land_cards=False,
                 )
             except Exception:
                 pass
@@ -5327,6 +5337,7 @@ def apply_confirm_result_to_chat(
                 audience=aud,
                 assistant_agent_actions=[ui],
                 hide_user=True,
+                include_land_cards=False,
             )
         except Exception:
             pass

@@ -3994,34 +3994,27 @@ def _partner_ai_layer_context(
 
     def _show_loaded(msgs: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
         nonlocal chat_history_has_more, chat_history_next_cursor, chat_has_user_messages
-        from app.ai.chat_store import (
-            CHAT_HISTORY_PAGE_DEFAULT,
-            _thread_has_user_message,
-            slice_messages_page,
-        )
+        from app.ai.chat_store import _thread_has_user_message
 
-        page, has_more, cursor = slice_messages_page(
-            list(msgs or []),
-            limit=CHAT_HISTORY_PAGE_DEFAULT,
-            before_id=None,
-        )
-        chat_history_has_more = bool(has_more)
-        chat_history_next_cursor = cursor or ''
-        chat_has_user_messages = _thread_has_user_message(msgs)
-        return page
+        rows = list(msgs or [])
+        chat_history_has_more = False
+        chat_history_next_cursor = ''
+        chat_has_user_messages = _thread_has_user_message(rows)
+        return rows
 
     def _show_stored(user_key: str, thread_id: str | None, audience: str) -> List[Dict[str, Any]]:
         nonlocal chat_history_has_more, chat_history_next_cursor, chat_has_user_messages
-        from app.ai.chat_store import CHAT_HISTORY_PAGE_DEFAULT, messages_page_for_ui
+        from app.ai.chat_store import messages_page_for_ui
 
         page = messages_page_for_ui(
             user_key,
             thread_id,
             audience,
-            limit=CHAT_HISTORY_PAGE_DEFAULT,
+            limit=None,
+            include_land_cards=False,
         )
-        chat_history_has_more = bool(page.get('has_more'))
-        chat_history_next_cursor = page.get('next_cursor') or ''
+        chat_history_has_more = False
+        chat_history_next_cursor = ''
         chat_has_user_messages = bool(page.get('has_user'))
         return list(page.get('messages') or [])
 
@@ -8549,7 +8542,7 @@ def ai_page():
 @require_partner_access(allow_pending=True, json_response=True)
 def ai_sync():
     from app.ai.audience import AUDIENCE_PARTNER
-    from app.ai.chat_store import messages_since
+    from app.ai.chat_store import include_land_cards_from_request, messages_since
 
     phone = (session.get('user_phone') or '').strip()
     thread_id = (request.args.get('thread_id') or '').strip() or None
@@ -8567,6 +8560,7 @@ def ai_sync():
         audience=AUDIENCE_PARTNER,
         after_count=max(0, after_count),
         exclude_escalation_ids=exclude_esc,
+        include_land_cards=include_land_cards_from_request(request),
     )
     return jsonify({
         'ok': True,
@@ -8609,7 +8603,11 @@ def ai_history():
             payload['messages'] = postchi_messages_for_ui(phone)
             payload['mode'] = 'postchi'
         else:
-            from app.ai.chat_store import coerce_history_page, history_messages_payload
+            from app.ai.chat_store import (
+                coerce_history_page,
+                history_messages_payload,
+                include_land_cards_from_request,
+            )
 
             raw_limit = request.args.get('limit')
             if raw_limit is None:
@@ -8622,10 +8620,33 @@ def ai_history():
                     AUDIENCE_PARTNER,
                     limit=page_size,
                     before_id=before_id,
+                    include_land_cards=include_land_cards_from_request(request),
                 )
             )
             payload['mode'] = 'lawyer' if is_lawyer_thread(thread_id) else 'chat'
     return jsonify(payload)
+
+
+@express_partner_bp.get('/ai/land-cards', endpoint='ai_land_cards')
+@require_partner_access(allow_pending=True, json_response=True)
+def ai_land_cards():
+    """Batch land-card HTML for codes this partner may see. Max 10."""
+    from app.ai.audience import AUDIENCE_PARTNER
+    from app.ai.land_cards import (
+        LAND_CARDS_BATCH_MAX,
+        land_cards_batch,
+        parse_land_code_list,
+    )
+
+    phone = (session.get('user_phone') or '').strip()
+    codes = parse_land_code_list(request.args.get('codes') or '')
+    if len(codes) > LAND_CARDS_BATCH_MAX:
+        return jsonify({
+            'ok': False,
+            'error': 'too_many_codes',
+            'max': LAND_CARDS_BATCH_MAX,
+        }), 400
+    return jsonify(land_cards_batch(phone, codes, audience=AUDIENCE_PARTNER))
 
 
 @express_partner_bp.post('/ai/chat', endpoint='ai_chat')
@@ -8708,9 +8729,12 @@ def ai_chat():
     if not result.get('ok'):
         return jsonify(result), ai_chat_http_status(result)
 
+    from app.ai.chat_store import include_land_cards_from_request
+
     land_codes = [] if voice == VOICE_LAWYER else (result.get('land_codes') or [])
     agent_actions = [] if voice == VOICE_LAWYER else (result.get('agent_actions') or [])
     user_meta = {'attachment': attachment} if attachment else None
+    include_cards = include_land_cards_from_request(request)
     msgs, tid = append_exchange(
         phone,
         message,
@@ -8721,7 +8745,11 @@ def ai_chat():
         audience=AUDIENCE_PARTNER,
         hide_user=hide_user,
         user_meta=user_meta,
+        include_land_cards=include_cards,
     )
+    if not include_cards and not agent_actions:
+        result.pop('cards_html', None)
+        result.pop('land_cards', None)
     result['messages'] = msgs
     result['audience'] = AUDIENCE_PARTNER
     result['thread_id'] = tid
@@ -8908,7 +8936,14 @@ def ai_clear():
     tid = out.get('thread_id')
     msgs = out.get('messages')
     if msgs is None:
-        msgs = messages_for_ui(phone, thread_id=tid, audience=AUDIENCE_PARTNER)
+        from app.ai.chat_store import include_land_cards_from_request
+
+        msgs = messages_for_ui(
+            phone,
+            thread_id=tid,
+            audience=AUDIENCE_PARTNER,
+            include_land_cards=include_land_cards_from_request(request),
+        )
     return jsonify({'ok': True, 'thread_id': tid, 'messages': msgs})
 
 
@@ -8931,7 +8966,11 @@ def ai_switch_thread():
         postchi_messages_for_ui,
     )
 
-    from app.ai.chat_store import coerce_history_page, history_messages_payload
+    from app.ai.chat_store import (
+        coerce_history_page,
+        history_messages_payload,
+        include_land_cards_from_request,
+    )
 
     phone = (session.get('user_phone') or '').strip()
     data = request.get_json(silent=True) or {}
@@ -8976,6 +9015,7 @@ def ai_switch_thread():
                 AUDIENCE_PARTNER,
                 limit=page_size,
                 before_id=before_id,
+                include_land_cards=include_land_cards_from_request(request),
             )
         )
         return jsonify(body)
@@ -8999,6 +9039,7 @@ def ai_switch_thread():
             AUDIENCE_PARTNER,
             limit=page_size,
             before_id=before_id,
+            include_land_cards=include_land_cards_from_request(request),
         )
     )
     return jsonify(body)
@@ -9019,7 +9060,11 @@ def ai_delete_thread():
         return jsonify({'ok': False, 'error': 'این گفتگو قابل حذف نیست.'}), 400
     if not thread_id or not delete_thread(phone, thread_id, audience=AUDIENCE_PARTNER):
         return jsonify({'ok': False, 'error': 'حذف ممکن نیست.'}), 400
-    from app.ai.chat_store import coerce_history_page, history_messages_payload
+    from app.ai.chat_store import (
+        coerce_history_page,
+        history_messages_payload,
+        include_land_cards_from_request,
+    )
 
     record = load_user_record(phone, audience=AUDIENCE_PARTNER)
     active = record.get('active_id')
@@ -9043,6 +9088,7 @@ def ai_delete_thread():
             AUDIENCE_PARTNER,
             limit=page_size,
             before_id=before_id,
+            include_land_cards=include_land_cards_from_request(request),
         )
     )
     return jsonify(body)

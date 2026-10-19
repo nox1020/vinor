@@ -613,7 +613,15 @@ def ensure_vinor_opening(
     body = (text or "").strip()[:_MAX_CONTENT]
     if not body:
         tid = thread_id or ensure_active_thread(user_key, audience=audience)
-        return messages_for_ui(user_key, thread_id=tid, audience=audience), tid
+        return (
+            messages_for_ui(
+                user_key,
+                thread_id=tid,
+                audience=audience,
+                include_land_cards=False,
+            ),
+            tid,
+        )
 
     record = load_user_record(user_key, audience)
     tid = (thread_id or record.get("active_id") or "").strip()
@@ -627,9 +635,25 @@ def ensure_vinor_opening(
 
     msgs = [m for m in (th.get("messages") or []) if isinstance(m, dict)]
     if msgs and not is_thread_open_slate(th):
-        return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+        return (
+            _enrich_messages_for_ui(
+                user_key,
+                list(th.get("messages") or []),
+                audience,
+                include_land_cards=False,
+            ),
+            tid,
+        )
     if msgs and all(_is_welcome_msg(m) for m in msgs):
-        return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+        return (
+            _enrich_messages_for_ui(
+                user_key,
+                list(th.get("messages") or []),
+                audience,
+                include_land_cards=False,
+            ),
+            tid,
+        )
 
     ts = _now_iso()
     entry: dict[str, Any] = {
@@ -647,7 +671,12 @@ def ensure_vinor_opening(
     th["title"] = VINOR_THREAD_TITLE
     record["active_id"] = tid
     _save_record(record, user_key, audience)
-    return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
+    return (
+        _enrich_messages_for_ui(
+            user_key, th["messages"], audience, include_land_cards=False
+        ),
+        tid,
+    )
 
 
 def set_active_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:
@@ -776,12 +805,56 @@ def messages_for_ui(
     user_key: str,
     thread_id: str | None = None,
     audience: str | None = None,
+    *,
+    include_land_cards: bool = True,
 ) -> list[dict[str, Any]]:
     record = load_user_record(user_key, audience)
     th = _find_thread(record, thread_id) if thread_id else _active_thread(record)
     if not th:
         return []
-    return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience)
+    return _enrich_messages_for_ui(
+        user_key,
+        list(th.get("messages") or []),
+        audience,
+        include_land_cards=include_land_cards,
+    )
+
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_FALSY = frozenset({"0", "false", "no", "off"})
+
+
+def wants_land_card_html(light: Any = None, cards: Any = None) -> bool:
+    """Land-card HTML is off unless the caller sends cards=1 or light=0.
+
+    Old apps ignore card fields, so the default stays light and the message
+    keys (content, land_codes, attachments, agent actions) stay in place.
+    """
+    cards_s = str("" if cards is None else cards).strip().lower()
+    light_s = str("" if light is None else light).strip().lower()
+    if cards_s in _TRUTHY:
+        return True
+    if light_s in _FALSY:
+        return True
+    return False
+
+
+def include_land_cards_from_request(req: Any) -> bool:
+    data: dict[str, Any] = {}
+    try:
+        if getattr(req, "method", "GET") != "GET":
+            parsed = req.get_json(silent=True)
+            if isinstance(parsed, dict):
+                data = parsed
+    except Exception:
+        data = {}
+    light = req.args.get("light") if getattr(req, "args", None) is not None else None
+    if light is None:
+        light = data.get("light")
+    cards = req.args.get("cards") if getattr(req, "args", None) is not None else None
+    if cards is None:
+        cards = data.get("cards")
+    return wants_land_card_html(light, cards)
 
 
 CHAT_HISTORY_PAGE_DEFAULT = 10
@@ -864,6 +937,7 @@ def messages_page_for_ui(
     *,
     limit: Any = None,
     before_id: Any = None,
+    include_land_cards: bool = False,
 ) -> dict[str, Any]:
     """Page of UI messages. Only the page is enriched, not the older rows."""
     size, cursor = coerce_history_page(limit, before_id)
@@ -873,14 +947,26 @@ def messages_page_for_ui(
     has_user = _thread_has_user_message(raw)
     if size is None:
         return {
-            "messages": _enrich_messages_for_ui(user_key, raw, audience) if raw else [],
+            "messages": (
+                _enrich_messages_for_ui(
+                    user_key, raw, audience, include_land_cards=include_land_cards
+                )
+                if raw
+                else []
+            ),
             "has_more": False,
             "next_cursor": None,
             "paged": False,
             "has_user": has_user,
         }
     page, has_more, next_cursor = slice_messages_page(raw, limit=size, before_id=cursor)
-    enriched = _enrich_messages_for_ui(user_key, page, audience) if page else []
+    enriched = (
+        _enrich_messages_for_ui(
+            user_key, page, audience, include_land_cards=include_land_cards
+        )
+        if page
+        else []
+    )
     return {
         "messages": enriched,
         "has_more": has_more,
@@ -897,6 +983,7 @@ def history_messages_payload(
     *,
     limit: Any = None,
     before_id: Any = None,
+    include_land_cards: bool = False,
 ) -> dict[str, Any]:
     """JSON fields for a history response. Unpaged calls omit the page keys."""
     page = messages_page_for_ui(
@@ -905,6 +992,7 @@ def history_messages_payload(
         audience,
         limit=limit,
         before_id=before_id,
+        include_land_cards=include_land_cards,
     )
     payload: dict[str, Any] = {"messages": page["messages"]}
     if page["paged"]:
@@ -944,6 +1032,8 @@ def _enrich_messages_for_ui(
     user_key: str,
     messages: list[dict[str, Any]],
     audience: str | None = None,
+    *,
+    include_land_cards: bool = True,
 ) -> list[dict[str, Any]]:
     from app.ai.agent_tools import render_agent_actions_html
     from app.ai.audience import AUDIENCE_ADMIN
@@ -956,6 +1046,10 @@ def _enrich_messages_for_ui(
         if not isinstance(item, dict):
             continue
         row = dict(item)
+        if not include_land_cards:
+            row.pop("cards_html", None)
+            row.pop("land_cards", None)
+            row.pop("land_detail_html", None)
         meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
         is_land_detail = (
             str(row.get("source") or "").strip().lower() == LAND_DETAIL_SOURCE
@@ -967,18 +1061,25 @@ def _enrich_messages_for_ui(
                 (codes[0] if codes else "") or meta.get("land_code") or ""
             ).strip()
             if code:
-                try:
-                    from app.express_partner.land_chat_detail import (
-                        render_land_chat_detail_html,
-                    )
+                row["land_code"] = code
+                if not include_land_cards:
+                    # The stored label is «جزئیات فایل …». The client paints a
+                    # skeleton and fetches the same detail card on scroll.
+                    row["content"] = ""
+                    row["lazy_land_codes"] = [code]
+                else:
+                    try:
+                        from app.express_partner.land_chat_detail import (
+                            render_land_chat_detail_html,
+                        )
 
-                    payload = render_land_chat_detail_html(code)
-                    if payload and payload.get("html"):
-                        row["land_detail_html"] = payload["html"]
-                        row["land_code"] = str(payload.get("code") or code).strip()
-                        row["content"] = ""
-                except Exception:
-                    pass
+                        payload = render_land_chat_detail_html(code)
+                        if payload and payload.get("html"):
+                            row["land_detail_html"] = payload["html"]
+                            row["land_code"] = str(payload.get("code") or code).strip()
+                            row["content"] = ""
+                    except Exception:
+                        pass
             out.append(row)
             continue
         # پیوست کاربر از meta به سطح پیام برای UI
@@ -1046,7 +1147,7 @@ def _enrich_messages_for_ui(
             parts: list[str] = []
             # کارت‌های جدا فقط برای land_codes پیام؛ confirm خودش کارت را داخل دارد
             show_codes = [c for c in codes if str(c).strip() and str(c).strip() not in action_land_codes]
-            if show_codes and show_land:
+            if show_codes and show_land and include_land_cards:
                 try:
                     from app.ai.land_cards import render_land_cards_html
 
@@ -1056,6 +1157,9 @@ def _enrich_messages_for_ui(
                         parts.append(land_html)
                 except Exception:
                     row.pop("land_cards", None)
+            elif show_codes and show_land:
+                row["lazy_land_codes"] = [str(c).strip() for c in show_codes if str(c).strip()]
+                row.pop("land_cards", None)
             elif codes and not show_land:
                 row.pop("land_cards", None)
             if isinstance(actions, list) and actions:
@@ -1128,6 +1232,7 @@ def append_exchange(
     audience: str | None = None,
     hide_user: bool = False,
     user_meta: dict[str, Any] | None = None,
+    include_land_cards: bool = True,
 ) -> tuple[list[dict[str, Any]], str]:
     from app.ai.message_types import MSG_AI, MSG_ATTACHMENT, MSG_CARD, MSG_TEXT
 
@@ -1209,7 +1314,15 @@ def append_exchange(
         )
     except Exception:
         pass
-    return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
+    return (
+        _enrich_messages_for_ui(
+            user_key,
+            th["messages"],
+            audience,
+            include_land_cards=include_land_cards,
+        ),
+        tid,
+    )
 
 
 def append_typed_message(
@@ -1226,6 +1339,7 @@ def append_typed_message(
     meta: dict[str, Any] | None = None,
     quota: bool = False,
     escalation_id: str = "",
+    include_land_cards: bool = True,
 ) -> tuple[list[dict[str, Any]], str]:
     """Append a single assistant-side typed message (system / timeline / …)."""
     from app.ai.message_types import normalize_message_type
@@ -1244,7 +1358,15 @@ def append_typed_message(
     actions = _normalize_actions(agent_actions)
     codes = [str(c).strip() for c in (land_codes or []) if str(c).strip()][:5]
     if not body and not actions and not codes:
-        return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+        return (
+            _enrich_messages_for_ui(
+                user_key,
+                list(th.get("messages") or []),
+                audience,
+                include_land_cards=include_land_cards,
+            ),
+            tid,
+        )
 
     eid = (escalation_id or "").strip()
     if eid:
@@ -1252,7 +1374,15 @@ def append_typed_message(
             if not isinstance(item, dict):
                 continue
             if str(item.get("escalation_id") or "") == eid:
-                return _enrich_messages_for_ui(user_key, list(th.get("messages") or []), audience), tid
+                return (
+                    _enrich_messages_for_ui(
+                        user_key,
+                        list(th.get("messages") or []),
+                        audience,
+                        include_land_cards=include_land_cards,
+                    ),
+                    tid,
+                )
 
     ts = _now_iso()
     entry: dict[str, Any] = {
@@ -1281,7 +1411,15 @@ def append_typed_message(
     th["updated_at"] = ts
     record["active_id"] = tid
     _save_record(record, user_key, audience)
-    return _enrich_messages_for_ui(user_key, th["messages"], audience), tid
+    return (
+        _enrich_messages_for_ui(
+            user_key,
+            th["messages"],
+            audience,
+            include_land_cards=include_land_cards,
+        ),
+        tid,
+    )
 
 
 def record_land_chat_view(
@@ -1332,6 +1470,7 @@ def record_land_chat_view(
         land_codes=[code],
         meta={"land_chat_detail": True, "land_code": code},
         quota=False,
+        include_land_cards=False,
     )
     return tid
 
@@ -1348,6 +1487,7 @@ def update_agent_action_by_token(
     lines: list[str] | None = None,
     note: str = "",
     actor: str = "",
+    include_land_cards: bool = True,
 ) -> tuple[bool, list[dict[str, Any]], str]:
     """Update a living card in-place by token (or card_id if passed as token)."""
     from app.ai.card_registry import apply_card_transition
@@ -1418,7 +1558,12 @@ def update_agent_action_by_token(
 
     record["active_id"] = out_tid or record.get("active_id")
     _save_record(record, user_key, audience)
-    ui = messages_for_ui(user_key, out_tid, audience)
+    ui = messages_for_ui(
+        user_key,
+        out_tid,
+        audience,
+        include_land_cards=include_land_cards,
+    )
     return True, ui, out_tid
 
 
@@ -1519,17 +1664,25 @@ def inject_admin_reply(
     return True
 
 
-def messages_since(
+def _collapsed_thread_messages(
     user_key: str,
     thread_id: str | None,
+    audience: str | None,
+) -> list[dict[str, Any]]:
+    record = load_user_record(user_key, audience)
+    th = _find_thread(record, thread_id) if thread_id else _active_thread(record)
+    if not th:
+        return []
+    return _collapse_duplicate_land_detail_messages(list(th.get("messages") or []))
+
+
+def _select_messages_since(
+    all_msgs: list[dict[str, Any]],
     after_iso: str = "",
-    audience: str | None = None,
-    *,
     after_count: int = 0,
     exclude_escalation_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """پیام‌های جدید گفتگوی فعال — برای polling (پاسخ ادمین + پیام‌های بعدی)."""
-    all_msgs = messages_for_ui(user_key, thread_id, audience)
+    """Same index and timestamp rules as the previous sync, before any card HTML."""
     if not all_msgs:
         return []
 
@@ -1576,6 +1729,33 @@ def messages_since(
 
     out.sort(key=lambda x: str(x.get("created_at") or ""))
     return out
+
+
+def messages_since(
+    user_key: str,
+    thread_id: str | None,
+    after_iso: str = "",
+    audience: str | None = None,
+    *,
+    after_count: int = 0,
+    exclude_escalation_ids: list[str] | None = None,
+    include_land_cards: bool = False,
+) -> list[dict[str, Any]]:
+    """پیام‌های جدید گفتگوی فعال — اول برش، بعد غنی‌سازی همان ردیف‌ها."""
+    selected = _select_messages_since(
+        _collapsed_thread_messages(user_key, thread_id, audience),
+        after_iso,
+        after_count,
+        exclude_escalation_ids,
+    )
+    if not selected:
+        return []
+    return _enrich_messages_for_ui(
+        user_key,
+        selected,
+        audience,
+        include_land_cards=include_land_cards,
+    )
 
 
 def delete_thread(user_key: str, thread_id: str, audience: str | None = None) -> bool:

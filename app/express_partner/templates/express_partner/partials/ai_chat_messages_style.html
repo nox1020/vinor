@@ -133,6 +133,22 @@
     max-width: min(18.5rem, 86vw);
     min-width: 0;
   }
+  #aiMessages .ai-land-card-slot {
+    width: 100%;
+    min-height: 4.5rem;
+    margin: 0.35rem 0;
+  }
+  #aiMessages .ai-land-card-skeleton {
+    height: 5.5rem;
+    border-radius: 1rem;
+    background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+    background-size: 200% 100%;
+    animation: aiLandShimmer 1.2s ease-in-out infinite;
+  }
+  @keyframes aiLandShimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
   #aiMessages .ai-land-cards--full {
     flex-direction: column;
     overflow: visible;
