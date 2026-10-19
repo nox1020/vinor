@@ -214,12 +214,29 @@ def apply_payload(me_phone: str) -> Dict[str, Any]:
     }
 
 
-def requests_payload(me_phone: str, profile, tab: str = '', status: str = '') -> Dict[str, Any]:
+def offers_in_cards_param(raw: Any) -> bool:
+    """اپ تازه با offers_in_cards=1 ردیف پیشنهاد را داخل cards می‌خواهد."""
+    return str(raw or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def requests_payload(
+    me_phone: str,
+    profile,
+    tab: str = '',
+    status: str = '',
+    offers_in_cards: bool = False,
+) -> Dict[str, Any]:
     from .routes import _build_partner_sales_pipeline
     from .visit_requests import PIPELINE_TABS
 
     archive_status = 'archived' if str(status or '').strip().lower() == 'archived' else 'active'
-    pipe = _build_partner_sales_pipeline(me_phone, profile, archive_status=archive_status)
+    include_offers = bool(offers_in_cards)
+    pipe = _build_partner_sales_pipeline(
+        me_phone,
+        profile,
+        archive_status=archive_status,
+        include_offers_in_cards=include_offers,
+    )
     requested = str(tab or '').strip().lower()
     if requested not in PIPELINE_TABS:
         requested = str(pipe.get('default_tab') or 'requests')
@@ -245,6 +262,14 @@ def requests_payload(me_phone: str, profile, tab: str = '', status: str = '') ->
         'is_approved', 'is_special', 'support_phone', 'allow_attendance',
     )
     out = {k: json_ready(pipe.get(k)) for k in keys}
+    cards = out.get('cards') or []
+    counts = dict(out.get('tab_counts') or {})
+    counts['deals'] = sum(
+        1
+        for card in cards
+        if isinstance(card, dict) and str(card.get('pipeline_tab') or '') == 'deals'
+    )
+    out['tab_counts'] = counts
     out.update({
         'ok': True,
         'active_tab': requested,

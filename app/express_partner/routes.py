@@ -3574,6 +3574,7 @@ def _build_partner_sales_pipeline(
     *,
     land_status: Optional[Dict[str, str]] = None,
     archive_status: str = "active",
+    include_offers_in_cards: bool = False,
 ) -> Dict[str, Any]:
     """آیتم‌ها و شمارش تب‌های پیگیری — مشترک بین /requests و badge خانه."""
     from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance
@@ -3748,6 +3749,24 @@ def _build_partner_sales_pipeline(
     inbox_items = [card for card in inbox_items if _keep(card)]
     if want_archived:
         offers = []
+    if include_offers_in_cards and offers:
+        from .special_offer_inbox import offer_pipeline_cards
+
+        seen_offer_ids = {
+            str(card.get('id') or '').strip()
+            for card in cards
+            if str(card.get('kind') or '') == 'offer' and str(card.get('id') or '').strip()
+        }
+        for offer_card in offer_pipeline_cards(offers):
+            oid = str(offer_card.get('id') or '').strip()
+            if not oid or oid in seen_offer_ids:
+                continue
+            seen_offer_ids.add(oid)
+            cards.append(offer_card)
+        cards.sort(
+            key=lambda card: str(card.get('updated_at') or card.get('created_at') or ''),
+            reverse=True,
+        )
     tab_counts = {
         PIPELINE_REQUESTS: 0,
         PIPELINE_VISITS: 0,
@@ -3757,7 +3776,8 @@ def _build_partner_sales_pipeline(
         key = str(it.get('pipeline_tab') or PIPELINE_REQUESTS)
         if key in tab_counts:
             tab_counts[key] += 1
-    if offers:
+    # پیشنهادها روی وب جدا از cards رسم می‌شوند. داخل cards که باشند همین حلقه می‌شماردشان.
+    if offers and not include_offers_in_cards:
         tab_counts[PIPELINE_DEALS] += len(offers)
 
     return {
@@ -4578,10 +4598,21 @@ def apk_apply_submit():
 @express_partner_bp.get('/api/requests/data', endpoint='apk_requests_data')
 @require_partner_access(allow_pending=True, json_response=True)
 def apk_requests_data():
-    from .apk_native import requests_payload, session_phone, session_profile
+    from .apk_native import (
+        offers_in_cards_param,
+        requests_payload,
+        session_phone,
+        session_profile,
+    )
     tab = (request.args.get('tab') or '').strip()
     status = (request.args.get('status') or '').strip()
-    return _apk_json(requests_payload(session_phone(), session_profile(), tab, status))
+    return _apk_json(requests_payload(
+        session_phone(),
+        session_profile(),
+        tab,
+        status,
+        offers_in_cards=offers_in_cards_param(request.args.get('offers_in_cards')),
+    ))
 
 
 def _archive_status_arg() -> str:
