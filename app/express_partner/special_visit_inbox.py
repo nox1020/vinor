@@ -387,6 +387,9 @@ def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
         return
     title = str(rec.get("land_title") or land.get("title") or code).strip() or code
     partner_name = str(rec.get("partner_name") or "").strip() or "یک همکار"
+    customer_name = str(rec.get("customer_name") or "").strip()
+    if customer_name and customer_name != partner_name:
+        partner_name = f"{partner_name} (مشتری: {customer_name})"
     date_bit = ""
     visit_date = str(rec.get("visit_date") or "").strip()
     if visit_date:

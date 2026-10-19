@@ -524,8 +524,8 @@
             <div class="vn-cust-extra-body">
               <div class="vn-cust-grid">
                 <label class="vn-cust-field">
-                  <span class="vn-cust-field__label">نام</span>
-                  <input class="vn-cust-field__input" name="customer_first_name" autocomplete="given-name" placeholder="نام">
+                  <span class="vn-cust-field__label">نام مشتری</span>
+                  <input class="vn-cust-field__input" name="customer_first_name" autocomplete="given-name" placeholder="نام مشتری">
                 </label>
                 <label class="vn-cust-field">
                   <span class="vn-cust-field__label">نام خانوادگی</span>
@@ -586,6 +586,23 @@
   var extraEl = document.getElementById('vnCustomerExtra');
   var notesAcc = document.getElementById('vnCustomerNotesAcc');
   var accItems = [landField, plusField, slotField, extraEl, notesAcc];
+
+  function normalizeVisitPhone(raw) {
+    var fa = '۰۱۲۳۴۵۶۷۸۹';
+    var ar = '٠١٢٣٤٥٦٧٨٩';
+    var s = String(raw || '').trim();
+    s = s.replace(/[۰-۹]/g, function (d) { return String(fa.indexOf(d)); });
+    s = s.replace(/[٠-٩]/g, function (d) { return String(ar.indexOf(d)); });
+    s = s.replace(/[\s\u00a0\u200c\u200f\u200e\u202a-\u202e]+/g, '');
+    s = s.replace(/[-‐‑‒–—―−ـ]/g, '');
+    s = s.replace(/\D+/g, '');
+    var rest = s;
+    if (s.indexOf('0098') === 0) rest = s.slice(4);
+    else if (s.indexOf('98') === 0 && (s.length === 12 || (s.length === 13 && s.charAt(2) === '0'))) rest = s.slice(2);
+    if (rest.charAt(0) === '0') rest = rest.slice(1);
+    if (rest.charAt(0) === '9' && rest.length === 10) return '0' + rest;
+    return s;
+  }
 
   function accValueEl(box) {
     return box ? box.querySelector('[data-acc-value]') : null;
@@ -1094,6 +1111,12 @@
         setError('یک وقت مجاز انتخاب کنید.');
         return;
       }
+      var phoneRaw = String(fd.get('customer_phone') || '').trim();
+      var phone = phoneRaw ? normalizeVisitPhone(phoneRaw) : '';
+      if (phoneRaw && !/^09\d{9}$/.test(phone)) {
+        setError('شماره تماس مشتری معتبر نیست.');
+        return;
+      }
       var payload = {
         notes: String(fd.get('notes') || '').trim(),
         land_code: pending || picked,
@@ -1101,7 +1124,7 @@
         visit_slot: visitSlot,
         customer_first_name: String(fd.get('customer_first_name') || '').trim(),
         customer_last_name: String(fd.get('customer_last_name') || '').trim(),
-        customer_phone: String(fd.get('customer_phone') || '').trim()
+        customer_phone: phone
       };
 
       var url = modal.getAttribute('data-register-url') || '';

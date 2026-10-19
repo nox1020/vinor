@@ -1353,15 +1353,19 @@
   }
 
   function normalizeIranMobileInput(raw) {
-    var s = String(raw || '').trim().replace(/[\s\-]/g, '');
-    s = s.replace(/[۰-۹]/g, function (d) {
-      return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
-    }).replace(/[٠-٩]/g, function (d) {
-      return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-    });
-    if (s.indexOf('+98') === 0) s = '0' + s.slice(3);
-    if (s.indexOf('0098') === 0) s = '0' + s.slice(4);
-    if (s.indexOf('98') === 0 && s.length === 12) s = '0' + s.slice(2);
+    var fa = '۰۱۲۳۴۵۶۷۸۹';
+    var ar = '٠١٢٣٤٥٦٧٨٩';
+    var s = String(raw || '').trim();
+    s = s.replace(/[۰-۹]/g, function (d) { return String(fa.indexOf(d)); });
+    s = s.replace(/[٠-٩]/g, function (d) { return String(ar.indexOf(d)); });
+    s = s.replace(/[\s\u00a0\u200c\u200f\u200e\u202a-\u202e]+/g, '');
+    s = s.replace(/[-‐‑‒–—―−ـ]/g, '');
+    s = s.replace(/\D+/g, '');
+    var rest = s;
+    if (s.indexOf('0098') === 0) rest = s.slice(4);
+    else if (s.indexOf('98') === 0 && (s.length === 12 || (s.length === 13 && s.charAt(2) === '0'))) rest = s.slice(2);
+    if (rest.charAt(0) === '0') rest = rest.slice(1);
+    if (rest.charAt(0) === '9' && rest.length === 10) return '0' + rest;
     return s;
   }
 
@@ -1382,11 +1386,9 @@
   }
 
   function validateVisitCustomerFields() {
-    var fields = readVisitCustomerFields();
-    if (!fields.first) return 'نام مشتری را وارد کنید.';
-    if (!fields.last) return 'نام خانوادگی مشتری را وارد کنید.';
-    if (!fields.phone) return 'شماره تماس مشتری را وارد کنید.';
-    if (!isValidIranMobileInput(fields.phone)) return 'شماره تماس مشتری معتبر نیست.';
+    var phoneEl = document.getElementById('landVisitCustomerPhone');
+    var raw = phoneEl ? String(phoneEl.value || '').trim() : '';
+    if (raw && !isValidIranMobileInput(raw)) return 'شماره تماس مشتری معتبر نیست.';
     return '';
   }
 

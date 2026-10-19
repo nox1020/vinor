@@ -491,6 +491,30 @@ def _sale_clock(land: Dict[str, Any], published: bool) -> Dict[str, Any]:
         return dict(empty)
 
 
+def _visit_booking_for_listing(code: str) -> Dict[str, Any]:
+    """فرم بازدید جزئیات آگهی. دیوار فرم بازدید کاتالوگ ندارد."""
+    if not str(code or "").strip():
+        logged = bool(str(session.get("user_phone") or "").strip())
+        return {
+            "logged_in": logged,
+            "can_request_visit": False,
+            "is_advisor": False,
+            "show_customer_fields": False,
+            "customer_name_optional": True,
+            "customer_phone_optional": True,
+            "prefilled_name": "",
+            "prefilled_phone": "",
+            "tx_mode": "",
+        }
+    try:
+        from .routes import listing_visit_booking_fields
+
+        fields = listing_visit_booking_fields(code)
+        return fields if isinstance(fields, dict) else {}
+    except Exception:
+        return {}
+
+
 def native_listing_detail_payload(
     code: str,
     *,
@@ -601,4 +625,5 @@ def native_listing_detail_payload(
         "owner_badge": (
             "منتشرشده" if is_mine and published else ("خصوصی" if is_mine else "")
         ),
+        **_visit_booking_for_listing(code_out if source != "divar" else ""),
     }

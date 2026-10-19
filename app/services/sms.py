@@ -32,27 +32,48 @@ _DIGIT_TRANSLATION = str.maketrans(
 )
 
 
+# خط تیرهٔ ASCII و یونیکد (en/em dash، منها، کشیده) قبل از حذف غیررقم
+_MOBILE_DASHES = str.maketrans({
+    "-": "",
+    "‐": "",
+    "‑": "",
+    "‒": "",
+    "–": "",
+    "—": "",
+    "―": "",
+    "−": "",
+    "ـ": "",
+})
+
+
 def normalize_iran_mobile(phone: str) -> str:
-    """شماره موبایل ایران → 09xxxxxxxxx (ارقام ASCII) برای sms.ir."""
+    """شماره موبایل ایران → 09xxxxxxxxx.
+
+    فاصله، خط تیره، ارقام فارسی/عربی و پیش‌شمارهٔ +98 / 0098 / 98
+    (حتی اگر بعدش صفر ملی آمده باشد) قبل از بررسی طول حذف می‌شوند.
+    رقم اضافه کوتاه نمی‌شود؛ شمارهٔ نامعتبر همان ارقام تمیزشده می‌ماند.
+    """
     if not phone:
         return ""
-    s = str(phone).strip().replace(" ", "").replace("-", "").translate(_DIGIT_TRANSLATION)
+    s = str(phone).strip().translate(_DIGIT_TRANSLATION)
+    s = re.sub(r"\s+", "", s).translate(_MOBILE_DASHES)
     s = re.sub(r"\D+", "", s)
-    if s.startswith("0098") and len(s) >= 14 and s[4:].startswith("9"):
-        s = "0" + s[4:]
-    elif s.startswith("98") and len(s) >= 12 and s[2:].startswith("9"):
-        s = "0" + s[2:]
-    elif s.startswith("9") and len(s) == 10:
-        s = "0" + s
-    if len(s) >= 11:
-        return s[:11]
-    if len(s) == 10:
-        return "0" + s
+    rest = s
+    if s.startswith("0098"):
+        rest = s[4:]
+    elif s.startswith("98") and (
+        len(s) == 12 or (len(s) == 13 and s[2:3] == "0")
+    ):
+        rest = s[2:]
+    if rest.startswith("0"):
+        rest = rest[1:]
+    if len(rest) == 10 and rest.startswith("9") and rest.isdigit():
+        return "0" + rest
     return s
 
 
 def is_valid_iran_mobile(phone: str) -> bool:
-    return bool(phone) and len(phone) == 11 and phone.startswith("09")
+    return bool(re.fullmatch(r"09\d{9}", str(phone or "")))
 
 
 def sms_is_infrastructure_error(error: object) -> bool:

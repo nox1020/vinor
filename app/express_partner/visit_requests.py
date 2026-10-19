@@ -227,9 +227,80 @@ def visit_schedule_for_land(land_code: str) -> Dict[str, Any]:
     code = str(land_code or "").strip()
     return {
         "visit_date_min": visit_date_min_iso(),
+        "visit_date_max": (_today() + timedelta(days=90)).isoformat(),
         "visit_allowed_weekdays": list(visit_allowed_weekdays_for_js()),
         "visit_allowed_hours": list(get_visit_allowed_hours()),
         "visit_request_url": f"/express/partner/visit-requests/{code}" if code else "",
+    }
+
+
+def split_visitor_name(full: str) -> Tuple[str, str]:
+    """«علی رضایی» → نام و نام خانوادگی. یک واژه فقط در نام می‌ماند."""
+    parts = [p for p in str(full or "").split() if p.strip()]
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
+
+def _canonical_customer_mobile(raw: str) -> str:
+    from app.services.sms import is_valid_iran_mobile, normalize_iran_mobile
+
+    phone = normalize_iran_mobile(raw)
+    return phone if is_valid_iran_mobile(phone) else ""
+
+
+def resolve_visit_customer_fields(
+    *,
+    is_advisor: bool,
+    account_name: str,
+    account_phone: str,
+    customer_first_name: str = "",
+    customer_last_name: str = "",
+    customer_phone_raw: str = "",
+) -> Tuple[str, str, str, Optional[str]]:
+    """نام و موبایل ذخیره‌شده روی درخواست بازدید.
+
+    خریدار: نام و موبایل از پروفایل/حساب، بدون توجه به فیلدهای ارسالی.
+    مشاور: نام مشتری اختیاری است؛ اگر خالی باشد نام خود مشاور ذخیره می‌شود.
+    موبایل مشتری برای مشاور اختیاری است و فقط مقدار پرِ نامعتبر رد می‌شود.
+    """
+    account_name_s = str(account_name or "").strip()
+    if is_advisor:
+        first = str(customer_first_name or "").strip()
+        last = str(customer_last_name or "").strip()
+        if not first and not last:
+            first, last = split_visitor_name(account_name_s)
+        raw_phone = str(customer_phone_raw or "").strip()
+        if not raw_phone:
+            return first, last, "", None
+        phone = _canonical_customer_mobile(raw_phone)
+        if not phone:
+            return "", "", "", "شماره تماس مشتری معتبر نیست."
+        return first, last, phone, None
+
+    first, last = split_visitor_name(account_name_s)
+    phone = _canonical_customer_mobile(account_phone)
+    if not phone:
+        return "", "", "", "شماره تماس حساب شما معتبر نیست."
+    return first, last, phone, None
+
+
+def visit_booking_hints(
+    *,
+    is_advisor: bool,
+    account_name: str,
+    account_phone: str,
+) -> Dict[str, Any]:
+    """فیلدهایی که اپ برای فرم بازدید لازم دارد."""
+    return {
+        "is_advisor": bool(is_advisor),
+        "prefilled_name": str(account_name or "").strip(),
+        "prefilled_phone": _canonical_customer_mobile(account_phone),
+        "show_customer_fields": bool(is_advisor),
+        "customer_name_optional": True,
+        "customer_phone_optional": True,
     }
 
 
@@ -2890,8 +2961,21 @@ def visit_tx_mode(
     is_sold: bool,
 ) -> str:
     st = (assignment_status or "active").strip().lower()
-    if not is_approved or is_sold:
+    if is_sold:
         return "hidden"
+    if not is_approved:
+        # خریدار لاگین‌شده بازدید ثبت می‌کند؛ دکمه‌های معامله مخصوص مشاور می‌ماند.
+        if has_visit_awaiting_admin:
+            return "visit_pending"
+        if has_visit_done_pending:
+            return "visit_done_pending"
+        if has_approved_visit:
+            return "visit_done"
+        if has_visit_no_show:
+            return "visit_no_show"
+        if has_completed_visit:
+            return "visit_done"
+        return "visit"
     if st == "in_transaction":
         return "release"
     if has_visit_awaiting_admin:

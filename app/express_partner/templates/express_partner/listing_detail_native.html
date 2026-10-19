@@ -303,12 +303,99 @@
   #vinorListingDetail.vn-ld--no-sticky {
     padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   }
+  #vinorListingDetail .vn-ld__sticky button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: var(--vn-ld-radius);
+    background: var(--vn-ld-accent);
+    color: #04140e;
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  #vinorListingDetail .vn-ld__sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.62);
+  }
+  #vinorListingDetail .vn-ld__sheet[hidden] { display: none; }
+  #vinorListingDetail .vn-ld__sheet-card {
+    width: min(28rem, 100%);
+    max-height: min(92dvh, 40rem);
+    overflow: auto;
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    border-radius: 16px 16px 0 0;
+    background: var(--vn-ld-raised);
+    border: 1px solid var(--vn-ld-border);
+  }
+  #vinorListingDetail .vn-ld__sheet h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+  }
+  #vinorListingDetail .vn-ld__visit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0 0 0.7rem;
+    font-size: 0.8rem;
+    color: var(--vn-ld-muted);
+  }
+  #vinorListingDetail .vn-ld__visit-field input,
+  #vinorListingDetail .vn-ld__visit-field select {
+    min-height: 2.5rem;
+    border-radius: var(--vn-ld-radius);
+    border: 1px solid var(--vn-ld-border);
+    background: var(--vn-ld-bg);
+    color: var(--vn-ld-text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 0 0.7rem;
+  }
+  #vinorListingDetail .vn-ld__visit-hint,
+  #vinorListingDetail .vn-ld__visit-who {
+    margin: 0 0 0.75rem;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: var(--vn-ld-muted);
+  }
+  #vinorListingDetail .vn-ld__visit-error {
+    margin: 0 0 0.7rem;
+    color: #fecaca;
+    font-size: 0.8rem;
+  }
+  #vinorListingDetail .vn-ld__visit-error[hidden] { display: none; }
+  #vinorListingDetail .vn-ld__sheet-close {
+    margin-top: 0.45rem;
+    width: 100%;
+    min-height: 2.4rem;
+    border-radius: var(--vn-ld-radius);
+    border: 1px solid var(--vn-ld-border);
+    background: transparent;
+    color: var(--vn-ld-text);
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
 </style>
 
+{% set _visit_bar = d.can_request_visit or ((not d.logged_in) and d.source != 'divar') or (d.show_divar and d.divar_url) %}
 <article id="vinorListingDetail"
-         class="{% if not (d.show_divar and d.divar_url) %}vn-ld--no-sticky{% endif %}"
+         class="{% if not _visit_bar %}vn-ld--no-sticky{% endif %}"
          data-listing-code="{{ d.code|e }}"
-         data-listing-source="{{ d.source|e }}">
+         data-listing-source="{{ d.source|e }}"
+         data-is-advisor="{{ 1 if d.is_advisor else 0 }}"
+         data-can-request-visit="{{ 1 if d.can_request_visit else 0 }}"
+         data-prefilled-name="{{ d.prefilled_name|default('')|e }}"
+         data-prefilled-phone="{{ d.prefilled_phone|default('')|e }}">
   <div class="vn-ld__gallery-wrap">
     <div class="vn-ld__chrome">
       <button type="button" class="vn-ld__orb" id="listingDetailBack" aria-label="بازگشت">‹</button>
@@ -413,7 +500,62 @@
     {% endif %}
   </div>
 
-  {% if d.show_divar and d.divar_url %}
+  {% if d.can_request_visit %}
+  <div class="vn-ld__sticky">
+    <button type="button" id="listingVisitOpen">بازدید</button>
+  </div>
+  <div id="listingVisitSheet" class="vn-ld__sheet" hidden>
+    <form id="listingVisitForm" class="vn-ld__sheet-card" data-vinor-direct-action>
+      <h2>تعیین وقت بازدید</h2>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="vn-ld__visit-field">تاریخ بازدید
+        <input type="date" id="listingVisitDate" name="visit_date" required
+               min="{{ d.visit_date_min|e }}" max="{{ d.visit_date_max|e }}">
+      </label>
+      <label class="vn-ld__visit-field">ساعت بازدید
+        <select id="listingVisitTime" name="visit_time">
+          {% for h in d.visit_allowed_hours or [] %}
+          <option value="{{ '%02d:00' % h }}">{{ '%02d:00' % h }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% if d.show_customer_fields %}
+      <p class="vn-ld__visit-hint">نام مشتری اختیاری است. اگر خالی بماند، نام شما برای مالک ارسال می‌شود.</p>
+      <label class="vn-ld__visit-field">نام مشتری
+        <input name="customer_first_name" autocomplete="given-name" placeholder="نام مشتری">
+      </label>
+      <label class="vn-ld__visit-field">نام خانوادگی
+        <input name="customer_last_name" autocomplete="family-name" placeholder="نام خانوادگی مشتری">
+      </label>
+      <label class="vn-ld__visit-field">موبایل
+        <input name="customer_phone" dir="ltr" inputmode="tel" autocomplete="tel" placeholder="0912 345 6789">
+      </label>
+      {% else %}
+      <p class="vn-ld__visit-who">بازدید به نام {{ d.prefilled_name or 'حساب شما' }}{% if d.prefilled_phone %} · <span dir="ltr">{{ d.prefilled_phone }}</span>{% endif %} ثبت می‌شود.</p>
+      {% endif %}
+      <p id="listingVisitError" class="vn-ld__visit-error" hidden></p>
+      <button type="submit" id="listingVisitSubmit">ثبت درخواست بازدید</button>
+      <button type="button" class="vn-ld__sheet-close" id="listingVisitClose">بستن</button>
+    </form>
+  </div>
+  <script type="application/json" id="listingVisitConfig">{{ {
+    'is_advisor': d.is_advisor|default(false),
+    'prefilled_name': d.prefilled_name|default(''),
+    'prefilled_phone': d.prefilled_phone|default(''),
+    'show_customer_fields': d.show_customer_fields|default(false),
+    'customer_name_optional': true,
+    'customer_phone_optional': true,
+    'visit_date_min': d.visit_date_min|default(''),
+    'visit_date_max': d.visit_date_max|default(''),
+    'visit_allowed_weekdays': d.visit_allowed_weekdays|default([]),
+    'visit_allowed_hours': d.visit_allowed_hours|default([]),
+    'visit_request_url': d.visit_request_url|default('')
+  }|tojson }}</script>
+  {% elif (not d.logged_in) and d.source != 'divar' %}
+  <div class="vn-ld__sticky">
+    <a href="{{ url_for('express_partner.login', next=request.path) }}">بازدید</a>
+  </div>
+  {% elif d.show_divar and d.divar_url %}
   <div class="vn-ld__sticky">
     <a href="{{ d.divar_url }}"
        target="_blank"
@@ -469,6 +611,113 @@
   try {
     if (typeof window.vinorSyncFavButtons === 'function') window.vinorSyncFavButtons();
   } catch (_) {}
+})();
+</script>
+<script>
+(function () {
+  var openBtn = document.getElementById('listingVisitOpen');
+  var sheet = document.getElementById('listingVisitSheet');
+  var form = document.getElementById('listingVisitForm');
+  if (!openBtn || !sheet || !form) return;
+
+  function readConfig() {
+    var el = document.getElementById('listingVisitConfig');
+    if (!el) return {};
+    try { return JSON.parse(el.textContent || '{}') || {}; } catch (_) { return {}; }
+  }
+  var config = readConfig();
+
+  function normalizeIranMobileInput(raw) {
+    var fa = '۰۱۲۳۴۵۶۷۸۹';
+    var ar = '٠١٢٣٤٥٦٧٨٩';
+    var s = String(raw || '').trim();
+    s = s.replace(/[۰-۹]/g, function (d) { return String(fa.indexOf(d)); });
+    s = s.replace(/[٠-٩]/g, function (d) { return String(ar.indexOf(d)); });
+    s = s.replace(/[\s\u00a0\u200c\u200f\u200e\u202a-\u202e]+/g, '');
+    s = s.replace(/[-‐‑‒–—―−ـ]/g, '');
+    s = s.replace(/\D+/g, '');
+    var rest = s;
+    if (s.indexOf('0098') === 0) rest = s.slice(4);
+    else if (s.indexOf('98') === 0 && (s.length === 12 || (s.length === 13 && s.charAt(2) === '0'))) rest = s.slice(2);
+    if (rest.charAt(0) === '0') rest = rest.slice(1);
+    if (rest.charAt(0) === '9' && rest.length === 10) return '0' + rest;
+    return s;
+  }
+
+  function showError(msg) {
+    var el = document.getElementById('listingVisitError');
+    if (!el) return;
+    el.hidden = !msg;
+    el.textContent = msg || '';
+  }
+
+  openBtn.addEventListener('click', function () {
+    sheet.hidden = false;
+    showError('');
+  });
+  var closeBtn = document.getElementById('listingVisitClose');
+  if (closeBtn) closeBtn.addEventListener('click', function () { sheet.hidden = true; });
+  sheet.addEventListener('click', function (ev) {
+    if (ev.target === sheet) sheet.hidden = true;
+  });
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    showError('');
+    var dateEl = document.getElementById('listingVisitDate');
+    var visitDate = dateEl ? String(dateEl.value || '').trim() : '';
+    if (!visitDate) {
+      showError('لطفاً تاریخ بازدید را انتخاب کنید.');
+      return;
+    }
+    var parts = visitDate.split('-');
+    var day = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])).getDay();
+    var allowed = config.visit_allowed_weekdays || [];
+    if (allowed.length && allowed.indexOf(day) < 0) {
+      showError('تاریخ انتخاب‌شده در روزهای مجاز بازدید نیست.');
+      return;
+    }
+    var phoneEl = form.querySelector('[name="customer_phone"]');
+    var phoneRaw = phoneEl ? String(phoneEl.value || '').trim() : '';
+    var phone = phoneRaw ? normalizeIranMobileInput(phoneRaw) : '';
+    if (phoneRaw && !/^09\d{9}$/.test(phone)) {
+      showError('شماره تماس مشتری معتبر نیست.');
+      return;
+    }
+    var body = new FormData(form);
+    if (phoneEl) body.set('customer_phone', phone);
+    var csrf = body.get('csrf_token') || '';
+    var submitBtn = document.getElementById('listingVisitSubmit');
+    if (submitBtn) submitBtn.disabled = true;
+    var url = String(config.visit_request_url || '').trim();
+    if (!url) {
+      showError('ثبت درخواست بازدید ممکن نشد.');
+      if (submitBtn) submitBtn.disabled = false;
+      return;
+    }
+    fetch(url, {
+      method: 'POST',
+      body: body,
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrf
+      }
+    }).then(function (res) {
+      return res.json().then(function (data) { return { ok: res.ok, data: data || {} }; });
+    }).then(function (result) {
+      if (!result.ok || !result.data.success) {
+        showError((result.data && result.data.message) || 'ثبت درخواست بازدید ممکن نشد.');
+        return;
+      }
+      form.innerHTML = '<p class="vn-ld__visit-who">' + (result.data.message || 'بازدید ثبت شد.') + '</p>';
+    }).catch(function () {
+      showError('ثبت درخواست بازدید ممکن نشد.');
+    }).then(function () {
+      if (submitBtn && submitBtn.isConnected) submitBtn.disabled = false;
+    });
+  });
 })();
 </script>
 {% endblock %}

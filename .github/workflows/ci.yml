@@ -95,6 +95,7 @@ jobs:
             tests/test_invest_backup.py
             tests/test_invest_data_diag.py
             tests/test_otp_sms.py
+            tests/test_visit_request_form.py
           )
           python -m pytest -q "${files[@]}"
 

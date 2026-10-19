@@ -7221,11 +7221,19 @@ def home_register_customer():
         else:
             plus_user_name = plus_user_phone
 
-    customer_phone = ''
-    if customer_phone_raw:
-        customer_phone = normalize_iran_mobile(customer_phone_raw) or customer_phone_raw
-        if not is_valid_iran_mobile(customer_phone):
-            return _fail('شماره مشتری معتبر نیست.')
+    account_name = str((partner_profile.get('name') if partner_profile else '') or '').strip()
+    from .visit_requests import resolve_visit_customer_fields
+
+    customer_first_name, customer_last_name, customer_phone, phone_err = resolve_visit_customer_fields(
+        is_advisor=True,
+        account_name=account_name,
+        account_phone=me_phone,
+        customer_first_name=customer_first_name,
+        customer_last_name=customer_last_name,
+        customer_phone_raw=customer_phone_raw,
+    )
+    if phone_err:
+        return _fail(phone_err)
 
     if '|' in visit_slot_raw:
         visit_date_in, _, visit_time_in = visit_slot_raw.partition('|')
@@ -9201,7 +9209,13 @@ def _mark_in_transaction_finish(
     customer_name: str | None = None,
 ):
     """پاسخ HTML (redirect) یا JSON برای درخواست AJAX جزئیات فایل."""
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.is_json
+        or request.accept_mimetypes['application/json']
+        > request.accept_mimetypes['text/html']
+    )
+    if wants_json:
         payload = {
             'success': success,
             'message': message,
@@ -9392,10 +9406,53 @@ def _sync_visit_customer_to_club(
         )
 
 
+def listing_visit_booking_fields(code: str) -> Dict[str, Any]:
+    """وضعیت فرم بازدید برای صفحهٔ جزئیات و JSON اپ."""
+    from .visit_requests import visit_booking_hints, visit_schedule_for_land
+
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = _partner_profile_for_phone(me_phone) if me_phone else None
+    try:
+        is_advisor = bool(me_phone and _is_partner_approved(profile))
+    except Exception:
+        is_advisor = False
+    account_name = str((profile or {}).get('name') or '').strip()
+    hints = visit_booking_hints(
+        is_advisor=is_advisor,
+        account_name=account_name,
+        account_phone=me_phone,
+    )
+    schedule: Dict[str, Any] = {}
+    try:
+        schedule = visit_schedule_for_land(code) if code else {}
+    except Exception:
+        schedule = {}
+    can = False
+    tx_mode = ''
+    if me_phone and code:
+        ctx = _express_land_partner_ctx(code, me_phone)
+        if ctx is not None and str(ctx.get('global_status') or '') != 'sold':
+            state = _partner_land_tx_payload(
+                code,
+                me_phone,
+                is_partner_approved=is_advisor,
+                global_assignment_status=ctx.get('global_status') or 'active',
+            )
+            tx_mode = str(state.get('tx_mode') or '')
+            can = tx_mode in ('visit', 'revisit') or bool(state.get('can_revisit'))
+    return {
+        **hints,
+        **schedule,
+        'logged_in': bool(me_phone),
+        'can_request_visit': bool(can and me_phone),
+        'tx_mode': tx_mode,
+    }
+
+
 @express_partner_bp.route('/visit-requests/<code>', methods=['POST'], endpoint='create_visit_request')
-@require_partner_access()
+@require_partner_access(allow_pending=True)
 def create_visit_request(code: str):
-    """ثبت درخواست بازدید با تاریخ و مشخصات مشتری."""
+    """ثبت درخواست بازدید. نام مشتری برای مشاور اختیاری است؛ خریدار از پروفایل پر می‌شود."""
     me_phone = (session.get('user_phone') or '').strip()
     json_payload = None
     if request.is_json:
@@ -9408,34 +9465,31 @@ def create_visit_request(code: str):
     customer_first_name = _request_visit_field('customer_first_name', json_payload)
     customer_last_name = _request_visit_field('customer_last_name', json_payload)
     customer_phone_raw = _request_visit_field('customer_phone', json_payload)
-    customer_phone = normalize_iran_mobile(customer_phone_raw) or customer_phone_raw
-
-    if not customer_first_name or not customer_last_name or not customer_phone_raw:
-        return _mark_in_transaction_finish(
-            code,
-            success=False,
-            message='نام، نام خانوادگی و شماره تماس مشتری الزامی است.',
-            category='error',
-        )
-    if not is_valid_iran_mobile(customer_phone):
-        return _mark_in_transaction_finish(
-            code,
-            success=False,
-            message='شماره تماس مشتری معتبر نیست.',
-            category='error',
-        )
 
     partners = load_express_partners() or []
     partner_profile = next((p for p in partners if str(p.get('phone')) == me_phone), None)
+    if partner_profile is None:
+        partner_profile = _partner_profile_for_phone(me_phone)
     try:
         is_pa = _is_partner_approved(partner_profile)
     except Exception:
         is_pa = False
-    if not is_pa:
+    account_name = str((partner_profile or {}).get('name') or '').strip()
+    from .visit_requests import resolve_visit_customer_fields
+
+    customer_first_name, customer_last_name, customer_phone, phone_err = resolve_visit_customer_fields(
+        is_advisor=is_pa,
+        account_name=account_name,
+        account_phone=me_phone,
+        customer_first_name=customer_first_name,
+        customer_last_name=customer_last_name,
+        customer_phone_raw=customer_phone_raw,
+    )
+    if phone_err:
         return _mark_in_transaction_finish(
             code,
             success=False,
-            message='برای ثبت درخواست بازدید باید حساب همکاری شما تأیید شده باشد.',
+            message=phone_err,
             category='error',
         )
 
@@ -9456,13 +9510,6 @@ def create_visit_request(code: str):
                 ctx = _express_land_partner_ctx(code, me_phone) or ctx
         except Exception:
             pass
-    if not ctx.get('my_assignment'):
-        return _mark_in_transaction_finish(
-            code,
-            success=False,
-            message='این فایل برای ثبت بازدید در دسترس نیست (فروخته یا قفل همکار دیگر).',
-            category='error',
-        )
 
     current_status = ctx['global_status']
     holder_phone = ctx.get('holder_phone')
@@ -9493,7 +9540,7 @@ def create_visit_request(code: str):
     land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
     land_title = (land.get('title') if land else None) or code
 
-    partner_name = (partner_profile.get('name') if partner_profile else None) or me_phone
+    partner_name = account_name or me_phone
 
     visit_requests = load_express_visit_requests() or []
     if not isinstance(visit_requests, list):
@@ -9509,6 +9556,7 @@ def create_visit_request(code: str):
         customer_first_name=customer_first_name,
         customer_last_name=customer_last_name,
         customer_phone=customer_phone,
+        require_customer=False,
     )
     if err == 'already_pending':
         open_rec = partner_open_visit(visit_requests, me_phone, str(code))
@@ -9792,7 +9840,7 @@ def complete_visit_request(code: str):
 
 
 @express_partner_bp.get('/lands/<string:code>/tx-status', endpoint='land_tx_status')
-@require_partner_access()
+@require_partner_access(allow_pending=True)
 def land_tx_status(code: str):
     """وضعیت دکمه بازدید/معامله — برای به‌روزرسانی خودکار پس از تأیید ادمین."""
     me_phone = (session.get('user_phone') or '').strip()
@@ -9813,9 +9861,14 @@ def land_tx_status(code: str):
         global_assignment_status=ctx['global_status'],
     ))
     try:
-        from .visit_requests import visit_schedule_for_land
+        from .visit_requests import visit_booking_hints, visit_schedule_for_land
 
         state.update(visit_schedule_for_land(code))
+        state.update(visit_booking_hints(
+            is_advisor=is_partner_approved,
+            account_name=str((partner_profile or {}).get('name') or '').strip(),
+            account_phone=me_phone,
+        ))
     except Exception:
         current_app.logger.exception("visit schedule payload failed code=%s", code)
     # پولینگ tx-status هر چند ثانیه یک‌بار است؛ روتین را مسدود نکن
