@@ -80,7 +80,32 @@
     border-radius: 999px; min-height: 44px; padding: 0 18px; font-size: 0.85rem;
     display: inline-flex; align-items: center; justify-content: center;
   }
+  .vn-hub__tiles {
+    display: flex; flex-direction: row; direction: rtl; gap: 14px;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch; padding: 2px 0 4px;
+  }
+  .vn-hub__tiles::-webkit-scrollbar { display: none; }
+  .vn-hub__tile {
+    flex: 0 0 4.5rem; width: 4.5rem; display: flex; flex-direction: column;
+    align-items: center; gap: 6px; text-decoration: none; color: inherit; text-align: center;
+  }
+  .vn-hub__tile-icon {
+    position: relative; width: 4.5rem; height: 4.5rem; border-radius: 18px;
+    background: #161618; border: 1px solid rgba(255,255,255,0.06);
+    display: grid; place-items: center; color: #e4e4e7;
+  }
+  .vn-hub__tile-icon svg { width: 26px; height: 26px; }
+  .vn-hub__tile-label {
+    font-size: 0.75rem; font-weight: 700; line-height: 1.2; color: #fafafa; max-width: 4.8rem;
+  }
+  .vn-hub__tile-badge {
+    position: absolute; top: 4px; left: 4px; min-width: 1.05rem; padding: 0 4px;
+    border-radius: 999px; background: #166534; color: #fff;
+    font-size: 0.62rem; font-weight: 800; line-height: 1.35;
+  }
   .vn-hub__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .vn-hub__grid .vn-hub__sc:only-child { grid-column: 1 / -1; }
   .vn-hub__sc {
     display: flex; align-items: center; gap: 8px; min-height: 44px;
     background: #161618; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px;
@@ -198,26 +223,36 @@
   </a>
   {% endif %}
 
+  <div class="vn-hub__tiles" aria-label="میانبرها">
+    <a class="vn-hub__tile" href="{{ url_for('express_partner.training') }}" data-vinor-express-nav>
+      <span class="vn-hub__tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M7 10.5V15c0 1.2 2.2 2.5 5 2.5s5-1.3 5-2.5v-4.5" stroke-linecap="round"/></svg>
+      </span>
+      <span class="vn-hub__tile-label">آموزش</span>
+    </a>
+    <a class="vn-hub__tile" href="{{ url_for('express_partner.news') }}" data-vinor-express-nav>
+      <span class="vn-hub__tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 5h11a2 2 0 0 1 2 2v12H7a2 2 0 0 1-2-2V5z" stroke-linejoin="round"/><path d="M8 9h7M8 12.5h7M8 16h4" stroke-linecap="round"/></svg>
+      </span>
+      <span class="vn-hub__tile-label">خبر</span>
+    </a>
+    {% if is_approved %}
+    <a class="vn-hub__tile" href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav>
+      <span class="vn-hub__tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 7h8M8 12h8M8 17h5" stroke-linecap="round"/><rect x="5" y="4" width="14" height="16" rx="2"/></svg>
+        {% if _pipe > 0 %}<span class="vn-hub__tile-badge">{{ _pipe|fa_digits }}</span>{% endif %}
+      </span>
+      <span class="vn-hub__tile-label">پیگیری</span>
+    </a>
+    {% endif %}
+  </div>
+
   <div class="vn-hub__grid">
-    <a class="vn-hub__sc" href="{{ url_for('express_partner.training') }}" data-vinor-express-nav>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 8l9-4 9 4-9 4-9-4z"/><path d="M7 10.5V15c0 1.2 2.2 2.5 5 2.5s5-1.3 5-2.5v-4.5" stroke-linecap="round"/></svg>
-      <span class="vn-hub__label">آموزش فروش</span>
-    </a>
-    <a class="vn-hub__sc" href="{{ url_for('express_partner.news') }}" data-vinor-express-nav>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 5h11a2 2 0 0 1 2 2v12H7a2 2 0 0 1-2-2V5z" stroke-linejoin="round"/><path d="M8 9h7M8 12.5h7M8 16h4" stroke-linecap="round"/></svg>
-      <span class="vn-hub__label">خبر وینور</span>
-    </a>
     <a class="vn-hub__sc" href="{{ url_for('express_partner.my_property') if me_phone else url_for('express_partner.home', menu=1, login_next=url_for('express_partner.my_property')) }}" data-vinor-express-nav>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-5v-5H10v5H5a1 1 0 0 1-1-1v-8z" stroke-linejoin="round"/></svg>
       <span class="vn-hub__label">فایل‌های من</span>
     </a>
-    {% if is_approved %}
-    <a class="vn-hub__sc" href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 7h8M8 12h8M8 17h5" stroke-linecap="round"/><rect x="5" y="4" width="14" height="16" rx="2"/></svg>
-      <span class="vn-hub__label">پیگیری مشتری‌ها</span>
-      {% if _pipe > 0 %}<span class="vn-hub__badge">{{ _pipe|fa_digits }}</span>{% endif %}
-    </a>
-    {% else %}
+    {% if not is_approved %}
     <a class="vn-hub__sc" href="{{ url_for('express_partner.coop_levels') }}" data-vinor-express-nav>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/></svg>
       <span class="vn-hub__label">سطوح همکاری</span>

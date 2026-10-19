@@ -169,6 +169,59 @@ MARKETER_LABEL = "می‌خواهم بازاریاب وینور شوم"
 HOME = "/express/partner/home"
 
 
+def _hub_tiles(html: str) -> str:
+    start = html.find('class="vn-hub__tiles"')
+    assert start != -1
+    end = html.find('class="vn-hub__grid"', start)
+    assert end != -1
+    return html[start:end]
+
+
+def test_home_category_tiles_are_short_and_keep_their_links(client, app):
+    """کاشی‌های خانه: برچسب کوتاه، همان لینک، پیگیری فقط برای همکار تأییدشده."""
+    guest = client.get(HOME).get_data(as_text=True)
+    guest_tiles = _hub_tiles(guest)
+    assert re.findall(r'vn-hub__tile-label">([^<]+)', guest_tiles) == ["آموزش", "خبر"]
+    assert 'href="/express/partner/training"' in guest_tiles
+    assert 'href="/express/partner/news"' in guest_tiles
+    assert 'href="/express/partner/requests"' not in guest_tiles
+    assert "آموزش فروش" not in guest
+    assert "خبر وینور" not in guest
+    assert "پیگیری مشتری‌ها" not in guest
+    assert "سطوح همکاری" in guest
+    assert "overflow-x: auto" in guest
+    assert "flex-direction: row" in guest
+    assert "direction: rtl" in guest
+
+    _login(client)
+    with app.app_context():
+        from app.utils.storage import save_express_partners, save_express_visit_requests
+
+        save_express_partners([
+            {"phone": PHONE, "name": "همکار", "status": "approved"},
+        ])
+        save_express_visit_requests([{
+            "id": "home-tile-visit",
+            "partner_phone": PHONE,
+            "partner_name": "همکار",
+            "land_code": "H-1",
+            "status": "approved",
+            "visit_date": "2026-11-02",
+            "created_at": "2026-10-01T00:00:00Z",
+            "updated_at": "2026-10-01T00:00:00Z",
+        }])
+    approved = client.get(HOME).get_data(as_text=True)
+    tiles = _hub_tiles(approved)
+    assert re.findall(r'vn-hub__tile-label">([^<]+)', tiles) == ["آموزش", "خبر", "پیگیری"]
+    assert 'href="/express/partner/requests"' in tiles
+    assert "vn-hub__tile-badge" in tiles
+    assert "سطوح همکاری" not in _hub_tiles(approved)
+    data = client.get("/express/partner/home/data").get_json()
+    assert "آموزش فروش" not in str(data)
+    assert "خبر وینور" not in str(data)
+    assert "پیگیری مشتری‌ها" not in str(data)
+
+
 def test_marketer_banner_moves_to_vinor_man(client, app):
     """بنر خانه حذف شده و همان مسیر از وینور من باز می‌شود."""
     guest_home = client.get(HOME).get_data(as_text=True)
