@@ -11,12 +11,16 @@ class VinorOpensChatTests(unittest.TestCase):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
         root = self._tmpdir.name
-        self._patcher = mock.patch(
-            "app.ai.paths.ai_data_file",
-            side_effect=lambda *parts: os.path.join(root, *parts),
-        )
-        self._patcher.start()
-        self.addCleanup(self._patcher.stop)
+
+        def _ai_file(*parts: str) -> str:
+            return os.path.join(root, *parts)
+
+        # chat_store binds ai_data_file at import time. Patch that name too so a
+        # full-suite run does not read or write the real instance chat files.
+        for target in ("app.ai.paths.ai_data_file", "app.ai.chat_store.ai_data_file"):
+            patcher = mock.patch(target, side_effect=_ai_file)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_empty_thread_gets_vinor_opening(self) -> None:
         from app.ai.audience import AUDIENCE_PUBLIC

@@ -38,15 +38,8 @@
     <form method="post" class="flex flex-col sm:flex-row gap-3">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="add">
-      <select name="city" required
-              class="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-        <option value="">انتخاب شهر استان تهران...</option>
-        {% for city in tehran_cities %}
-          {% if city not in cities %}
-            <option value="{{ city }}">{{ city }}</option>
-          {% endif %}
-        {% endfor %}
-      </select>
+      <input type="text" name="city" required maxlength="40" placeholder="نام شهر"
+             class="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
       <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition focusable">
         <i class="fas fa-plus text-xs ml-1"></i>
         افزودن
@@ -87,7 +80,7 @@
   <!-- راهنما - سبک دیوار -->
   <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-sm">
     <p class="font-medium text-gray-900 dark:text-white mb-2">راهنما</p>
-    <p class="text-gray-600 dark:text-gray-400">تمرکز فعلی: <strong>استان تهران · شهرستان دماوند · روستای گرمابسرد</strong>. همه پیشنهادها و همکاری فعلاً فقط حول گرمابسرد است. در صورت نیاز می‌توانید شهرهای استان تهران را دوباره اضافه کنید.</p>
+    <p class="text-gray-600 dark:text-gray-400">همکاری به یک روستا محدود نیست. هر نام شهر معتبر را می‌توان اضافه کرد. دکمهٔ استان تهران همان ۴۸ شهر را یکجا به لیست فعال می‌گذارد.</p>
   </div>
 
 </div>

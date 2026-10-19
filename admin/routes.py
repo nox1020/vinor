@@ -7112,7 +7112,7 @@ def express_cities():
             from app.utils.iran_cities import is_allowed_service_city
             new_city = (request.form.get('city') or '').strip()
             if new_city and not is_allowed_service_city(new_city):
-                flash('فقط شهرهای محدودهٔ سرویس (استان تهران / گرمابسرد دماوند) مجاز است.', 'warning')
+                flash('نام شهر معتبر نیست.', 'warning')
             elif new_city and new_city not in cities:
                 cities.append(new_city)
                 cities.sort()
@@ -7131,7 +7131,7 @@ def express_cities():
         elif action == 'set_focus':
             from app.utils.iran_cities import FOCUS_SERVICE_CITIES
             save_active_cities(list(FOCUS_SERVICE_CITIES))
-            flash('تمرکز سرویس: استان تهران · شهرستان دماوند · روستای گرمابسرد.', 'success')
+            flash('لیست شهرهای فعال روی گرمابسرد گذاشته شد.', 'success')
 
         elif action == 'add_tehran':
             from app.utils.iran_cities import normalize_active_tehran_cities

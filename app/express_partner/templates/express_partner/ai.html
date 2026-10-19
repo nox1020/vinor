@@ -96,8 +96,8 @@
     <div id="aiMessages"
          class="ai-messages ai-scroll"
          aria-live="polite"
-         aria-label="ع¯ظپطھع¯ظˆ"
-         data-welcome="{{ 'ط³ظ„ط§ظ… â€” ظ…ظ†ظ… ع©ظ†ط§ط±طھظ… ط¨ط±ط§غŒ ظپط§غŒظ„ ظˆ ظپط±ظˆط´طھ. ط¨ع¯ظˆ ع©ط¬ط§ ع¯غŒط± ع©ط±ط¯غŒ غŒط§ ع†غŒ ظ„ط§ط²ظ… ط¯ط§ط±غŒ.' if (ai_audience|default('partner')) == 'partner' else 'ط³ظ„ط§ظ… â€” ظ…ظ†ظ… ع©ظ†ط§ط±طھظ… ط¨ط±ط§غŒ ط®ط±غŒط¯ ط§ظ…ظ† ط²ظ…غŒظ† ظˆ ظˆغŒظ„ط§ ظˆ ط¢ع¯ظ‡غŒâ€Œظ‡ط§غŒ ط§ع©ط³ظ¾ط±ط³. ط¨ع¯ظˆ ط¯ظ†ط¨ط§ظ„ ع†غŒ ظ‡ط³طھغŒ.' }}">
+         aria-label="گفتگو"
+         data-welcome="{{ 'سلام — منم کنارتم برای فایل و فروشت. بگو کجا گیر کردی یا چی لازم داری.' if (ai_audience|default('partner')) == 'partner' else 'سلام! دنبال خرید ملکی یا می‌خوای بازاریاب بشی؟' }}">
       {% for msg in chat_messages %}
         {% include 'express_partner/partials/ai_chat_message.html' %}
       {% endfor %}

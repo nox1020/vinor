@@ -1831,15 +1831,13 @@ def _parse_apply_national_id(raw: str) -> str:
 
 
 def _default_apply_city(raw: str = '') -> str:
-    """شهر فعالیت — در فرم ساده‌شده پیش‌فرض گرمابسرد."""
-    city = (raw or '').strip()[:APPLY_CITY_MAX_LEN]
-    if city:
+    """شهر فعالیت اگر آمده باشد. نام خالی را با یک روستا پر نکن."""
+    from ..utils.iran_cities import is_plausible_city_name
+
+    city = " ".join((raw or "").split())[:APPLY_CITY_MAX_LEN]
+    if city and is_plausible_city_name(city):
         return city
-    try:
-        from ..utils.iran_cities import FOCUS_SERVICE_CITY
-        return str(FOCUS_SERVICE_CITY or '').strip()[:APPLY_CITY_MAX_LEN] or 'گرمابسرد'
-    except Exception:
-        return 'گرمابسرد'
+    return ''
 
 
 def _compose_apply_name(data: dict) -> tuple[str, str, str]:
@@ -2679,7 +2677,10 @@ def create_partner_application_core(
     first_name, last_name, name = _compose_apply_name(data)
     experience = (data.get('experience') or '').strip()[:APPLY_EXPERIENCE_MAX_LEN]
     note = (data.get('note') or '').strip()[:APPLY_NOTE_MAX_LEN]
-    city = _default_apply_city(data.get('city') or '')
+    raw_city = (data.get('city') or '').strip()
+    if raw_city and not _default_apply_city(raw_city):
+        return {'ok': False, 'error': 'نام شهر معتبر نیست.'}
+    city = _default_apply_city(raw_city)
     national_id = _parse_apply_national_id(data.get('national_id') or '')
     if not first_name or not last_name or not national_id:
         return {'ok': False, 'error': 'نام، نام خانوادگی و کد ملی الزامی است.'}
@@ -10885,21 +10886,20 @@ def _apply_partner_profile_fields(
     """به‌روزرسانی فیلدهای قابل ویرایش پروفایل همکار روی همان dict."""
     prev_birth = (profile.get('birth_date') or '').strip()
     birth_date = _normalize_profile_birth_date(birth_date, prev_birth)
+    from ..utils.iran_cities import is_plausible_city_name
+
     name = (name or '').strip()[:60]
-    city = (city or '').strip()[:60]
+    city = " ".join((city or "").split())[:60]
     bio = (bio or '').strip()[:200]
 
     if name:
         profile['name'] = name
     else:
         profile.pop('name', None)
-    if city:
-        if cities_allowed and city not in cities_allowed:
-            city = ''
-        if city:
-            profile['city'] = city
-        else:
-            profile.pop('city', None)
+    if city and is_plausible_city_name(city):
+        profile['city'] = city
+    elif city:
+        profile.pop('city', None)
     else:
         profile.pop('city', None)
     if bio:

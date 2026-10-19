@@ -13,7 +13,7 @@
 {% set allow_all = allow_all|default(false) %}
 {% set apply_submit = apply_submit|default(false) %}
 {% set empty_label = empty_label|default('انتخاب شهر') %}
-{% set major_cities = ['گرمابسرد'] %}
+{% set major_cities = (cities if cities is defined else [])[:4] %}
 
 <div id="{{ cp }}Modal"
      class="fixed inset-0 z-[85] hidden overflow-y-auto"

@@ -346,7 +346,9 @@ def agent_system_hint(voice: str | None) -> str:
         return (
             "مهمان: خرید→search_lands (حداکثر ۲)→نزدیک‌ترین را با [[LAND]] معرفی کن | "
             "بازاریاب شدن→اول coop_info (شرایط+نحوه ارتقا) بعد شروع ثبت "
-            "(نام→نام‌خانوادگی→کدملی یکی‌یکی→propose_apply). شهر نپرس. propose_visit/deal نزن."
+            "(نام→نام‌خانوادگی→کدملی یکی‌یکی→propose_apply). "
+            "اگر شهر گفت در city بفرست؛ اجباری نپرس و به یک روستا محدود نکن. "
+            "propose_visit/deal نزن."
         )
     return (
         "دستیار فروش: حرف بزن، یک سؤال بعدی بپرس، کارت تأیید آماده کن. "
@@ -565,6 +567,10 @@ def _schema_propose_apply() -> dict[str, Any]:
                     "last_name": {"type": "string", "description": "نام خانوادگی"},
                     "name": {"type": "string", "description": "نام کامل (اگر first/last جدا نیست)"},
                     "national_id": {"type": "string"},
+                    "city": {
+                        "type": "string",
+                        "description": "شهر فعالیت اگر کاربر گفت؛ هر شهر، نه فقط یک روستا",
+                    },
                 },
                 "required": ["national_id"],
             },
@@ -1099,14 +1105,14 @@ def _session_phone() -> str:
 def _tool_coop_info(args: dict[str, Any]) -> dict[str, Any]:
     topic = str(args.get("topic") or "all").strip().lower() or "all"
     try:
-        from app.utils.iran_cities import FOCUS_SERVICE_CITY, focus_location_label
+        from app.utils.iran_cities import focus_location_label
 
         city_bit = (
             f"محدوده سرویس: {focus_location_label()}. "
-            f"شهر همکاری فقط «{FOCUS_SERVICE_CITY}»."
+            "اگر کاربر شهر گفت همان را ثبت کن و شهری را از خودت نساز."
         )
     except Exception:
-        city_bit = "محدوده سرویس: استان تهران · شهرستان دماوند · روستای گرمابسرد."
+        city_bit = "محدوده سرویس: همهٔ شهرها. اگر کاربر شهر گفت همان را ثبت کن."
 
     blocks: dict[str, str] = {
         "levels": (
@@ -1237,6 +1243,7 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
     last_name = str(args.get("last_name") or "").strip()
     name = str(args.get("name") or "").strip()
     national_id = str(args.get("national_id") or "").strip()
+    city = " ".join(str(args.get("city") or "").split())
     if not first_name and not last_name and name:
         parts = name.split(None, 1)
         first_name = parts[0] if parts else ""
@@ -1258,7 +1265,7 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
                 "missing": missing,
                 "instruction": (
                     "فقط فیلدهای missing را یکی‌یکی بپرس (نام، نام خانوادگی، کد ملی)؛ "
-                    "شهر نپرس؛ لینک نده."
+                    "شهر را اجباری نپرس. اگر کاربر شهر گفت در city بفرست. لینک نده."
                 ),
             },
         }
@@ -1272,6 +1279,7 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
             _parse_apply_national_id,
             _partner_profile_for_phone,
         )
+        from app.utils.iran_cities import is_plausible_city_name
         from app.utils.iran_ids import is_valid_iran_national_id
 
         if _is_partner_approved(_partner_profile_for_phone(me)):
@@ -1310,6 +1318,15 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
                     "instruction": "کد ملی نامعتبر است؛ دوباره بپرس.",
                 },
             }
+        if city and not is_plausible_city_name(city):
+            return {
+                "ok": True,
+                "model_result": {
+                    "ok": False,
+                    "invalid": "city",
+                    "instruction": "نام شهر معتبر نیست؛ اگر شهر را گفت دوباره بپرس. شهری نساز.",
+                },
+            }
     except Exception as exc:
         return _denied(str(exc))
 
@@ -1318,6 +1335,7 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
         "last_name": last_name,
         "name": name,
         "national_id": national_id,
+        "city": city,
         "source": "ai_chat",
     }
     token = _store_pending_action(
@@ -1347,6 +1365,7 @@ def _tool_propose_partner_application(args: dict[str, Any], *, phone: str) -> di
             "last_name": last_name,
             "name": name,
             "national_id": national_id,
+            "city": city,
         },
         "instruction": (
             "کارت تأیید نشان داده می‌شود. بگو روی تأیید بزند تا همکاری فعال شود. "
@@ -1490,13 +1509,11 @@ def _tool_search_lands(
     lands_map = accessible_lands_map(phone, aud)
     lands = list(lands_map.values())
     try:
-        from app.utils.iran_cities import SERVICE_VILLAGE, focus_location_label
+        from app.utils.iran_cities import focus_location_label
 
         loc_label = focus_location_label()
-        village = SERVICE_VILLAGE
     except Exception:
-        loc_label = "روستای گرمابسرد"
-        village = "گرمابسرد"
+        loc_label = "همهٔ شهرها"
 
     if not lands:
         out = {
@@ -1530,7 +1547,7 @@ def _tool_search_lands(
                 "code": code,
                 "summary": _land_summary(land, assigned=assigned, compact=True),
                 "title": str(land.get("title") or "").strip(),
-                "city": str(land.get("city") or "").strip() or village,
+                "city": str(land.get("city") or "").strip() or "نامشخص",
                 "assigned": assigned,
             }
         )

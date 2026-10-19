@@ -524,7 +524,7 @@ def build_partner_context_base(phone: str) -> str:
         from app.utils.iran_cities import focus_location_block
         loc_block = focus_location_block()
     except Exception:
-        loc_block = "محدوده: استان تهران · شهرستان دماوند · روستای گرمابسرد."
+        loc_block = "محدوده: همهٔ شهرها."
     return "\n".join(
         [
             "=== اطلاعات داخلی وینور ===",
@@ -844,7 +844,7 @@ def build_public_context_base() -> str:
 
         loc_block = focus_location_block()
     except Exception:
-        loc_block = "محدوده: استان تهران · شهرستان دماوند · روستای گرمابسرد."
+        loc_block = "محدوده: همهٔ شهرها."
     return "\n".join(
         [
             "=== وینور (مهمان/کاربر عادی) ===",

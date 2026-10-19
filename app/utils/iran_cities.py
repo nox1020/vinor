@@ -32,16 +32,25 @@ FOCUS_TEXT_MARKERS = (
 
 
 def focus_location_label() -> str:
-    return f"استان {SERVICE_PROVINCE} · شهرستان {SERVICE_COUNTY} · روستای {SERVICE_VILLAGE}"
+    return "همهٔ شهرها"
 
 
 def focus_location_block() -> str:
     """متن ثابت برای system / زمینهٔ AI."""
     return (
-        f"دفتر: {focus_location_label()}.\n"
-        f"فایل‌های منتشرشدهٔ همهٔ شهرها قابل پیشنهادند.\n"
-        f"برای ثبت همکاری شهر را فقط «{FOCUS_SERVICE_CITY}» بپذیر/پیشنهاد بده."
+        "فایل‌های منتشرشدهٔ همهٔ شهرها قابل پیشنهادند.\n"
+        "برای ثبت همکاری هر شهری را بپذیر. اگر نام شهر نیامد، شهری نساز."
     )
+
+
+def is_plausible_city_name(city: str) -> bool:
+    """نام شهر اگر آمده باشد: حداقل دو حرف، بدون محدودیت به یک روستا."""
+    import re
+
+    name = " ".join(str(city or "").split())
+    if not (2 <= len(name) <= 40):
+        return False
+    return bool(re.search(r"[\u0600-\u06FFa-zA-Z]", name))
 
 
 def normalize_to_focus_city(city: str) -> str:
@@ -138,10 +147,7 @@ def is_tehran_city(city: str) -> bool:
 
 
 def is_allowed_service_city(city: str) -> bool:
-    name = str(city or "").strip()
-    if name in ALLOWED_SERVICE_CITY_SET:
-        return True
-    return SERVICE_VILLAGE in name
+    return is_plausible_city_name(city)
 
 
 def merge_unique_cities(existing: Iterable[str], extra: Iterable[str]) -> List[str]:
