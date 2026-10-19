@@ -16,7 +16,8 @@
 {% set _my_ads = url_for('express_partner.my_property') %}
 {% set _favs = url_for('express_partner.favorites') %}
 {% set _collab = url_for('express_partner.consultant_gate') if _consultant_on else url_for('express_partner.apply') %}
-{% set _collab_label = 'بازاریاب وینور' if _consultant_on else 'همکاری با وینور' %}
+{% set _collab_label = 'می‌خواهم بازاریاب وینور شوم' if _consultant_on else 'همکاری با وینور' %}
+{% set _collab_href = _collab if _logged else url_for('express_partner.home', menu=1, login_next=_collab) %}
 {% set _lawyer_dest = url_for('express_partner.home', ai=1, thread='__lawyer__') %}
 
 <main id="vinorMePage" class="partner-page-scroll-pad">
@@ -69,7 +70,7 @@
     <div class="vn-me-gap" aria-hidden="true"></div>
     <h2 class="vn-me-label">همکاری با وینور</h2>
     {% if not _approved and not _pending %}
-    {{ profile_menu_row(_collab if _logged else url_for('express_partner.login') ~ '?next=' ~ (_collab|quote_next), 'fa-user-plus', _collab_label) }}
+    {{ profile_menu_row(_collab_href, 'fa-user-plus', _collab_label, subtitle='شروع همکاری فروش و دریافت پورسانت') }}
     {% endif %}
     {% if _logged and _pending %}
       {% if _consultant_on %}
