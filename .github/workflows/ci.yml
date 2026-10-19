@@ -88,6 +88,7 @@ jobs:
             tests/test_deal_decision_listing.py
             tests/test_inbox_visit_actions.py
             tests/test_inbox_offer_cards.py
+            tests/test_inbox_noshow_actions.py
             tests/test_invest_checks.py
             tests/test_invest_backup.py
             tests/test_invest_data_diag.py

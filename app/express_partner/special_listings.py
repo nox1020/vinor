@@ -1021,6 +1021,22 @@ def publish_owner_home(
     return target, None
 
 
+def _listing_code(lands: Any, code: str) -> str:
+    """کد فعلی. previous_code همان ملک است و رقم فارسی با انگلیسی یکی است."""
+    want = str(code or "").strip().translate(_FA_AR_DIGITS)
+    if not want:
+        return ""
+    for land in lands or []:
+        if not isinstance(land, dict):
+            continue
+        current = str(land.get("code") or "").strip()
+        extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+        prev = str(extras.get("previous_code") or "").strip().translate(_FA_AR_DIGITS)
+        if want == current.translate(_FA_AR_DIGITS) or (prev and want == prev):
+            return current or want
+    return want
+
+
 def resolve_listing_for_viewer(
     lands: Any,
     code: str,
@@ -1029,10 +1045,10 @@ def resolve_listing_for_viewer(
     """ردیف قابل‌نمایش برای بیننده.
 
     مالک، ردیف «ملک من» خودش را می‌بیند — اگر هنوز نسخه‌ای منتشر باشد همان را —
-    تا یک کپی اکسپرسِ جا مانده جزئیات را منتشر نشان ندهد. بقیه فقط آگهی عمومی
-    را می‌بینند.
+    تا یک کپی اکسپرسِ جا مانده جزئیات را منتشر نشان ندهد. آگهی متوقف یا
+    بایگانی‌شده هم فقط برای خود مالک باز می‌شود. بقیه فقط آگهی عمومی را می‌بینند.
     """
-    matches = _rows_for_code(lands, code)
+    matches = _rows_for_code(lands, _listing_code(lands, code))
     if not matches:
         return None, "missing"
     owned = [
@@ -1047,12 +1063,25 @@ def resolve_listing_for_viewer(
         return owned[0], "owner"
     from app.listings.service import is_archived
 
+    owned_hidden = None
     for land in matches:
         if is_archived(land):
+            if owned_hidden is None and _same_phone(_owner_phone(land), phone):
+                owned_hidden = land
             continue
         if land.get("is_express") and not is_owner_home(land):
             return land, "public"
+        if owned_hidden is None and _same_phone(_owner_phone(land), phone):
+            owned_hidden = land
+    if owned_hidden is not None:
+        return owned_hidden, "owner"
     return None, "missing"
+
+
+def viewer_can_open_listing(lands: Any, code: str, phone: str) -> bool:
+    """همان شرطی که جزئیات آگهی برای این شماره ساخته می‌شود."""
+    land, _mode = resolve_listing_for_viewer(lands, code, phone)
+    return isinstance(land, dict)
 
 
 def viewer_owns_private_home(lands: Any, code: str, phone: str) -> bool:

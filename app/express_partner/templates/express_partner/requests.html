@@ -713,6 +713,7 @@
           <span class="rq-badge">بازدید {{ item.revisit_count|fa_digits }}</span>
           {% endif %}
         </p>
+        {% if item.can_archive %}
         <form method="post"
               action="{{ url_for('express_partner.apk_request_restore' if item.archived else 'express_partner.apk_request_archive', vid=item.id) }}"
               class="px-4 pb-2"
@@ -720,10 +721,11 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="rq-badge">{{ 'بازگرداندن به پیگیری' if item.archived else 'بایگانی این پیگیری' }}</button>
         </form>
+        {% endif %}
         {% include 'express_partner/partials/visit_card_face.html' %}
         <div class="rq-vcard__body" data-rq-detail-body hidden>
           {% include 'express_partner/partials/visit_card_detail_facts.html' %}
-          {% if item.land_code %}
+          {% if item.can_view_land and item.land_code %}
           <button type="button" class="rq-vcard__open-land" data-rq-open-land data-vinor-direct-action>مشاهده فایل</button>
           {% endif %}
           {% if item.progress_steps %}

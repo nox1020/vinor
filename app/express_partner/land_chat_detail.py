@@ -449,22 +449,30 @@ def _listing_spec_rows(land: Dict[str, Any], *, is_divar: bool) -> list[dict[str
     return rows[:18]
 
 
-def _unpublish_confirm_payload(code: str) -> Dict[str, Any]:
-    """پاسخ ۲۰۰ برای تأیید توقف، فقط وقتی جلسه مالک همین ملک است.
+LAND_MISSING_MESSAGE = "آگهی پیدا نشد."
+LAND_UNAVAILABLE_MESSAGE = "این آگهی دیگر در دسترس نیست."
 
-    اپ موفقیت را از ``published_for_sale: false`` می‌فهمد. ``ok: false`` تا
-    صفحهٔ جزئیات عنوان آگهی نسازد. دیگران از همین مسیر ۴۰۴ می‌گیرند.
+
+def land_unavailable_message(code: str) -> str:
+    """پیام وقتی جزئیات برای این جلسه ساخته نمی‌شود.
+
+    کد ناشناس «پیدا نشد» است. ملکی که هست ولی این کاربر نباید ببیند
+    (خصوصی، متوقف، بایگانی) «دیگر در دسترس نیست» است.
     """
-    return {
-        "ok": False,
-        "error": "آگهی پیدا نشد.",
-        "code": str(code or "").strip(),
-        "published_for_sale": False,
-        "sale_publish_expires_at": None,
-        "sale_publish_remaining_seconds": None,
-        "is_mine": True,
-        "can_publish": True,
-    }
+    raw = str(code or "").strip()
+    if not raw:
+        return LAND_MISSING_MESSAGE
+    try:
+        from ..utils.storage import load_ads_cached
+        from .special_listings import _listing_code, _rows_for_code
+
+        lands = load_ads_cached() or []
+        current = _listing_code(lands, raw) or raw
+        if _rows_for_code(lands, current):
+            return LAND_UNAVAILABLE_MESSAGE
+    except Exception:
+        pass
+    return LAND_MISSING_MESSAGE
 
 
 def _sale_clock(land: Dict[str, Any], published: bool) -> Dict[str, Any]:
@@ -510,9 +518,9 @@ def native_listing_detail_payload(
         lands = load_ads_cached() or []
         if unpublished_owner_home_only(lands, raw):
             me = str(session.get("user_phone") or "") if has_request_context() else ""
-            if viewer_owns_private_home(lands, raw, me):
-                return _unpublish_confirm_payload(raw)
-            return None
+            if not viewer_owns_private_home(lands, raw, me):
+                return None
+            # مالک ملک خصوصی یا متوقف‌شده همان جزئیات را می‌بیند.
     if not land:
         return None
     source = "divar" if (is_divar or str(land.get("_source") or "") == "divar") else "vinor"

@@ -192,8 +192,10 @@ def test_private_land_data_is_owner_only(client, app):
     owner = client.get("/express/partner/api/lands/4/data")
     assert owner.status_code == 200
     body = owner.get_json()
-    assert body["ok"] is False
+    assert body["ok"] is True
+    assert body["title"]
     assert body["published_for_sale"] is False
+    assert body["is_mine"] is True
     assert body["can_publish"] is True
 
     _login(client, OTHER)

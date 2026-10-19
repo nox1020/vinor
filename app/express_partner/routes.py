@@ -3767,6 +3767,12 @@ def _build_partner_sales_pipeline(
             key=lambda card: str(card.get('updated_at') or card.get('created_at') or ''),
             reverse=True,
         )
+    from .visit_requests import _visit_lands, follow_card_permissions
+
+    card_lands = _visit_lands()
+    for card in cards:
+        if isinstance(card, dict):
+            card.update(follow_card_permissions(card, ph, card_lands))
     tab_counts = {
         PIPELINE_REQUESTS: 0,
         PIPELINE_VISITS: 0,
@@ -5171,9 +5177,11 @@ def apk_land_detail_data(code: str):
     from .land_chat_detail import native_listing_detail_payload
 
     payload = native_listing_detail_payload(code, confirm_unpublish=True)
-    if not payload:
+    if not payload or not payload.get("ok"):
+        from .land_chat_detail import land_unavailable_message
+
         return _apk_json(
-            {"ok": False, "error": "آگهی پیدا نشد.", "error_code": "not_found"},
+            {"ok": False, "error": land_unavailable_message(code), "error_code": "not_found"},
             404,
         )
     return _apk_json(payload)
@@ -12007,10 +12015,12 @@ def land_chat_detail(code: str):
 
     payload = render_land_chat_detail_html(code_s)
     if not payload:
+        from .land_chat_detail import land_unavailable_message
+
         return jsonify({
             "ok": False,
             "error": "not_found",
-            "message": "این فایل پیدا نشد یا دیگر در دسترس نیست.",
+            "message": land_unavailable_message(code_s),
         }), 404
 
     try:
@@ -12101,8 +12111,10 @@ def _render_native_listing_page(code: str, *, source_hint: str = ""):
     from .land_chat_detail import native_listing_detail_payload, track_land_view_async
 
     payload = native_listing_detail_payload(code, source_hint=source_hint)
-    if not payload:
-        flash('این آگهی پیدا نشد یا دیگر در دسترس نیست.', 'warning')
+    if not payload or not payload.get("ok"):
+        from .land_chat_detail import land_unavailable_message
+
+        flash(land_unavailable_message(code), 'warning')
         return redirect(url_for('express_partner.home'))
     if payload.get("source") == "vinor" and not _is_prefetch_request():
         code_s = str(payload.get("code") or code).strip()

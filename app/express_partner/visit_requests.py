@@ -516,6 +516,21 @@ def remaining_visit_hours_for_date(
     return remain
 
 
+def _phone_digits(raw: Any) -> str:
+    return "".join(ch for ch in to_en_digits(str(raw or "")) if ch.isdigit())
+
+
+def _phones_match(left: Any, right: Any) -> bool:
+    """09 و 98 و ده رقم آخر یکی‌اند."""
+    a = _canonical_visit_phone(left)
+    b = _canonical_visit_phone(right)
+    if a and b and a == b:
+        return True
+    da = _phone_digits(left)
+    db = _phone_digits(right)
+    return len(da) >= 10 and len(db) >= 10 and da[-10:] == db[-10:]
+
+
 def _canonical_visit_phone(raw: Any) -> str:
     phone = str(raw or "").strip()
     if not phone:
@@ -1201,15 +1216,40 @@ def follow_archive_fields(row: Dict[str, Any] | None) -> Dict[str, Any]:
 
 
 def _actor_can_touch_card(row: Dict[str, Any], actor: str, lands: List[Dict[str, Any]] | None = None) -> bool:
-    me = _canonical_visit_phone(actor)
-    if not me:
+    """درخواست‌کننده، مالکِ ثبت‌شده، کاربر پلاسِ همین کارت، یا مالک آگهی."""
+    me = _canonical_visit_phone(actor) or str(actor or "").strip()
+    if not me or not isinstance(row, dict):
         return False
-    if _canonical_visit_phone(row.get("partner_phone")) == me:
-        return True
-    if _canonical_visit_phone(row.get("owner_phone")) == me:
-        return True
+    for key in ("partner_phone", "owner_phone", "plus_user_phone"):
+        if _phones_match(row.get(key), me):
+            return True
     owner = owner_phone_for_listing(str(row.get("land_code") or ""), lands)
-    return bool(owner) and owner == me
+    return _phones_match(owner, me)
+
+
+def follow_card_permissions(
+    card: Dict[str, Any] | None,
+    actor: str,
+    lands: List[Dict[str, Any]] | None = None,
+) -> Dict[str, bool]:
+    """can_archive و پرچم نمایش ملک. هر دو پرچم ملک فقط وقتی جزئیات برای همین کاربر باز می‌شود."""
+    row = card if isinstance(card, dict) else {}
+    code = str(row.get("land_code") or "").strip()
+    visible = False
+    if code:
+        rows = lands if lands is not None else _visit_lands()
+        try:
+            from .special_listings import viewer_can_open_listing
+
+            visible = viewer_can_open_listing(rows, code, actor)
+        except Exception:
+            visible = False
+    kind = str(row.get("kind") or "").strip()
+    return {
+        "can_archive": False if kind == "offer" else _actor_can_touch_card(row, actor, lands),
+        "land_available": visible,
+        "can_view_land": visible,
+    }
 
 
 def _touch_visit_card_archive(
@@ -1867,7 +1907,9 @@ def owner_phone_for_listing(code: str, lands: List[Dict[str, Any]] | None = None
         if key != current and key != prev:
             continue
         raw = listing_owner_phone(land) if listing_owner_phone else ""
-        return _canonical_visit_phone(raw) or ""
+        phone = _canonical_visit_phone(raw)
+        if phone:
+            return phone
     return ""
 
 
