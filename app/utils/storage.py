@@ -193,24 +193,32 @@ def load_express_lands_cached(app=None):
 
     c = _EXPRESS_LANDS_CACHE
     if c["path"] == path and c["mtime"] == mtime and c["size"] == size and c["data"] is not None:
-        return c["data"]
+        express_lands = c["data"]
+    else:
+        # بارگذاری فایل‌های اکسپرس (شامل فروخته‌شده — مرتب‌سازی در UI همکار)
+        all_lands = load_ads_cached(app)
+        from app.listings.service import is_archived
 
-    # بارگذاری فایل‌های اکسپرس (شامل فروخته‌شده — مرتب‌سازی در UI همکار)
-    all_lands = load_ads_cached(app)
-    from app.listings.service import is_archived
+        express_lands = [
+            l for l in all_lands
+            if isinstance(l, dict)
+            and l.get('is_express', False)
+            and not _is_owner_home_land(l)
+            and not is_archived(l)
+        ]
+        # مرتب‌سازی بر اساس تاریخ ایجاد (جدیدترین اول)
+        express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        _EXPRESS_LANDS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": express_lands})
+    return _drop_expired_sale_publishes(express_lands)
 
-    express_lands = [
-        l for l in all_lands
-        if isinstance(l, dict)
-        and l.get('is_express', False)
-        and not _is_owner_home_land(l)
-        and not is_archived(l)
-    ]
-    # مرتب‌سازی بر اساس تاریخ ایجاد (جدیدترین اول)
-    express_lands.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-    
-    _EXPRESS_LANDS_CACHE.update({"path": path, "mtime": mtime, "size": size, "data": express_lands})
-    return express_lands
+
+def _drop_expired_sale_publishes(rows):
+    """مهلت ۳۰روزه روی هر خواندن اعمال می‌شود تا کش فایل آن را عقب نیندازد."""
+    try:
+        from app.listings.sale_publish_window import sale_publish_expired
+    except Exception:
+        return rows
+    return [row for row in rows if not sale_publish_expired(row)]
 
 def get_lands_file_stats(app=None):
     """

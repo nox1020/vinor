@@ -24,10 +24,19 @@ def is_publicly_visible_listing(land: Any) -> bool:
 
     Same rules as ``_home_public_carousel_lands``: express listing with a code,
     not ``public=False``, not an unpublished owner-home, not admin-created, and
-    not sold/closed/archived/hidden. City does not decide visibility.
+    not sold/closed/archived/hidden. A sale publish older than 30 days is not
+    public even before the stop sweep writes the unpublished flags. City does
+    not decide visibility.
     """
     if not isinstance(land, dict):
         return False
+    try:
+        from app.listings.sale_publish_window import sale_publish_expired
+
+        if sale_publish_expired(land):
+            return False
+    except Exception:
+        pass
     try:
         from app.listings.service import is_archived
 

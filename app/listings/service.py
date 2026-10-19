@@ -31,6 +31,7 @@ _EXTRAS_PUBLISH_KEYS = (
 _CYCLE_KEYS = (
     "published_at",
     "first_published_at",
+    "sale_published_at",
     "quiet_nudge_published_at",
 )
 ARCHIVE_MANUAL = "manual"
@@ -184,12 +185,14 @@ def mark_published(
     })
     first = _cycle_stamp(target, "first_published_at")
     current = _cycle_stamp(target, "published_at")
+    sale = _cycle_stamp(target, "sale_published_at")
     if not already_live:
         stamp = now
         if stamp == current:
             stamp = utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         extras["published_at"] = stamp
         extras["first_published_at"] = first or stamp
+        extras["sale_published_at"] = stamp
     else:
         if first:
             extras["first_published_at"] = first
@@ -197,11 +200,17 @@ def mark_published(
             extras["published_at"] = current
         elif first:
             extras["published_at"] = first
+        if sale:
+            extras["sale_published_at"] = sale
+        elif extras.get("published_at"):
+            extras["sale_published_at"] = extras["published_at"]
     target["extras"] = extras
     if extras.get("first_published_at"):
         target["first_published_at"] = extras["first_published_at"]
     if extras.get("published_at"):
         target["published_at"] = extras["published_at"]
+    if extras.get("sale_published_at"):
+        target["sale_published_at"] = extras["sale_published_at"]
     target["public"] = True
     target["is_express"] = True
     target["ad_type"] = "express"

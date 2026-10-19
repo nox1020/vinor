@@ -460,9 +460,27 @@ def _unpublish_confirm_payload(code: str) -> Dict[str, Any]:
         "error": "آگهی پیدا نشد.",
         "code": str(code or "").strip(),
         "published_for_sale": False,
+        "sale_publish_expires_at": None,
+        "sale_publish_remaining_seconds": None,
         "is_mine": True,
         "can_publish": True,
     }
+
+
+def _sale_clock(land: Dict[str, Any], published: bool) -> Dict[str, Any]:
+    """ساعت ۳۰روزه فقط وقتی خود آگهی برای فروش روشن است. پرچم جزئیاتِ آگهی عادی نیست."""
+    empty = {
+        "sale_publish_expires_at": None,
+        "sale_publish_remaining_seconds": None,
+    }
+    if not published:
+        return dict(empty)
+    try:
+        from app.listings.sale_publish_window import sale_publish_fields
+
+        return sale_publish_fields(land)
+    except Exception:
+        return dict(empty)
 
 
 def native_listing_detail_payload(
@@ -570,6 +588,7 @@ def native_listing_detail_payload(
         "can_favorite": source == "vinor",
         "is_mine": is_mine,
         "published_for_sale": sale_flag,
+        **_sale_clock(land, published),
         "can_publish": bool(is_mine and not published),
         "owner_badge": (
             "منتشرشده" if is_mine and published else ("خصوصی" if is_mine else "")

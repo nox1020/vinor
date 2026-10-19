@@ -38,6 +38,13 @@ def land_card(land: Dict[str, Any] | None) -> Dict[str, Any]:
         'image_url': partner_card_image_url(item) or None,
     }
     card.update(archive_payload(item))
+    try:
+        from app.listings.sale_publish_window import sale_publish_fields
+
+        card.update(sale_publish_fields(item))
+    except Exception:
+        card["sale_publish_expires_at"] = None
+        card["sale_publish_remaining_seconds"] = None
     return card
 
 

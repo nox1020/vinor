@@ -4892,10 +4892,16 @@ def _mark_payload_unpublished(payload: Dict[str, Any], code: str) -> None:
             item["published_for_sale"] = False
             item["badge_label"] = "خصوصی"
             item["_status_label"] = "خصوصی"
+            item["sale_publish_expires_at"] = None
+            item["sale_publish_remaining_seconds"] = None
     prop = payload.get("property")
     if isinstance(prop, dict) and str(prop.get("code") or "").strip() == want:
         prop["published_for_sale"] = False
+        prop["sale_publish_expires_at"] = None
+        prop["sale_publish_remaining_seconds"] = None
         payload["published_for_sale"] = False
+        payload["sale_publish_expires_at"] = None
+        payload["sale_publish_remaining_seconds"] = None
 
 
 def _publish_request_wants_unpublish(body: Any = None) -> bool:

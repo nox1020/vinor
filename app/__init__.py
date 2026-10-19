@@ -926,6 +926,13 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.warning("Optimization scheduler not started: %s", e)
 
+    try:
+        from app.listings.sale_publish_window import install_sale_publish_sweep
+
+        install_sale_publish_sweep(app)
+    except Exception as e:
+        app.logger.warning("Sale publish sweep not started: %s", e)
+
     @app.before_request
     def landing_gate():
         debug = app.debug or _flask_debug()

@@ -615,6 +615,22 @@ def healthz_invest_backup():
     return response
 
 
+@main_bp.route("/healthz/sale-publish-sweep", methods=("GET", "POST"), endpoint="healthz_sale_publish_sweep")
+def healthz_sale_publish_sweep():
+    """توقف انتشارهای ۳۰روزه. توکن VINOR_WEBHOOK_SECRET است و cron اختیاری است."""
+    if not _otp_diag_authorized():
+        resp = jsonify({"ok": False})
+        resp.status_code = 401
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    from app.listings.sale_publish_window import sweep_expired_sale_publishes
+
+    payload = sweep_expired_sale_publishes()
+    resp = jsonify(payload)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @main_bp.route("/healthz", methods=("GET", "HEAD"), endpoint="healthz")
 def healthz():
     """پین سلامت برای تشخیص آنلاین/آفلاین در کلاینت.

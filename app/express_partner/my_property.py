@@ -101,6 +101,18 @@ def _activity_from_stats(stats: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
+def _sale_publish_fields(land: Dict[str, Any] | None) -> Dict[str, Any]:
+    try:
+        from app.listings.sale_publish_window import sale_publish_fields
+
+        return sale_publish_fields(land if isinstance(land, dict) else None)
+    except Exception:
+        return {
+            "sale_publish_expires_at": None,
+            "sale_publish_remaining_seconds": None,
+        }
+
+
 def _performance(land: Dict[str, Any] | None) -> Dict[str, Any]:
     try:
         from app.listings.performance import listing_performance
@@ -153,6 +165,8 @@ def demo_property() -> Dict[str, Any]:
         "badge_label": "خصوصی",
         "privacy_note": "بعد از ثبت ملک، آمار واقعی انتشار اینجا می‌آید",
         "published_for_sale": False,
+        "sale_publish_expires_at": None,
+        "sale_publish_remaining_seconds": None,
         "nearby_listings": [],
         "activity": [],
         "edit_url": "",
@@ -225,6 +239,7 @@ def _from_land(land: Dict[str, Any], nearby: List[Dict[str, Any]]) -> Dict[str, 
             "فقط شما این ملک را می‌بینید · برای فروش هنوز منتشر نشده"
         ),
         "published_for_sale": published,
+        **_sale_publish_fields(land),
         "nearby_listings": list(nearby or []),
         "activity": _activity_from_stats(stats),
         "edit_url": edit_url,
@@ -301,6 +316,7 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
             "images": images,
             "image_count": len(images),
             "published_for_sale": published,
+            **_sale_publish_fields(land),
             "badge_label": "منتشرشده" if published else "خصوصی",
             "_status_label": "منتشرشده" if published else "خصوصی",
             "_status_class": "text-emerald-400" if published else "text-slate-400",
@@ -384,6 +400,8 @@ def page_payload(me_phone: str, status: str = "active") -> Dict[str, Any]:
         "form_url": form_url,
         "publish_url": publish_url,
         "published_for_sale": bool(prop and prop.get("published_for_sale")),
+        "sale_publish_expires_at": None if not prop else prop.get("sale_publish_expires_at"),
+        "sale_publish_remaining_seconds": None if not prop else prop.get("sale_publish_remaining_seconds"),
         "payment_methods": ["نقدی", "توافقی", "معاوضه"],
         "default_commission_pct": "2",
         "weekly_views": stats.get("weekly_views", 0),
