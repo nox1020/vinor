@@ -674,6 +674,7 @@ def visits_for_special_owner(
             "can_close_deal": can_close_deal,
             "can_cancel": can_cancel,
             "can_delete": can_delete,
+            "can_remove": bool(can_cancel or can_delete),
             "can_revisit": can_revisit,
             "is_own_request": is_own_request,
             "call_visitor_phone": calls["call_visitor_phone"],

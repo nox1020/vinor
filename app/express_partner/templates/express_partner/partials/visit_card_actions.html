@@ -122,7 +122,8 @@
       <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن پرونده</button>
     </form>
     {% endif %}
-  {% elif field_ok and received and item.can_start_deal %}
+  {% endif %}
+  {% if field_ok and received and item.can_start_deal %}
   <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='start_deal') }}" data-vinor-direct-action class="contents">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('فروش نهایی برای این همکار ثبت شود؟ فایل در حال معامله می‌شود.')">ثبت معامله</button>
