@@ -10,6 +10,8 @@ OWNER_A = "09121000001"
 OWNER_B = "09121000002"
 THIRD = "09121000003"
 BOOKER = "09121000004"
+ADVISOR = "09121000014"
+BUYER = "09121000015"
 CODE_A = "5101"
 CODE_B = "5102"
 CODE_PREFIX = "510"
@@ -31,14 +33,21 @@ def app(tmp_path, monkeypatch):
         "app.express_partner.new_land_sms.notify_all_partners_new_express_land_background",
         lambda *_a, **_k: None,
     )
-    monkeypatch.setattr(
-        "app.express_partner.visit_sms.notify_partner_land_tx_sms",
-        lambda *_a, **_k: None,
-    )
-    monkeypatch.setattr(
-        "app.services.fcm_push.send_fcm_to_user_background",
-        lambda *_a, **_k: None,
-    )
+    sms_sent: list[str] = []
+
+    def _fake_sms(mobile, message="", line_number=None, record_history=False, **kwargs):
+        sms_sent.append(str(mobile or ""))
+        return {"ok": True, "status": 200, "body": {}}
+
+    pushes: list[str] = []
+
+    def _fake_push(user_id, title="", body="", url="", **kwargs):
+        pushes.append(str(user_id or ""))
+
+    monkeypatch.setattr("app.services.sms.send_sms_direct", _fake_sms)
+    monkeypatch.setattr("app.express_partner.visit_sms.send_sms_direct", _fake_sms)
+    monkeypatch.setattr("app.express_partner.admin_action_sms.send_sms_direct", _fake_sms)
+    monkeypatch.setattr("app.services.fcm_push.send_fcm_to_user_background", _fake_push)
     import app.express_partner.special_visit_inbox as inbox
     import app.utils.storage as storage
 
@@ -48,6 +57,8 @@ def app(tmp_path, monkeypatch):
 
     application = create_app()
     application.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
+    application.sms_sent = sms_sent
+    application.pushes = pushes
     return application
 
 
@@ -315,3 +326,109 @@ def test_schedule_sms_and_admin_sms_use_the_listing_owner(app, monkeypatch):
     assert OWNER_B not in admin
     assert THIRD not in admin
     assert BOOKER not in admin
+
+
+def _post_listing_visit(client, phone, **fields):
+    day = date.today() + timedelta(days=1)
+    last = None
+    for _ in range(21):
+        _login(client, phone)
+        response = client.post(
+            f"/express/partner/visit-requests/{CODE_A}",
+            data={"visit_date": day.isoformat(), **fields},
+            headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+        )
+        body = response.get_json(silent=True) or {}
+        if response.status_code == 200 and body.get("success"):
+            return body
+        last = (response.status_code, body)
+        message = str(body.get("message") or "")
+        if "روز" not in message and "ساعت" not in message and "گذشته" not in message:
+            break
+        day += timedelta(days=1)
+    raise AssertionError(last)
+
+
+def _row_for(app, phone):
+    from app.utils.storage import load_express_visit_requests
+
+    with app.app_context():
+        rows = load_express_visit_requests() or []
+    return next(row for row in rows if str(row.get("partner_phone") or "") == phone)
+
+
+def _visit_alerts(app, phone):
+    from app.services.notifications import get_user_notifications
+
+    with app.app_context():
+        rows = get_user_notifications(phone) or []
+    return [row for row in rows if str(row.get("type") or "") == "visit"]
+
+
+def test_advisor_and_buyer_bookings_reach_only_the_listing_owner(app, client):
+    """مشاور و خریدار عادی هر دو فقط روی پیگیری مالک، به‌اضافهٔ کارت ارسالی خودشان."""
+    from app.services.sms import normalize_iran_mobile
+    from app.utils.storage import load_express_partners, save_express_partners
+
+    _seed(app)
+    with app.app_context():
+        partners = list(load_express_partners() or [])
+        partners.extend([
+            _partner(ADVISOR, "سارا کریمی"),
+            {"phone": BUYER, "name": "علی رضایی", "status": "pending"},
+        ])
+        save_express_partners(partners)
+    app.sms_sent.clear()
+    app.pushes.clear()
+
+    advisor_body = _post_listing_visit(
+        client,
+        ADVISOR,
+        customer_first_name="نگار",
+        customer_last_name="احمدی",
+        customer_phone="09125556677",
+    )
+    buyer_body = _post_listing_visit(client, BUYER)
+    assert advisor_body["success"] is True
+    assert buyer_body["success"] is True
+
+    advisor_row = _row_for(app, ADVISOR)
+    buyer_row = _row_for(app, BUYER)
+    assert advisor_row["owner_phone"] == OWNER_A
+    assert buyer_row["owner_phone"] == OWNER_A
+    assert advisor_row.get("plus_user_phone") in ("", None, OWNER_A)
+    assert buyer_row.get("plus_user_phone") in ("", None, OWNER_A)
+    assert advisor_row["customer_name"] == "نگار احمدی"
+    assert buyer_row["customer_name"] == "علی رضایی"
+    assert buyer_row["customer_phone"] == BUYER
+
+    owner_in = set(_incoming_ids(client, OWNER_A))
+    assert owner_in == {advisor_row["id"], buyer_row["id"]}
+    assert _incoming_ids(client, OWNER_B) == []
+    assert _incoming_ids(client, THIRD) == []
+
+    advisor_cards = _cards(client, ADVISOR)
+    buyer_cards = _cards(client, BUYER)
+    assert [card["id"] for card in advisor_cards if card.get("direction") == "outgoing"] == [advisor_row["id"]]
+    assert [card["id"] for card in advisor_cards if card.get("direction") == "incoming"] == []
+    assert [card["id"] for card in buyer_cards if card.get("direction") == "outgoing"] == [buyer_row["id"]]
+    assert [card["id"] for card in buyer_cards if card.get("direction") == "incoming"] == []
+    assert advisor_row["id"] not in {card["id"] for card in buyer_cards}
+    assert buyer_row["id"] not in {card["id"] for card in advisor_cards}
+
+    assert _visit_alerts(app, OWNER_A)
+    assert _visit_alerts(app, OWNER_B) == []
+    assert _visit_alerts(app, THIRD) == []
+    assert _visit_alerts(app, ADVISOR) == []
+    assert _visit_alerts(app, BUYER) == []
+
+    sms = {normalize_iran_mobile(phone) or phone for phone in app.sms_sent}
+    pushes = {normalize_iran_mobile(phone) or phone for phone in app.pushes}
+    assert OWNER_B not in sms
+    assert THIRD not in sms
+    assert OWNER_B not in pushes
+    assert THIRD not in pushes
+    assert ADVISOR not in pushes
+    assert BUYER not in pushes
+    assert pushes <= {OWNER_A}
+    assert OWNER_A in pushes
