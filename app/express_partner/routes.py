@@ -6957,10 +6957,21 @@ def _partner_deal_decision_action(vid: str, *, decision: str):
     wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if err or not updated:
         message = listing_deal_error_fa(err or 'failed')
+        extra = {}
+        if err == 'wallet_insufficient':
+            from .deal_wallet import wallet_detail
+
+            detail = wallet_detail()
+            extra = {
+                'code': 'wallet_insufficient',
+                'required_amount': int(detail.get('required_amount') or 0),
+                'balance': int(detail.get('balance') or 0),
+                'shortfall': int(detail.get('shortfall') or 0),
+            }
         if wants_html:
             flash(message, 'warning')
             return redirect(_sales_pipeline_url('deals'))
-        return _requests_action_json(False, error=message)
+        return _requests_action_json(False, error=message, **extra)
     try:
         save_express_visit_requests(visit_rows)
     except Exception:
@@ -10846,9 +10857,28 @@ def special_visit_action(vid: str, action: str):
         'no_open_deal': 'معاملهٔ در جریانی برای این کار پیدا نشد.',
         'failed': 'ثبت معامله روی فایل ممکن نشد.',
         'no_land': 'این پرونده به فایلی وصل نیست.',
+        'wallet_insufficient': 'برای تأیید نهایی، ابتدا کیف پول خود را به مبلغ پورسانت شارژ کنید.',
         'already_decided': 'برای این پرونده قبلاً تصمیم ثبت شده است.',
         'invalid_decision': 'ثبت تصمیم ممکن نشد.',
     }
+    if err == 'wallet_insufficient':
+        from .deal_wallet import wallet_detail
+        from .special_visit_inbox import listing_deal_error_fa
+
+        detail = wallet_detail()
+        message = listing_deal_error_fa(err)
+        accept = (request.headers.get('Accept') or '').lower().split(',')[0].strip()
+        if request.is_json or accept.startswith('application/json'):
+            return jsonify({
+                'ok': False,
+                'error': 'wallet_insufficient',
+                'message': message,
+                'required_amount': int(detail.get('required_amount') or 0),
+                'balance': int(detail.get('balance') or 0),
+                'shortfall': int(detail.get('shortfall') or 0),
+            }), 400
+        flash(message, 'warning')
+        return redirect(_sales_pipeline_url('deals'))
     if err and err in extra_err:
         flash(extra_err[err], 'warning')
         return redirect(_sales_pipeline_url('visits'))
@@ -10930,7 +10960,12 @@ def special_visit_action(vid: str, action: str):
     elif act_l == 'start_deal':
         flash('فروش نهایی ثبت شد. با تأیید شما فایل بسته می‌شود.', 'success')
     elif act_l == 'approve_deal':
-        flash('فروش نهایی تأیید شد: فایل بسته شد و پورسانت به کیف پول همکار اضافه شد.', 'success')
+        from .deal_wallet import wallet_detail
+
+        if wallet_detail().get('transferred'):
+            flash('فروش نهایی تأیید شد: پورسانت از کیف پول شما به کیف پول مشاور منتقل شد.', 'success')
+        else:
+            flash('فروش نهایی تأیید شد: فایل بسته شد و پورسانت به کیف پول همکار اضافه شد.', 'success')
     elif act_l == 'reject_deal':
         flash('معامله رد شد. همکار می‌تواند دوباره درخواست بدهد.', 'info')
     elif act_l == 'confirm_deal':
@@ -10938,7 +10973,12 @@ def special_visit_action(vid: str, action: str):
     elif act_l == 'decline_deal':
         flash('معامله رد شد.', 'info')
     elif act_l == 'close_deal':
-        flash('پرونده بسته شد.', 'success')
+        from .deal_wallet import wallet_detail
+
+        if wallet_detail().get('transferred'):
+            flash('پرونده بسته شد و پورسانت از کیف پول شما به کیف پول مشاور منتقل شد.', 'success')
+        else:
+            flash('پرونده بسته شد.', 'success')
     elif act_l == 'result':
         oc = (request.form.get('outcome') or '').strip()
         if oc == 'interested':

@@ -266,6 +266,11 @@
           </form>
           {% endif %}
 
+          {% if item.can_approve_deal and not item.can_final_confirm and item.final_confirm_message %}
+          <p class="sv-hint">{{ item.final_confirm_message }}</p>
+          <a class="sv-btn sv-btn--deal" href="{{ item.wallet_charge_path or url_for('express_partner.commissions') }}">شارژ کیف پول</a>
+          {% endif %}
+
           {% if item.can_approve_deal or item.can_reject_deal %}
           <div class="sv-btn-row{% if not item.can_reject_deal or not item.can_approve_deal %} sv-btn-row--solo{% endif %}">
             {% if item.can_approve_deal %}

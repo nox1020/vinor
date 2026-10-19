@@ -103,6 +103,11 @@
   <p class="sv-hint">در سطح عادی فقط مشاهده و لغو درخواست خودتان ممکن است.</p>
   {% endif %}
 
+  {% if received and item.can_approve_deal and not item.can_final_confirm and item.final_confirm_message %}
+  <p class="sv-hint">{{ item.final_confirm_message }}</p>
+  <a class="rq-btn rq-btn--deal" href="{{ item.wallet_charge_path or url_for('express_partner.commissions') }}">شارژ کیف پول</a>
+  {% endif %}
+
   {% if field_ok and (item.can_confirm_deal or item.can_reject_deal or item.can_close_deal) %}
     {% if item.can_confirm_deal %}
     <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='confirm_deal') }}{% else %}{{ url_for('express_partner.requests_confirm_deal', vid=vid) }}{% endif %}" data-vinor-direct-action class="contents">

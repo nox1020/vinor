@@ -453,6 +453,12 @@ def visits_for_special_owner(
         assignments = []
     if not isinstance(assignments, list):
         assignments = []
+    try:
+        withdrawals = load_partner_withdrawals() or []
+    except Exception:
+        withdrawals = []
+    if not isinstance(withdrawals, list):
+        withdrawals = []
     owner_addr = get_plus_visit_presence_address(phone)
     owner_name = str(phone or "").strip()
     try:
@@ -646,6 +652,15 @@ def visits_for_special_owner(
             sale_amount = int((deal or {}).get("sale_amount") or 0)
         except (TypeError, ValueError):
             sale_amount = 0
+        from .deal_wallet import card_wallet_fields
+
+        wallet_fields = card_wallet_fields(
+            commissions,
+            withdrawals,
+            owner_phone=str(phone or ""),
+            required=deal_amount,
+            can_finalize=bool(can_approve_deal),
+        )
 
         is_own_request = _canon_phone(partner_phone) == _canon_phone(phone)
         can_cancel = is_own_request and st in (PENDING_STATUS, APPROVED_STATUS)
@@ -712,6 +727,13 @@ def visits_for_special_owner(
             "deal_commission_id": (deal or {}).get("id"),
             "deal_commission_status": deal_st,
             "deal_commission_amount": deal_amount,
+            "required_commission": wallet_fields["required_commission"],
+            "owner_wallet_balance": wallet_fields["owner_wallet_balance"],
+            "can_final_confirm": wallet_fields["can_final_confirm"],
+            "wallet_shortfall": wallet_fields["wallet_shortfall"],
+            "wallet_error": wallet_fields["wallet_error"],
+            "final_confirm_message": wallet_fields["final_confirm_message"],
+            "wallet_charge_path": wallet_fields["wallet_charge_path"],
             "sale_amount": sale_amount,
             "can_approve": can_approve,
             "can_reject": can_reject,
@@ -829,6 +851,7 @@ LISTING_DEAL_ERROR_FA = {
     "no_open_deal": "معاملهٔ در جریانی برای این کار پیدا نشد.",
     "failed": "ثبت معامله روی فایل ممکن نشد.",
     "no_land": "این پرونده به فایلی وصل نیست.",
+    "wallet_insufficient": "برای تأیید نهایی، ابتدا کیف پول خود را به مبلغ پورسانت شارژ کنید.",
     "invalid_action": "ثبت معامله روی فایل ممکن نشد.",
     "invalid_status": "این پرونده الان در مرحله معامله نیست.",
     "invalid_transition": "این پرونده الان در مرحله معامله نیست.",
@@ -839,8 +862,15 @@ LISTING_DEAL_ERROR_FA = {
 
 
 def listing_deal_error_fa(code: str) -> str:
+    key = str(code or "").strip()
+    if key == "wallet_insufficient":
+        from .deal_wallet import wallet_detail
+
+        message = str((wallet_detail() or {}).get("message") or "").strip()
+        if message:
+            return message
     return LISTING_DEAL_ERROR_FA.get(
-        str(code or "").strip(),
+        key,
         "ثبت معامله روی فایل ممکن نشد.",
     )
 
@@ -1138,7 +1168,7 @@ def _apply_special_deal_action(
             err = _start_deal_for_visit(rec)
             return (rec, None) if not err else (None, err)
         if act == "approve_deal":
-            err = _decide_deal_commission(rec, decision="approve")
+            err = _decide_deal_commission(rec, decision="approve", owner_phone=owner_phone)
             return (rec, None) if not err else (None, err)
         if act == "reject_deal":
             err = _decide_deal_commission(rec, decision="reject")
@@ -1290,7 +1320,9 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _decide_deal_commission(rec: Dict[str, Any], *, decision: str) -> Optional[str]:
+def _decide_deal_commission(
+    rec: Dict[str, Any], *, decision: str, owner_phone: str = ""
+) -> Optional[str]:
     code = str(rec.get("land_code") or "").strip()
     partner_phone = str(rec.get("partner_phone") or "").strip()
     commissions = load_express_commissions() or []
@@ -1300,12 +1332,12 @@ def _decide_deal_commission(rec: Dict[str, Any], *, decision: str) -> Optional[s
     if not deal:
         return "not_found"
     deal_st = str(deal.get("status") or "").strip().lower()
+    if decision == "approve":
+        return _approve_pending_deal(deal, owner_phone=owner_phone)
     if deal_st != COMMISSION_PENDING:
         if deal_st in ("approved", "paid"):
             return "already_sold"
         return "invalid_transition"
-    if decision == "approve":
-        return _approve_pending_deal(deal, commissions)
     if decision == "reject":
         return _reject_pending_deal(deal, commissions)
     return "invalid_action"
@@ -1313,18 +1345,32 @@ def _decide_deal_commission(rec: Dict[str, Any], *, decision: str) -> Optional[s
 
 def _approve_pending_deal(
     commission_record: Dict[str, Any],
-    commissions: List[Dict[str, Any]],
+    commissions: List[Dict[str, Any]] | None = None,
+    *,
+    owner_phone: str = "",
 ) -> Optional[str]:
-    stamp = iso_z(utcnow())
+    """تأیید نهایی: اول انتقال پورسانت از کیف پول مالک، بعد بستن فایل.
+
+    اعتبار مشاور همان پورسانت pending است که approved می‌شود. ردیف درآمد دوم ساخته نمی‌شود.
+    """
+    del commissions
+    from .deal_wallet import finalize_deal_payout
+
+    err, detail = finalize_deal_payout(
+        deal_id=commission_record.get("id"),
+        owner_phone=owner_phone,
+    )
+    if err:
+        return err
+    if detail.get("idempotent"):
+        commission_record["status"] = "approved"
+        return None
+    land_code = str(detail.get("land_code") or commission_record.get("land_code") or "").strip()
+    partner_phone = str(detail.get("partner_phone") or commission_record.get("partner_phone") or "").strip()
     commission_record["status"] = "approved"
-    commission_record["approved_at"] = stamp
-    save_express_commissions(commissions)
-    land_code = str(commission_record.get("land_code") or "").strip()
-    partner_phone = str(commission_record.get("partner_phone") or "").strip()
+    commission_record["payout_settled"] = True
+    commission_record["owner_payout_id"] = detail.get("payout_id") or 0
     if land_code:
-        assignments = load_express_assignments() or []
-        if mark_assignments_sold_for_land(assignments, land_code, sold_at=stamp):
-            save_express_assignments(assignments)
         try:
             _mark_land_sold(land_code)
         except Exception:
@@ -1340,37 +1386,21 @@ def _approve_pending_deal(
             maybe_sync_deal_on_commission_status(
                 partner_phone=partner_phone,
                 land_code=land_code,
-                commission_id=str(commission_record.get("id") or ""),
+                commission_id=str(detail.get("commission_id") or commission_record.get("id") or ""),
                 commission_status="approved",
-                sale_amount=int(commission_record.get("sale_amount") or 0),
+                sale_amount=int(detail.get("sale_amount") or commission_record.get("sale_amount") or 0),
             )
         except Exception:
             pass
-    try:
-        commission_amount = int(commission_record.get("commission_amount") or 0)
-        sale_amount = int(commission_record.get("sale_amount") or 0)
-        if partner_phone:
-            partners = load_express_partners() or []
-            for p in partners if isinstance(partners, list) else []:
-                if str(p.get("phone") or "").strip() != partner_phone:
-                    continue
-                p["total_income"] = int(p.get("total_income", 0) or 0) + commission_amount
-                p["approved_sales_count"] = int(p.get("approved_sales_count", 0) or 0) + 1
-                p["total_approved_sales"] = int(p.get("total_approved_sales", 0) or 0) + sale_amount
-                p["last_updated"] = stamp
-                break
-            save_express_partners(partners)
-    except Exception:
-        pass
     try:
         from .commission_sms import notify_partner_commission_txn
         notify_partner_commission_txn(
             partner_phone=partner_phone,
             event="commission_approved",
-            amount=int(commission_record.get("commission_amount") or 0),
+            amount=int(detail.get("required_amount") or commission_record.get("commission_amount") or 0),
             land_code=land_code,
             commission_type=str(commission_record.get("commission_type") or ""),
-            reference_id=str(commission_record.get("id") or ""),
+            reference_id=str(detail.get("commission_id") or commission_record.get("id") or ""),
         )
     except Exception:
         pass

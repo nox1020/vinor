@@ -90,6 +90,7 @@ jobs:
             tests/test_inbox_offer_cards.py
             tests/test_inbox_noshow_actions.py
             tests/test_incoming_deal_confirm.py
+            tests/test_deal_wallet_confirm.py
             tests/test_invest_checks.py
             tests/test_invest_backup.py
             tests/test_invest_data_diag.py
