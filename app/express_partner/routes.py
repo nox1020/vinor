@@ -5235,13 +5235,6 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
         if not is_publicly_visible_listing(land):
             continue
         code = str(land.get('code') or '').strip()
-        try:
-            from app.utils.iran_cities import land_in_service_focus
-
-            if not land_in_service_focus(land):
-                continue
-        except Exception:
-            pass
         item = dict(land)
         item['_assignment_status'] = 'public'
         item['_in_transaction'] = False

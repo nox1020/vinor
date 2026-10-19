@@ -24,8 +24,7 @@ def is_publicly_visible_listing(land: Any) -> bool:
 
     Same rules as ``_home_public_carousel_lands``: express listing with a code,
     not ``public=False``, not an unpublished owner-home, not admin-created, and
-    not sold/closed/archived/hidden. The carousel's Garmabsard service-focus
-    check stays there; it limits the home strip, not whether the URL is public.
+    not sold/closed/archived/hidden. City does not decide visibility.
     """
     if not isinstance(land, dict):
         return False

@@ -483,7 +483,7 @@ def _schema_search() -> dict[str, Any]:
         "function": {
             "name": TOOL_SEARCH,
             "description": (
-                "جستجوی بهترین فایل قابل‌فروش در سیستم (گرمابسرد). "
+                "جستجوی بهترین فایل قابل‌فروش منتشرشده در سیستم، در هر شهر. "
                 "حداکثر ۲ نتیجه؛ نزدیک‌ترین به معیار را اول برگردان تا با [[LAND:کد]] معرفی شود."
             ),
             "parameters": {
@@ -1490,14 +1490,8 @@ def _tool_search_lands(
     lands_map = accessible_lands_map(phone, aud)
     lands = list(lands_map.values())
     try:
-        from app.utils.iran_cities import (
-            SERVICE_VILLAGE,
-            focus_location_label,
-            land_in_service_focus,
-        )
+        from app.utils.iran_cities import SERVICE_VILLAGE, focus_location_label
 
-        focus_lands = [l for l in lands if land_in_service_focus(l)]
-        lands = focus_lands if focus_lands else []
         loc_label = focus_location_label()
         village = SERVICE_VILLAGE
     except Exception:
@@ -1509,12 +1503,9 @@ def _tool_search_lands(
             "ok": True,
             "count": 0,
             "lands": [],
-            "note": f"فعلاً فایلی در {village} در دسترس نیست.",
+            "note": "فعلاً فایل منتشرشده‌ای در دسترس نیست.",
             "service_area": loc_label,
-            "instruction": (
-                f"بگو فعلا سرویس فقط {loc_label} است و فایل آماده‌ای نیست؛ "
-                "جای دیگر پیشنهاد نده."
-            ),
+            "instruction": "بگو فعلا فایل آماده‌ای در سیستم نیست.",
         }
         return {"ok": True, "model_result": out, "land_codes": []}
 
@@ -1550,10 +1541,7 @@ def _tool_search_lands(
         "lands": items,
         "recommended_code": (items[0].get("code") if items else ""),
         "service_area": loc_label,
-        "instruction": (
-            f"فقط {village}. نزدیک‌ترین را با [[LAND:کد]] معرفی کن؛ "
-            "دومی جایگزین. جای دیگر پیشنهاد نده."
-        ),
+        "instruction": "نزدیک‌ترین را با [[LAND:کد]] معرفی کن؛ دومی جایگزین.",
     }
     return {"ok": True, "model_result": model, "land_codes": codes[:_MAX_LAND_CARDS]}
 

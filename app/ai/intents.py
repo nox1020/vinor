@@ -60,7 +60,7 @@ CHIP_INTENT_HINTS: dict[str, str] = {
         "هدف: آزادسازی فایل. propose_release_deal + کارت."
     ),
     "find_land": (
-        "هدف: بهترین فایل سیستم (گرمابسرد). "
+        "هدف: بهترین فایل منتشرشدهٔ سیستم. "
         "معیار کوتاه→search_lands→[[LAND:کد]]→هل به بازدید."
     ),
     "have_customer": (

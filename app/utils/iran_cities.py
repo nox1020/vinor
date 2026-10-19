@@ -38,11 +38,8 @@ def focus_location_label() -> str:
 def focus_location_block() -> str:
     """متن ثابت برای system / زمینهٔ AI."""
     return (
-        f"محدوده ثابت سرویس: {focus_location_label()}.\n"
-        f"همه پیشنهادها، جستجوها و فایل‌ها فقط حول روستای {SERVICE_VILLAGE} "
-        f"(شهرستان {SERVICE_COUNTY}، استان {SERVICE_PROVINCE}) باشد.\n"
-        f"اگر کاربر جای دیگری خواست: مودبانه بگو فعلا فقط {SERVICE_VILLAGE} پوشش داده می‌شود "
-        f"و فایل‌های همین روستا را پیشنهاد بده؛ خارج از {SERVICE_VILLAGE} پیشنهاد نده.\n"
+        f"دفتر: {focus_location_label()}.\n"
+        f"فایل‌های منتشرشدهٔ همهٔ شهرها قابل پیشنهادند.\n"
         f"برای ثبت همکاری شهر را فقط «{FOCUS_SERVICE_CITY}» بپذیر/پیشنهاد بده."
     )
 

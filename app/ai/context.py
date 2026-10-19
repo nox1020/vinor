@@ -492,14 +492,13 @@ def _assigned_lands(phone: str) -> list[dict[str, Any]]:
 
 def _public_lands_sample(limit: int = 8) -> list[dict[str, Any]]:
     try:
-        from app.utils.iran_cities import land_in_service_focus
+        from app.utils.public_listings import is_publicly_visible_listing
 
         lands = load_express_lands_cached() or []
     except Exception:
         return []
-    focus = [l for l in lands if isinstance(l, dict) and land_in_service_focus(l)]
-    pool = focus if focus else [l for l in lands if isinstance(l, dict)]
-    return list(pool[:limit])
+    pool = [l for l in lands if is_publicly_visible_listing(l)]
+    return list(pool[: max(0, int(limit or 0))])
 
 
 def build_partner_context_base(phone: str) -> str:
@@ -688,13 +687,7 @@ def _select_lands_for_query(
 ) -> list[dict[str, Any]]:
     if not lands:
         return []
-    try:
-        from app.utils.iran_cities import land_in_service_focus
-
-        focus = [l for l in lands if land_in_service_focus(l)]
-        pool = focus if focus else lands
-    except Exception:
-        pool = lands
+    pool = [l for l in lands if isinstance(l, dict)]
     q = (query or "").strip()
     if q:
         rag_picked = _select_lands_by_rag(
@@ -707,7 +700,6 @@ def _select_lands_for_query(
         matched = [l for l in pool if _land_matches_query(l, q)]
         if matched:
             return matched[:match_limit]
-        # کوئری خارج از محدوده → باز هم فقط فایل‌های گرمابسرد
         return pool[:match_limit]
     return pool[:default_limit]
 
