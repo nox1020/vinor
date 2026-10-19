@@ -174,6 +174,27 @@ def _follow(client, resp):
     return page.get_data(as_text=True)
 
 
+def test_requests_archive_filter_omits_active_chip(app, client):
+    open_row = _row("open1", phone=REQUESTER, status="pending", customer="09120000081")
+    archived = _row("arch1", phone=REQUESTER, status="completed", outcome="interested", customer="09120000082")
+    archived["archived"] = True
+    _seed(app, [open_row, archived])
+    _login(client)
+
+    page = client.get("/express/partner/requests").get_data(as_text=True)
+    assert "status=active" not in page
+    assert "status=archived" in page
+    assert ">بایگانی " in page
+    assert 'data-request-id="open1"' in page
+    assert 'data-request-id="arch1"' not in page
+    assert "منتظر تأیید (قدیمی)" in page
+
+    archived_page = client.get("/express/partner/requests?status=archived").get_data(as_text=True)
+    assert "status=active" not in archived_page
+    assert 'data-request-id="arch1"' in archived_page
+    assert 'data-request-id="open1"' not in archived_page
+
+
 def test_can_remove_follows_cancel_or_delete(app, monkeypatch):
     from app.express_partner.special_visit_inbox import visits_for_special_owner
 

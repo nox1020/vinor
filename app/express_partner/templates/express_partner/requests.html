@@ -661,13 +661,10 @@
   <main class="mx-auto w-full max-w-lg">
     {% set _arch = archive_status|default('active') %}
     {% set _acounts = archive_counts|default({'active': 0, 'archived': 0}, true) %}
-    <nav class="flex gap-2 px-4 pt-3" aria-label="وضعیت پیگیری‌ها">
-      <a href="{{ url_for('express_partner.requests', status='active') }}"
-         data-vinor-express-nav
-         class="rq-badge{% if _arch != 'archived' %} rq-badge--visit{% endif %}">فعال {{ (_acounts.active|default(0))|fa_digits }}</a>
+    <nav class="flex flex-nowrap gap-2 overflow-x-auto px-4 pt-3" aria-label="وضعیت پیگیری‌ها">
       <a href="{{ url_for('express_partner.requests', status='archived') }}"
          data-vinor-express-nav
-         class="rq-badge{% if _arch == 'archived' %} rq-badge--visit{% endif %}">بایگانی {{ (_acounts.archived|default(0))|fa_digits }}</a>
+         class="rq-badge shrink-0{% if _arch == 'archived' %} rq-badge--visit{% endif %}">بایگانی {{ (_acounts.archived|default(0))|fa_digits }}</a>
     </nav>
     <p class="rq-summary" data-rq-summary>
       <strong>{{ _n_cards|fa_digits }}</strong> پیگیری
