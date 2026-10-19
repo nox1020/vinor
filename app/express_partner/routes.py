@@ -2453,6 +2453,19 @@ def _send_visit_schedule_partner_sms(
         'presence_address': addr,
         'support_phone': support,
     }
+    if (land_code or '').strip():
+        try:
+            from .visit_requests import owner_phone_for_listing, resolve_listing_for_visit_code
+
+            listing = resolve_listing_for_visit_code(land_code)
+            if listing is not None:
+                listing_owner = owner_phone_for_listing(land_code)
+                if normalize_iran_mobile(listing_owner) != normalize_iran_mobile(plus_user_phone):
+                    plus_user_name = ''
+                plus_user_phone = listing_owner or ''
+        except Exception:
+            current_app.logger.exception('visit schedule owner resolve failed code=%s', land_code)
+
     partner_n = normalize_iran_mobile(partner_phone)
     plus_n = normalize_iran_mobile(plus_user_phone)
     same_person = bool(partner_n and plus_n and partner_n == plus_n)

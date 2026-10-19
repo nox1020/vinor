@@ -191,18 +191,15 @@ def test_card_flags_match_what_detail_would_load(app, client):
     _login(client, OWNER)
     cards = _cards(client)
     private = cards["noshow-private"]
-    hidden = cards["noshow-hidden"]
     missing = cards["noshow-missing"]
     previous = cards["noshow-prev"]
     stopped = cards["noshow-stopped"]
+    assert "noshow-hidden" not in cards
     assert private["status"] == "no_show"
     assert private["direction"] == "incoming"
     assert private["can_archive"] is True
     assert private["land_available"] is True
     assert private["can_view_land"] is True
-    assert hidden["can_archive"] is True
-    assert hidden["land_available"] is False
-    assert hidden["can_view_land"] is False
     assert missing["can_archive"] is True
     assert missing["land_available"] is False
     assert missing["can_view_land"] is False
@@ -246,7 +243,7 @@ def test_website_hides_archive_and_land_when_unavailable(app, client):
     page = client.get("/express/partner/requests")
     text = page.get_data(as_text=True)
     assert page.status_code == 200
-    assert text.count("بایگانی این پیگیری") == 5
+    assert text.count("بایگانی این پیگیری") == 4
     assert text.count("مشاهده فایل") == 3
     assert "عدم حضور" in text
 

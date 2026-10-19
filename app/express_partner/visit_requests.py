@@ -1946,42 +1946,51 @@ def _visit_lands() -> List[Dict[str, Any]]:
     return [land for land in lands if isinstance(land, dict)] if isinstance(lands, list) else []
 
 
-def canonical_land_code(code: str, lands: List[Dict[str, Any]] | None = None) -> str:
-    """کد فعلی آگهی. previous_code همان ملک است."""
+def resolve_listing_for_visit_code(
+    code: str,
+    lands: List[Dict[str, Any]] | None = None,
+) -> Optional[Dict[str, Any]]:
+    """آگهیِ همین کد. کد فعلی بر previous_code مقدم است تا ملک دیگری کد را نگیرد."""
     key = _code_text(code)
     if not key:
-        return ""
+        return None
     rows = lands if lands is not None else _visit_lands()
+    previous_hits: List[Dict[str, Any]] = []
     for land in rows:
         current = _code_text(land.get("code"))
         extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
         prev = _code_text(extras.get("previous_code"))
-        if key == current or (prev and key == prev):
-            return current or key
-    return key
+        if current and key == current:
+            return land
+        if prev and key == prev:
+            previous_hits.append(land)
+    if len(previous_hits) == 1:
+        return previous_hits[0]
+    return None
 
 
-def owner_phone_for_listing(code: str, lands: List[Dict[str, Any]] | None = None) -> str:
-    """شمارهٔcanonical مالک از همان فیلدهای listings.service.owner_phone."""
+def canonical_land_code(code: str, lands: List[Dict[str, Any]] | None = None) -> str:
+    """کد فعلی آگهی. previous_code فقط وقتی کد فعلیِ هیچ آگهی‌ای نباشد."""
     key = _code_text(code)
     if not key:
         return ""
-    rows = lands if lands is not None else _visit_lands()
+    land = resolve_listing_for_visit_code(key, lands)
+    if land is None:
+        return key
+    return _code_text(land.get("code")) or key
+
+
+def owner_phone_for_listing(code: str, lands: List[Dict[str, Any]] | None = None) -> str:
+    """شمارهٔ canonical مالک همان آگهی. کد خالی و previous_codeِ ملک دیگر مالک نمی‌سازند."""
+    land = resolve_listing_for_visit_code(code, lands)
+    if not isinstance(land, dict):
+        return ""
     try:
         from app.listings.service import owner_phone as listing_owner_phone
     except Exception:
         listing_owner_phone = None
-    for land in rows:
-        current = _code_text(land.get("code"))
-        extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
-        prev = _code_text(extras.get("previous_code"))
-        if key != current and key != prev:
-            continue
-        raw = listing_owner_phone(land) if listing_owner_phone else ""
-        phone = _canonical_visit_phone(raw)
-        if phone:
-            return phone
-    return ""
+    raw = listing_owner_phone(land) if listing_owner_phone else ""
+    return _canonical_visit_phone(raw) or ""
 
 
 def _customer_key(phone: Any) -> str:
@@ -2226,9 +2235,10 @@ def create_visit_request(
     plus_phone = (plus_user_phone or "").strip()
     plus_name = (plus_user_name or "").strip()
     if code:
-        owner_phone = plus_phone_for_land_code(code)
-        if owner_phone:
-            plus_phone = owner_phone
+        listing_owner = owner_phone_for_listing(code)
+        plus_owner = plus_phone_for_land_code(code)
+        if plus_owner:
+            plus_phone = plus_owner
             try:
                 from .special_listings import plus_listing_owner_by_code
 
@@ -2236,6 +2246,11 @@ def create_visit_request(
                 plus_name = str(owner.get("name") or "").strip() or plus_name
             except Exception:
                 pass
+        elif listing_owner:
+            supplied = _canonical_visit_phone(plus_phone) or plus_phone
+            if supplied and supplied != listing_owner:
+                plus_phone = ""
+                plus_name = ""
     plus_phone = _canonical_visit_phone(plus_phone) or plus_phone
     vd = _parse_visit_date(visit_date)
     if not ph:
@@ -2413,8 +2428,8 @@ def _notify_plus_user_new_visit(rec: Dict[str, Any] | None) -> None:
     requester = str(rec.get("partner_phone") or "").strip()
     if _canonical_visit_phone(plus_phone) == _canonical_visit_phone(requester):
         return
-    land_owner = plus_phone_for_land_code(str(rec.get("land_code") or ""))
-    if land_owner and _canonical_visit_phone(land_owner) == _canonical_visit_phone(plus_phone):
+    code = str(rec.get("land_code") or "").strip()
+    if code and resolve_listing_for_visit_code(code) is not None:
         return
     partner_name = str(rec.get("partner_name") or "").strip() or "یک همکار"
     title = visit_request_display_title(rec)

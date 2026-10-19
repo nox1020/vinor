@@ -107,18 +107,40 @@ def _canon_phone(phone: str) -> str:
 
 
 def owned_land_codes(phone: str) -> Set[str]:
-    """کد فعلی و previous_code آگهی‌های منتشرشدهٔ این شماره."""
+    """کد فعلی آگهی‌های این شماره، به‌اضافهٔ previous_code فقط اگر کد فعلیِ ملک دیگری نباشد."""
     from .special_listings import _code_key
 
+    mine = listings_owned_by(phone)
+    if not mine:
+        return set()
+    try:
+        lands = load_ads_cached() or []
+    except Exception:
+        lands = []
+    current_codes: Set[str] = set()
+    previous_claims: Dict[str, int] = {}
+    for land in lands if isinstance(lands, list) else []:
+        if not isinstance(land, dict):
+            continue
+        code = _code_key(land)
+        if code:
+            current_codes.add(code)
+        extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+        prev = _code_key({"code": extras.get("previous_code")})
+        if prev:
+            previous_claims[prev] = previous_claims.get(prev, 0) + 1
     codes: Set[str] = set()
-    for land in listings_owned_by(phone):
+    for land in mine:
         code = _code_key(land)
         if code:
             codes.add(code)
         extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
         prev = _code_key({"code": extras.get("previous_code")})
-        if prev:
-            codes.add(prev)
+        if not prev or prev == code or prev in current_codes:
+            continue
+        if previous_claims.get(prev) != 1:
+            continue
+        codes.add(prev)
     return codes
 
 
@@ -138,10 +160,19 @@ def _visit_row_for_plus_owner(
         return False
     land_codes = codes if codes is not None else owned_land_codes(owner_phone)
     from .special_listings import _code_key
+    from .visit_requests import owner_phone_for_listing, resolve_listing_for_visit_code
 
     code = _code_key({"code": row.get("land_code")})
     if code and code in land_codes:
         return True
+    if code:
+        listing = resolve_listing_for_visit_code(code)
+        resolved = _canon_phone(owner_phone_for_listing(code)) if listing is not None else ""
+        if resolved:
+            return resolved == me
+        if listing is not None:
+            stamped_owner = _canon_phone(str(row.get("owner_phone") or ""))
+            return bool(stamped_owner) and stamped_owner == me
     stamped = _canon_phone(str(row.get("owner_phone") or ""))
     if stamped and stamped == me:
         return True
@@ -358,32 +389,16 @@ def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
     requester = _norm_phone(rec.get("partner_phone") or "")
     if not code:
         return
-    try:
-        from app.utils.storage import load_ads_cached
+    from .special_listings import _owner_phone
+    from .visit_requests import resolve_listing_for_visit_code
 
-        lands = load_ads_cached() or []
-    except Exception:
-        lands = []
-    from .special_listings import _code_key, _owner_phone
-
-    want = _code_key({"code": code})
-    land = None
-    for item in lands if isinstance(lands, list) else []:
-        if not isinstance(item, dict):
-            continue
-        extras = item.get("extras") if isinstance(item.get("extras"), dict) else {}
-        if _code_key(item) == want or _code_key({"code": extras.get("previous_code")}) == want:
-            land = item
-            break
+    land = resolve_listing_for_visit_code(code)
     if not isinstance(land, dict) or not land.get("is_express"):
         return
 
     owner = _canon_phone(_owner_phone(land))
     requester_canon = _canon_phone(requester)
     if not owner or owner == requester_canon:
-        return
-    aliases = owned_land_codes(owner)
-    if _code_key({"code": code}) not in aliases and code not in aliases:
         return
     title = str(rec.get("land_title") or land.get("title") or code).strip() or code
     partner_name = str(rec.get("partner_name") or "").strip() or "یک همکار"
@@ -538,7 +553,14 @@ def visits_for_special_owner(
         keyed = _code_key({"code": code})
         stamped_owner = _canon_phone(str(row.get("owner_phone") or ""))
         me_owner = _canon_phone(phone)
-        owned_listing = bool(keyed and keyed in codes) or bool(stamped_owner and stamped_owner == me_owner)
+        from .visit_requests import owner_phone_for_listing, resolve_listing_for_visit_code
+
+        resolved_owner = ""
+        if code and resolve_listing_for_visit_code(code) is not None:
+            resolved_owner = _canon_phone(owner_phone_for_listing(code))
+        owned_listing = bool(keyed and keyed in codes) or bool(resolved_owner and resolved_owner == me_owner)
+        if not resolved_owner:
+            owned_listing = owned_listing or bool(stamped_owner and stamped_owner == me_owner)
         if not owned_listing:
             can_approve = False
             can_reject = False
