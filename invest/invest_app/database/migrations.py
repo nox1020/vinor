@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -73,6 +73,22 @@ CREATE TABLE IF NOT EXISTS pwo_entries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pwo_entries_period ON pwo_entries (year, month);
+"""
+
+_MIGRATION_6_SQL = """
+CREATE TABLE IF NOT EXISTS pwo_transactions (
+    id            INTEGER PRIMARY KEY,
+    withdrawer_id INTEGER NOT NULL,
+    year          INTEGER NOT NULL,
+    month         INTEGER NOT NULL,
+    amount        REAL NOT NULL,
+    note          TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    FOREIGN KEY (withdrawer_id) REFERENCES pwo_withdrawers(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pwo_tx_period ON pwo_transactions (year, month);
 """
 
 _MIGRATION_2_SQL = """
@@ -181,6 +197,13 @@ def _migrate_5(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 5 (pwo)")
 
 
+def _migrate_6(conn: sqlite3.Connection) -> None:
+    """PWO: جدول برداشت‌های تکی (افزودنی). ردیف‌های pwo_entries دست نمی‌خورند."""
+    conn.executescript(_MIGRATION_6_SQL)
+    conn.commit()
+    logger.info("Applied schema migration version 6 (pwo transactions)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -219,6 +242,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 5 not in applied:
         _migrate_5(conn)
         _record(conn, 5)
+        applied = _applied_versions(conn)
+
+    if 6 not in applied:
+        _migrate_6(conn)
+        _record(conn, 6)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0

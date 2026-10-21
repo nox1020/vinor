@@ -230,3 +230,66 @@ def test_import_is_noop_when_account_already_has_entries(client):
     assert after["withdrawers"] == before["withdrawers"]
     assert after["entries"] == before["entries"]
     assert len(after["entries"]) == 27
+
+
+def test_transactions_sum_into_month_and_delete(client):
+    _login(client, OWNER)
+    ws = {w["name"]: w["id"] for w in _get(client)["withdrawers"]}
+    client.put(f"{API}/months/1405/7", json={"amounts": {str(ws["M"]): 50_000_000}})
+    T = API + "/transactions"
+    r = client.post(T, json={"withdrawer_id": ws["M"], "year": 1405, "month": 7, "amount": "۲۰٬۰۰۰٬۰۰۰", "note": "x"})
+    assert r.status_code == 200
+    client.post(T, json={"withdrawer_id": ws["M"], "year": 1405, "month": 7, "amount": 30_000_001})
+    client.post(T, json={"withdrawer_id": ws["A"], "year": 1405, "month": 7, "amount": 5})
+    p = _get(client)
+    m = p["totals"]["months"][0]
+    assert m["by_withdrawer"][str(ws["M"])] == 100_000_001
+    assert m["total"] == 100_000_006 and m["met_target"] is True
+    assert p["totals"]["years"][0]["total"] == 100_000_006
+    assert len(p["entries"]) == 1 and len(p["transactions"]) == 3
+    tid = [t for t in p["transactions"] if t["note"] == "x"][0]["id"]
+    p = client.patch(f"{T}/{tid}", json={"amount": 1}).get_json()["pwo"]
+    assert p["totals"]["months"][0]["by_withdrawer"][str(ws["M"])] == 80_000_002
+    assert client.delete(f"{T}/{tid}").status_code == 200
+    assert client.delete(f"{T}/{tid}").status_code == 404
+    p = _get(client)
+    assert p["totals"]["months"][0]["total"] == 80_000_006
+    for bad in ({"amount": 0}, {"amount": -1}, {"month": 13}, {"withdrawer_id": 999}):
+        body = {"withdrawer_id": ws["M"], "year": 1405, "month": 7, "amount": 1, **bad}
+        assert client.post(T, json=body).status_code in (400, 404)
+    # person with only transactions is archived, not deleted
+    client.delete(f"{API}/withdrawers/{ws['A']}")
+    a = [w for w in _get(client)["withdrawers"] if w["id"] == ws["A"]][0]
+    assert a["archived"] is True
+    # other account can't see or delete them
+    _login(client, OTHER)
+    assert _get(client)["transactions"] == []
+    assert client.delete(f"{T}/{p['transactions'][0]['id']}").status_code == 404
+
+
+def test_migration_6_keeps_existing_pwo_entries(tmp_path):
+    import sqlite3
+    from invest_app.database import migrations as mig
+    db = tmp_path / "y.db"
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
+    conn.execute("CREATE TABLE capital_snapshots (date TEXT, total_value REAL, created_at TEXT)")
+    conn.execute(mig.MIGRATION_TABLE)
+    for v in (1, 2, 3, 4):
+        conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?, 'x')", (v,))
+    mig._migrate_4(conn) if hasattr(mig, "_migrate_4") else None
+    mig._migrate_5(conn)
+    conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (5, 'x')")
+    conn.execute("INSERT INTO pwo_entries (withdrawer_id, year, month, amount, note, created_at, updated_at)"
+                 " VALUES (1, 1405, 7, 123456789.5, '', 'x', 'x')")
+    conn.commit()
+    before = [tuple(r) for r in conn.execute("SELECT * FROM pwo_entries")]
+    mig.run_migrations(conn)
+    mig.run_migrations(conn)
+    assert [tuple(r) for r in conn.execute("SELECT * FROM pwo_entries")] == before
+    assert conn.execute("SELECT COUNT(*) FROM pwo_transactions").fetchone()[0] == 0
+    assert 6 in {r[0] for r in conn.execute("SELECT version FROM schema_migrations")}
+    from invest.backend.pwo_api import snapshot
+    snap = snapshot(conn)
+    assert snap["totals"]["months"][0]["total"] == 123456789.5

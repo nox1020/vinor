@@ -94,19 +94,42 @@ def _e_public(r) -> dict:
             "updated_at": r["updated_at"]}
 
 
+def _t_public(r) -> dict:
+    return {"id": r["id"], "withdrawer_id": r["withdrawer_id"], "year": r["year"],
+            "month": r["month"], "amount": r["amount"], "note": r["note"],
+            "created_at": r["created_at"], "updated_at": r["updated_at"]}
+
+
+def _tx_fields(conn, b: dict, row=None) -> tuple:
+    wid = _int(b["withdrawer_id"], 1, 2**62, "برداشت‌کننده") if "withdrawer_id" in b or row is None \
+        else row["withdrawer_id"]
+    _withdrawer(conn, wid)
+    y = _int(b["year"], 1300, 1600, "سال") if "year" in b or row is None else row["year"]
+    m = _int(b["month"], 1, 12, "ماه") if "month" in b or row is None else row["month"]
+    amount = parse_amount(b["amount"]) if "amount" in b or row is None else row["amount"]
+    if amount <= 0:
+        raise PwoError("مبلغ برداشت باید بیشتر از صفر باشد.")
+    note = str(b.get("note") or "")[:500] if "note" in b or row is None else row["note"]
+    return wid, y, m, amount, note
+
+
 def snapshot(conn) -> dict:
     target = _get_target(conn)
     ws = [_w_public(r) for r in conn.execute(
         "SELECT * FROM pwo_withdrawers ORDER BY archived, sort_order, id")]
     es = [_e_public(r) for r in conn.execute(
         "SELECT * FROM pwo_entries ORDER BY year, month, withdrawer_id")]
+    txs = [_t_public(r) for r in conn.execute(
+        "SELECT * FROM pwo_transactions ORDER BY year, month, id")]
     months: dict[tuple, dict] = {}
     years: dict[int, dict] = {}
-    for e in es:
+    # ماه هر نفر = مبلغ پایه (pwo_entries) + جمع برداشت‌های تکی (pwo_transactions)
+    for e in es + txs:
         m = months.setdefault((e["year"], e["month"]),
                               {"year": e["year"], "month": e["month"], "total": 0.0, "by_withdrawer": {}})
         m["total"] += e["amount"]
-        m["by_withdrawer"][str(e["withdrawer_id"])] = e["amount"]
+        k0 = str(e["withdrawer_id"])
+        m["by_withdrawer"][k0] = m["by_withdrawer"].get(k0, 0.0) + e["amount"]
         y = years.setdefault(e["year"], {"year": e["year"], "total": 0.0, "by_withdrawer": {}})
         y["total"] += e["amount"]
         k = str(e["withdrawer_id"])
@@ -114,7 +137,7 @@ def snapshot(conn) -> dict:
     month_list = sorted(months.values(), key=lambda m: (m["year"], m["month"]))
     for m in month_list:
         m["met_target"] = m["total"] >= target
-    return {"target": target, "withdrawers": ws, "entries": es,
+    return {"target": target, "withdrawers": ws, "entries": es, "transactions": txs,
             "totals": {"months": month_list, "years": sorted(years.values(), key=lambda y: y["year"])}}
 
 
@@ -222,7 +245,9 @@ def register_pwo_routes() -> None:
             row = _withdrawer(conn, wid)
             if not row["archived"] and _active_count(conn) <= 1:
                 raise PwoError("حداقل یک برداشت‌کننده لازم است.", code="last_withdrawer")
-            has = conn.execute("SELECT 1 FROM pwo_entries WHERE withdrawer_id=? LIMIT 1", (wid,)).fetchone()
+            has = conn.execute("SELECT 1 FROM pwo_entries WHERE withdrawer_id=? UNION ALL "
+                               "SELECT 1 FROM pwo_transactions WHERE withdrawer_id=? LIMIT 1",
+                               (wid, wid)).fetchone()
             if has:  # برداشت‌های ثبت‌شده حفظ می‌شوند
                 conn.execute("UPDATE pwo_withdrawers SET archived=1, updated_at=? WHERE id=?", (now_iso(), wid))
             else:
@@ -282,6 +307,48 @@ def register_pwo_routes() -> None:
     def pwo_delete_entry_post(eid: int):
         return _del_entry(eid)
 
+    @invest_api_bp.post("/pwo/transactions")
+    @require_invest_auth
+    def pwo_add_tx():
+        def _do(conn):
+            wid, y, m, amount, note = _tx_fields(conn, _body())
+            ts = now_iso()
+            conn.execute("INSERT INTO pwo_transactions (withdrawer_id, year, month, amount, note,"
+                         " created_at, updated_at) VALUES (?,?,?,?,?,?,?)", (wid, y, m, amount, note, ts, ts))
+        return _run(_do)
+
+    def _tx_row(conn, tid: int):
+        row = conn.execute("SELECT * FROM pwo_transactions WHERE id=?", (tid,)).fetchone()
+        if not row:
+            raise PwoError("برداشت پیدا نشد.", code="not_found", status=404)
+        return row
+
+    @invest_api_bp.route("/pwo/transactions/<int:tid>", methods=["PUT", "PATCH"])
+    @require_invest_auth
+    def pwo_update_tx(tid: int):
+        def _do(conn):
+            row = _tx_row(conn, tid)
+            wid, y, m, amount, note = _tx_fields(conn, _body(), row)
+            conn.execute("UPDATE pwo_transactions SET withdrawer_id=?, year=?, month=?, amount=?, note=?,"
+                         " updated_at=? WHERE id=?", (wid, y, m, amount, note, now_iso(), tid))
+        return _run(_do)
+
+    def _del_tx(tid: int):
+        def _do(conn):
+            _tx_row(conn, tid)
+            conn.execute("DELETE FROM pwo_transactions WHERE id=?", (tid,))
+        return _run(_do)
+
+    @invest_api_bp.delete("/pwo/transactions/<int:tid>")
+    @require_invest_auth
+    def pwo_delete_tx(tid: int):
+        return _del_tx(tid)
+
+    @invest_api_bp.post("/pwo/transactions/<int:tid>/delete")
+    @require_invest_auth
+    def pwo_delete_tx_post(tid: int):
+        return _del_tx(tid)
+
     @invest_api_bp.post("/pwo/import")
     @require_invest_auth
     def pwo_import():
@@ -291,7 +358,8 @@ def register_pwo_routes() -> None:
         def _do(conn):
             b = _body()
             overwrite = bool(b.get("overwrite"))
-            if not overwrite and conn.execute("SELECT 1 FROM pwo_entries LIMIT 1").fetchone():
+            if not overwrite and conn.execute(
+                    "SELECT 1 FROM pwo_entries UNION ALL SELECT 1 FROM pwo_transactions LIMIT 1").fetchone():
                 # حساب از قبل داده دارد: مهاجرت دوباره (نصب مجدد اپ) هیچ نفر/ردیفی اضافه نمی‌کند.
                 raw = b.get("entries")
                 n = len(raw) if isinstance(raw, list) else 0
