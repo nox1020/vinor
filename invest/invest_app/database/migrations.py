@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 4
+CURRENT_SCHEMA_VERSION = 5
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -47,6 +47,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_checks_sayad_active
 CREATE UNIQUE INDEX IF NOT EXISTS idx_checks_number_active
     ON checks (direction, bank_name, check_number)
     WHERE check_number != '' AND status != 'cancelled';
+"""
+
+_MIGRATION_5_SQL = """
+CREATE TABLE IF NOT EXISTS pwo_withdrawers (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    archived    INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pwo_entries (
+    id            INTEGER PRIMARY KEY,
+    withdrawer_id INTEGER NOT NULL,
+    year          INTEGER NOT NULL,
+    month         INTEGER NOT NULL,
+    amount        REAL NOT NULL DEFAULT 0,
+    note          TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    UNIQUE (withdrawer_id, year, month),
+    FOREIGN KEY (withdrawer_id) REFERENCES pwo_withdrawers(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pwo_entries_period ON pwo_entries (year, month);
 """
 
 _MIGRATION_2_SQL = """
@@ -137,6 +163,24 @@ def _migrate_4(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 4 (checks)")
 
 
+def _migrate_5(conn: sqlite3.Connection) -> None:
+    """PWO: جدول‌های تازه؛ فقط وقتی خالی‌اند M/A/N پیش‌فرض اضافه می‌شود."""
+    conn.executescript(_MIGRATION_5_SQL)
+    if conn.execute("SELECT COUNT(*) FROM pwo_withdrawers").fetchone()[0] == 0:
+        ts = now_iso()
+        for i, name in enumerate(("M", "A", "N")):
+            conn.execute(
+                "INSERT INTO pwo_withdrawers (name, sort_order, archived, created_at, updated_at)"
+                " VALUES (?, ?, 0, ?, ?)",
+                (name, i, ts, ts),
+            )
+    conn.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('pwo_monthly_target', '100000000')"
+    )
+    conn.commit()
+    logger.info("Applied schema migration version 5 (pwo)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -170,6 +214,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 4 not in applied:
         _migrate_4(conn)
         _record(conn, 4)
+        applied = _applied_versions(conn)
+
+    if 5 not in applied:
+        _migrate_5(conn)
+        _record(conn, 5)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0

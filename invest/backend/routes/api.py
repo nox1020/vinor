@@ -570,6 +570,10 @@ from ..checks_api import register_check_routes
 
 register_check_routes()
 
+from ..pwo_api import register_pwo_routes  # noqa: E402
+
+register_pwo_routes()
+
 
 @invest_api_bp.get("/insights")
 @require_invest_auth
