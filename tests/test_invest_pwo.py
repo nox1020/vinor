@@ -185,7 +185,7 @@ def test_import_prefers_active_withdrawer_with_same_name(client):
     client.delete(f"{API}/withdrawers/{ws['N']}")  # archived (has entries)
     p = client.post(API + "/withdrawers", json={"name": "N"}).get_json()["pwo"]
     new_n = [w["id"] for w in p["withdrawers"] if w["name"] == "N" and not w["archived"]][0]
-    p = client.post(API + "/import", json={"entries": [
+    p = client.post(API + "/import", json={"overwrite": True, "entries": [
         {"withdrawer": "N", "year": 1405, "month": 2, "amount": 4}]}).get_json()["pwo"]
     e = [e for e in p["entries"] if e["month"] == 2][0]
     assert e["withdrawer_id"] == new_n
@@ -211,3 +211,22 @@ def test_bad_json_and_huge_amounts(client):
     assert client.post(API + "/import", json={"entries": "x"}).status_code == 400
     assert client.post(API + "/import", json={"withdrawers": [5, None]}).status_code in (200, 400)
     assert _get(client)["entries"] == []
+
+
+def test_import_is_noop_when_account_already_has_entries(client):
+    """Reinstalled app re-imports its seed: must never add people or rows."""
+    _login(client, OWNER)
+    ws = {w["name"]: w["id"] for w in _get(client)["withdrawers"]}
+    for name, new in (("M", "Masoud"), ("A", "Ali"), ("N", "Nima")):
+        client.put(f"{API}/withdrawers/{ws[name]}", json={"name": new})
+    for m in range(1, 10):
+        client.put(f"{API}/months/1405/{m}", json={"amounts": {str(ws["M"]): m * 10, str(ws["A"]): m, str(ws["N"]): 1}})
+    before = _get(client)
+    seed = {"target": 100_000_000, "withdrawers": [{"name": n} for n in "MAN"], "entries": [
+        {"withdrawer": n, "year": 1405, "month": m, "amount": 5} for m in range(1, 7) for n in "MAN"]}
+    r = client.post(API + "/import", json=seed).get_json()
+    assert r["written"] == 0 and r["skipped"] == 18
+    after = r["pwo"]
+    assert after["withdrawers"] == before["withdrawers"]
+    assert after["entries"] == before["entries"]
+    assert len(after["entries"]) == 27

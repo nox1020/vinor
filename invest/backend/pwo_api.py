@@ -291,6 +291,11 @@ def register_pwo_routes() -> None:
         def _do(conn):
             b = _body()
             overwrite = bool(b.get("overwrite"))
+            if not overwrite and conn.execute("SELECT 1 FROM pwo_entries LIMIT 1").fetchone():
+                # حساب از قبل داده دارد: مهاجرت دوباره (نصب مجدد اپ) هیچ نفر/ردیفی اضافه نمی‌کند.
+                raw = b.get("entries")
+                n = len(raw) if isinstance(raw, list) else 0
+                return _json_ok(written=0, skipped=n, already_has_data=True, pwo=snapshot(conn))
             by_name: dict[str, int] = {}
             for r in conn.execute("SELECT id, name FROM pwo_withdrawers ORDER BY archived, id"):
                 by_name.setdefault(r["name"], r["id"])  # active first, then oldest
