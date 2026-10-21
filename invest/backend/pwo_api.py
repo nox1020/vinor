@@ -120,17 +120,34 @@ def snapshot(conn) -> dict:
 
 def _upsert_entry(conn, wid: int, year: int, month: int, amount: float, note: str, *, overwrite=True) -> bool:
     ts = now_iso()
-    row = conn.execute("SELECT id FROM pwo_entries WHERE withdrawer_id=? AND year=? AND month=?",
-                       (wid, year, month)).fetchone()
-    if row:
+    if amount == 0:
+        # صفر یعنی «برداشتی نیست»: ردیف صفر نگه نمی‌داریم (وگرنه حذف نفر به بایگانی می‌افتد).
         if not overwrite:
             return False
-        conn.execute("UPDATE pwo_entries SET amount=?, note=?, updated_at=? WHERE id=?",
-                     (amount, note, ts, row[0]))
-    else:
-        conn.execute("INSERT INTO pwo_entries (withdrawer_id, year, month, amount, note, created_at, updated_at)"
-                     " VALUES (?,?,?,?,?,?,?)", (wid, year, month, amount, note, ts, ts))
+        conn.execute("DELETE FROM pwo_entries WHERE withdrawer_id=? AND year=? AND month=?",
+                     (wid, year, month))
+        return True
+    if not overwrite:
+        cur = conn.execute(
+            "INSERT INTO pwo_entries (withdrawer_id, year, month, amount, note, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?,?) ON CONFLICT(withdrawer_id, year, month) DO NOTHING",
+            (wid, year, month, amount, note, ts, ts))
+        return cur.rowcount > 0
+    # Atomic upsert (UNIQUE(withdrawer_id, year, month)); safe under concurrent saves.
+    conn.execute(
+        "INSERT INTO pwo_entries (withdrawer_id, year, month, amount, note, created_at, updated_at)"
+        " VALUES (?,?,?,?,?,?,?) ON CONFLICT(withdrawer_id, year, month)"
+        " DO UPDATE SET amount=excluded.amount, note=excluded.note, updated_at=excluded.updated_at",
+        (wid, year, month, amount, note, ts, ts))
     return True
+
+
+def _ensure_unique_name(conn, name: str, exclude_id: int | None = None) -> None:
+    row = conn.execute(
+        "SELECT id FROM pwo_withdrawers WHERE archived=0 AND name=? AND id != ?",
+        (name, exclude_id or 0)).fetchone()
+    if row:
+        raise PwoError("این نام تکراری است.", code="duplicate_name", status=409)
 
 
 def _add_withdrawer(conn, name: str) -> int:
@@ -176,7 +193,11 @@ def register_pwo_routes() -> None:
     @invest_api_bp.post("/pwo/withdrawers")
     @require_invest_auth
     def pwo_add_withdrawer():
-        return _run(lambda conn: (_add_withdrawer(conn, _name(_body().get("name"))), None)[1])
+        def _do(conn):
+            name = _name(_body().get("name"))
+            _ensure_unique_name(conn, name)
+            _add_withdrawer(conn, name)
+        return _run(_do)
 
     @invest_api_bp.route("/pwo/withdrawers/<int:wid>", methods=["PUT", "PATCH"])
     @require_invest_auth
@@ -185,6 +206,9 @@ def register_pwo_routes() -> None:
             row = _withdrawer(conn, wid)
             body = _body()
             name = _name(body["name"]) if "name" in body else row["name"]
+            archived_in = bool(body["archived"]) if "archived" in body else bool(row["archived"])
+            if not archived_in and (name != row["name"] or row["archived"]):
+                _ensure_unique_name(conn, name, exclude_id=wid)
             order = _int(body["sort_order"], 0, 10_000, "ترتیب") if "sort_order" in body else row["sort_order"]
             archived = int(bool(body["archived"])) if "archived" in body else row["archived"]
             if archived and not row["archived"] and _active_count(conn) <= 1:
@@ -267,8 +291,9 @@ def register_pwo_routes() -> None:
         def _do(conn):
             b = _body()
             overwrite = bool(b.get("overwrite"))
-            by_name = {r["name"]: r["id"] for r in conn.execute(
-                "SELECT id, name FROM pwo_withdrawers ORDER BY archived, id")}
+            by_name: dict[str, int] = {}
+            for r in conn.execute("SELECT id, name FROM pwo_withdrawers ORDER BY archived, id"):
+                by_name.setdefault(r["name"], r["id"])  # active first, then oldest
             for w in b.get("withdrawers") or []:
                 w = w if isinstance(w, dict) else {"name": w}
                 name = _name(w.get("name"))

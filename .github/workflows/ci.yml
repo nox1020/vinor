@@ -92,6 +92,7 @@ jobs:
             tests/test_incoming_deal_confirm.py
             tests/test_deal_wallet_confirm.py
             tests/test_invest_checks.py
+            tests/test_invest_pwo.py
             tests/test_invest_backup.py
             tests/test_invest_data_diag.py
             tests/test_otp_sms.py

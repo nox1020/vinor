@@ -81,12 +81,16 @@ def test_entries_totals_and_target(client):
     assert p["target"] == 200_000_000 and p["totals"]["months"][0]["met_target"] is False
     assert p["totals"]["years"][0]["by_withdrawer"][str(ws["M"])] == 96_700_000
     # upsert, not duplicate
-    client.post(API + "/entries", json={"withdrawer_id": ws["N"], "year": 1405, "month": 1, "amount": 0})
+    client.post(API + "/entries", json={"withdrawer_id": ws["N"], "year": 1405, "month": 1, "amount": 20})
     p = _get(client)
     assert len(p["entries"]) == 3
+    # zero clears the entry
+    client.post(API + "/entries", json={"withdrawer_id": ws["N"], "year": 1405, "month": 1, "amount": 0})
+    p = _get(client)
+    assert len(p["entries"]) == 2
     eid = p["entries"][0]["id"]
     assert client.delete(f"{API}/entries/{eid}").status_code == 200
-    assert len(_get(client)["entries"]) == 2
+    assert len(_get(client)["entries"]) == 1
     assert client.post(API + "/entries", json={"withdrawer_id": ws["N"], "year": 1405, "month": 13, "amount": 1}).status_code == 400
     assert client.post(API + "/entries", json={"withdrawer_id": 999, "year": 1405, "month": 1, "amount": 1}).status_code == 404
     assert client.put(API + "/target", json={"target": "abc"}).status_code == 400
@@ -156,3 +160,54 @@ def test_migration_keeps_existing_data(tmp_path):
     run_migrations(conn)
     assert conn.execute("SELECT value FROM settings WHERE key='pwo_monthly_target'").fetchone()[0] == "7"
     assert conn.execute("SELECT COUNT(*) FROM pwo_withdrawers").fetchone()[0] == 3
+
+
+def test_zero_amount_clears_entry_and_allows_real_delete(client):
+    """A cleared field (0) must not leave a 0 row that later forces archiving."""
+    _login(client, OWNER)
+    ws = {w["name"]: w["id"] for w in _get(client)["withdrawers"]}
+    client.put(f"{API}/months/1405/3", json={"amounts": {str(ws["M"]): 5, str(ws["A"]): 7}})
+    p = client.put(f"{API}/months/1405/3", json={"amounts": {str(ws["M"]): 5, str(ws["A"]): 0}}).get_json()["pwo"]
+    assert [e["withdrawer_id"] for e in p["entries"]] == [ws["M"]]
+    # A has no real withdrawals -> removed, not archived.
+    p = client.delete(f"{API}/withdrawers/{ws['A']}").get_json()["pwo"]
+    assert ws["A"] not in [w["id"] for w in p["withdrawers"]]
+    # import with zero amount writes nothing
+    r = client.post(API + "/import", json={"entries": [
+        {"withdrawer": "N", "year": 1405, "month": 4, "amount": 0}]}).get_json()
+    assert r["written"] == 0 and not [e for e in r["pwo"]["entries"] if e["month"] == 4]
+
+
+def test_import_prefers_active_withdrawer_with_same_name(client):
+    _login(client, OWNER)
+    ws = {w["name"]: w["id"] for w in _get(client)["withdrawers"]}
+    client.post(API + "/entries", json={"withdrawer_id": ws["N"], "year": 1405, "month": 1, "amount": 9})
+    client.delete(f"{API}/withdrawers/{ws['N']}")  # archived (has entries)
+    p = client.post(API + "/withdrawers", json={"name": "N"}).get_json()["pwo"]
+    new_n = [w["id"] for w in p["withdrawers"] if w["name"] == "N" and not w["archived"]][0]
+    p = client.post(API + "/import", json={"entries": [
+        {"withdrawer": "N", "year": 1405, "month": 2, "amount": 4}]}).get_json()["pwo"]
+    e = [e for e in p["entries"] if e["month"] == 2][0]
+    assert e["withdrawer_id"] == new_n
+
+
+def test_duplicate_active_name_rejected(client):
+    _login(client, OWNER)
+    r = client.post(API + "/withdrawers", json={"name": "M"})
+    assert r.status_code == 409 and "تکراری" in r.get_json()["message"]
+    ws = {w["name"]: w["id"] for w in _get(client)["withdrawers"]}
+    r = client.put(f"{API}/withdrawers/{ws['A']}", json={"name": " M "})
+    assert r.status_code == 409
+    assert client.put(f"{API}/withdrawers/{ws['A']}", json={"name": "A"}).status_code == 200
+
+
+def test_bad_json_and_huge_amounts(client):
+    _login(client, OWNER)
+    ws = {w["name"]: w["id"] for w in _get(client)["withdrawers"]}
+    assert client.put(f"{API}/months/1405/1", json={"amounts": {str(ws["M"]): "1e400"}}).status_code == 400
+    assert client.put(f"{API}/months/1405/1", json={"amounts": {"1 OR 1=1": 5}}).status_code == 400
+    assert client.put(f"{API}/months/1405/1", json={"amounts": {str(ws["M"]): -1}}).status_code == 400
+    assert client.put(API + "/target", json={"target": 0}).status_code == 400
+    assert client.post(API + "/import", json={"entries": "x"}).status_code == 400
+    assert client.post(API + "/import", json={"withdrawers": [5, None]}).status_code in (200, 400)
+    assert _get(client)["entries"] == []
