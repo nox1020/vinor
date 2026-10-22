@@ -621,3 +621,7 @@ def insights():
             "related_trades": list(ins.related_trades),
         })
     return _json_ok(items=rows, generated_at=bundle.generated_at)
+
+from ..biz_api import register_biz_routes  # noqa: E402
+
+register_biz_routes()

@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -89,6 +89,35 @@ CREATE TABLE IF NOT EXISTS pwo_transactions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pwo_tx_period ON pwo_transactions (year, month);
+"""
+
+_MIGRATION_7_SQL = """
+CREATE TABLE IF NOT EXISTS biz_property_trades (
+    id          INTEGER PRIMARY KEY,
+    buy_date    TEXT NOT NULL,
+    sell_date   TEXT NOT NULL DEFAULT '',
+    buy_amount  REAL NOT NULL DEFAULT 0,
+    sell_amount REAL NOT NULL DEFAULT 0,
+    area        REAL,
+    title       TEXT NOT NULL DEFAULT '',
+    extra_cost  REAL NOT NULL DEFAULT 0,
+    note        TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS biz_monthly_ops (
+    id         INTEGER PRIMARY KEY,
+    year       INTEGER NOT NULL,
+    month      INTEGER NOT NULL,
+    staff      REAL NOT NULL DEFAULT 0,
+    ads        REAL NOT NULL DEFAULT 0,
+    income     REAL NOT NULL DEFAULT 0,
+    note       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (year, month)
+);
 """
 
 _MIGRATION_2_SQL = """
@@ -204,6 +233,13 @@ def _migrate_6(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 6 (pwo transactions)")
 
 
+def _migrate_7(conn: sqlite3.Connection) -> None:
+    """کسب‌وکار ملک: جدول‌های افزودنی معاملات ملک و هزینه/درآمد ماهانه."""
+    conn.executescript(_MIGRATION_7_SQL)
+    conn.commit()
+    logger.info("Applied schema migration version 7 (biz property/monthly)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -247,6 +283,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 6 not in applied:
         _migrate_6(conn)
         _record(conn, 6)
+        applied = _applied_versions(conn)
+
+    if 7 not in applied:
+        _migrate_7(conn)
+        _record(conn, 7)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0
