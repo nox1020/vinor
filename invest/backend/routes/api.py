@@ -455,6 +455,7 @@ def get_settings():
     except (TypeError, ValueError):
         pass
     _attach_annual_withdrawal_pct(ctx, payload)
+    _attach_client_extras(ctx, payload)
     _attach_client_checks(ctx, payload, None)
     return _json_ok(settings=payload)
 
@@ -469,6 +470,79 @@ def _attach_annual_withdrawal_pct(ctx, payload: dict) -> None:
             payload[_ANNUAL_PCT_KEY] = max(1, min(100, int(float(raw))))
     except (TypeError, ValueError):
         pass
+
+
+# کلیدهایی که فقط اپ موبایل می‌فرستد و قبلاً سرور دور می‌ریخت. افزودنی در جدول settings
+# با پیشوند جدا ذخیره می‌شوند و در GET/PUT برگردانده می‌شوند.
+_CLIENT_LIST_KEYS = ("client_withdrawals", "price_alerts", "profit_alerts", "year_nav_history")
+_CLIENT_BOOL_KEYS = ("notify_background", "app_lock_biometric")
+_CLIENT_TEXT_KEYS = ("app_lock_hash",)
+_CLIENT_PREFIX = "client_ext:"
+_CLIENT_MAX_BYTES = 2_000_000
+
+
+def _parse_client_extras(data: dict) -> tuple[dict, str | None]:
+    import json
+
+    out: dict = {}
+    for key in _CLIENT_LIST_KEYS:
+        if key not in data:
+            continue
+        val = data.get(key)
+        if isinstance(val, str):
+            try:
+                val = json.loads(val) if val.strip() else []
+            except ValueError:
+                return {}, f"مقدار {key} نامعتبر است."
+        if val is None:
+            val = []
+        if not isinstance(val, list) or not all(isinstance(x, dict) for x in val):
+            return {}, f"مقدار {key} باید فهرست باشد."
+        text = json.dumps(val, ensure_ascii=False)
+        if len(text.encode()) > _CLIENT_MAX_BYTES:
+            return {}, f"حجم {key} بیش از حد مجاز است."
+        out[key] = text
+    for key in _CLIENT_BOOL_KEYS:
+        if key not in data:
+            continue
+        val = data.get(key)
+        if isinstance(val, str) and val.strip().lower() in ("1", "true", "0", "false", "yes", "no", "on", "off"):
+            val = val.strip().lower() in ("1", "true", "yes", "on")
+        if isinstance(val, (int, float)) and not isinstance(val, bool) and val in (0, 1):
+            val = bool(val)
+        if not isinstance(val, bool):
+            return {}, f"مقدار {key} باید درست/نادرست باشد."
+        out[key] = "1" if val else "0"
+    for key in _CLIENT_TEXT_KEYS:
+        if key not in data:
+            continue
+        val = data.get(key)
+        val = "" if val is None else val
+        if not isinstance(val, str) or len(val) > 512:
+            return {}, f"مقدار {key} نامعتبر است."
+        out[key] = val.strip()
+    return out, None
+
+
+def _attach_client_extras(ctx, payload: dict) -> None:
+    import json
+
+    for key in _CLIENT_LIST_KEYS:
+        raw = ctx.settings_repo.get(_CLIENT_PREFIX + key)
+        if raw is None:
+            continue
+        try:
+            payload[key] = json.loads(raw)
+        except ValueError:
+            continue
+    for key in _CLIENT_BOOL_KEYS:
+        raw = ctx.settings_repo.get(_CLIENT_PREFIX + key)
+        if raw is not None:
+            payload[key] = raw == "1"
+    for key in _CLIENT_TEXT_KEYS:
+        raw = ctx.settings_repo.get(_CLIENT_PREFIX + key)
+        if raw is not None:
+            payload[key] = raw
 
 
 def _attach_client_checks(ctx, payload: dict, incoming) -> None:
@@ -508,6 +582,9 @@ def _attach_client_checks(ctx, payload: dict, incoming) -> None:
 def put_settings():
     ctx = get_request_context()
     data = request.get_json(silent=True) or {}
+    extras, extras_error = _parse_client_extras(data)
+    if extras_error:
+        return _json_err(extras_error, error="validation")
     s = ctx.settings
     if "calendar" in data:
         s.calendar = str(data["calendar"])
@@ -557,6 +634,8 @@ def put_settings():
             annual_pct_error = "درصد برداشت سالانه باید بین ۱ تا ۱۰۰ باشد."
     if annual_pct_error:
         return _json_err(annual_pct_error, error="validation")
+    if extras:
+        ctx.settings_repo.set_many({_CLIENT_PREFIX + k: v for k, v in extras.items()})
     ctx.save_settings(s)
     # Optional cached rates (also written by /quotes).
     if "usdt_tmn_rate" in data and data.get("usdt_tmn_rate") not in (None, ""):
@@ -587,6 +666,7 @@ def put_settings():
         update_profile(phone, first_run_done=bool(data["first_run_done"]))
     payload = settings_to_dict(ctx.settings)
     _attach_annual_withdrawal_pct(ctx, payload)
+    _attach_client_extras(ctx, payload)
     _attach_client_checks(ctx, payload, data)
     return _json_ok(settings=payload)
 

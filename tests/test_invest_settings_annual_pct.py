@@ -66,3 +66,41 @@ def test_annual_pct_validation(client, bad):
     assert r.status_code == 400
     s = client.get(S).get_json()["settings"]
     assert s["annual_withdrawal_pct"] == 30
+
+
+def test_client_extras_persist_and_echo(client):
+    _login(client, OWNER)
+    body = {
+        "client_withdrawals": [{"id": 1, "amount": 5, "note": "n", "created_at": "2026-01-01", "status": "done"}],
+        "price_alerts": [{"symbol": "USDT", "target": 1}],
+        "profit_alerts": [],
+        "year_nav_history": [{"year_key": "1404", "nav_toman": 9}],
+        "notify_background": False,
+        "app_lock_hash": "abc",
+        "app_lock_biometric": True,
+    }
+    r = client.put(S, json=body)
+    assert r.status_code == 200, r.get_json()
+    for got in (r.get_json()["settings"], client.get(S).get_json()["settings"]):
+        for k, v in body.items():
+            assert got[k] == v, k
+    # a later save without these keys keeps them
+    client.put(S, json={"theme": "dark"})
+    assert client.get(S).get_json()["settings"]["client_withdrawals"][0]["amount"] == 5
+    # emptying the list is allowed (deleting the last withdrawal)
+    client.put(S, json={"client_withdrawals": []})
+    assert client.get(S).get_json()["settings"]["client_withdrawals"] == []
+    _login(client, OTHER)
+    assert "client_withdrawals" not in client.get(S).get_json()["settings"]
+
+
+@pytest.mark.parametrize("bad", [
+    {"client_withdrawals": "nope"}, {"price_alerts": {"a": 1}}, {"price_alerts": [1, 2]},
+    {"notify_background": "maybe"}, {"app_lock_hash": 5},
+])
+def test_client_extras_validation_writes_nothing(client, bad):
+    _login(client, OWNER)
+    r = client.put(S, json={**bad, "annual_withdrawal_pct": 40, "theme": "light"})
+    assert r.status_code == 400
+    s = client.get(S).get_json()["settings"]
+    assert "annual_withdrawal_pct" not in s and s["theme"] != "light"
