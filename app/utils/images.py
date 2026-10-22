@@ -1,7 +1,7 @@
 """Upload URL helpers for Vinor — بدون فشرده‌سازی یا واریانت."""
 from __future__ import annotations
 
-import imghdr
+from app.utils import imgtype as imghdr
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional

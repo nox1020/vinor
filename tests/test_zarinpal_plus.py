@@ -103,6 +103,20 @@ from app.express_partner.plus_sms import (
 
 
 class PlusSmsMessageTests(unittest.TestCase):
+    # SMS rendering reads admin overrides from instance/data, so it needs an
+    # app context (it always has one in production). Use an empty temp one.
+    def setUp(self) -> None:
+        import tempfile
+        from flask import Flask
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self._ctx = Flask(__name__, instance_path=self._tmp.name).app_context()
+        self._ctx.push()
+
+    def tearDown(self) -> None:
+        self._ctx.pop()
+        self._tmp.cleanup()
+
     def test_activation_message_placeholders(self) -> None:
         msg = build_plus_activation_sms_message(
             name="علی رضایی",

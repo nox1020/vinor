@@ -71,9 +71,8 @@ jobs:
       - name: Run gated tests
         run: |
           mkdir -p /tmp/vinor-ci
-          # Gated subset only. Append paths here once the backend fixes the
-          # known-failing suite (test_roles_phase5, test_visit_result_phase2,
-          # PlusSmsMessageTests). Do not run the full tests/ tree until then.
+          # Gated subset. The previously known-failing files are fixed and
+          # appended below; add more files here as they are verified.
           files=(
             tests/test_consultant_main_locks.py
             tests/test_search_page.py
@@ -98,6 +97,11 @@ jobs:
             tests/test_otp_sms.py
             tests/test_visit_request_form.py
             tests/test_visit_delivery_owner.py
+            tests/test_roles_phase5.py
+            tests/test_visit_result_phase2.py
+            tests/test_zarinpal_plus.py
+            tests/test_listing_first_week.py
+            tests/test_imgtype_compat.py
           )
           python -m pytest -q "${files[@]}"
 

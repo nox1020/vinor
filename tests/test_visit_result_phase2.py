@@ -265,13 +265,12 @@ class VisitResultChatPathTests(unittest.TestCase):
     def test_home_peygiri_stays_in_chat(self) -> None:
         from app.express_partner.sales_coach import build_home_ai_quick_prompts
 
+        # The follow-up tile was removed from home on purpose (b91c3c8);
+        # follow-up now lives inside chat, so home must not link out of it.
         items = build_home_ai_quick_prompts(is_approved=True)
-        peygiri = next((i for i in items if i.get("label") == "پیگیری"), None)
-        self.assertIsNotNone(peygiri)
-        assert peygiri is not None
-        self.assertEqual(peygiri.get("intent"), "next_action")
-        self.assertFalse(peygiri.get("href"))
-        self.assertIn("چت", peygiri.get("prompt") or "")
+        self.assertIsNone(next((i for i in items if i.get("label") == "پیگیری"), None))
+        self.assertTrue(items)
+        self.assertTrue(all(i.get("href", "").find("/visit") < 0 for i in items))
 
 
 if __name__ == "__main__":

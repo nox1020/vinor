@@ -71,7 +71,13 @@ class RolesResolveTests(unittest.TestCase):
         with mock.patch.dict(os.environ, self._env, clear=False):
             from app.roles.service import resolve_portals
 
-            profile = {"phone": "09123333333", "status": "approved", "partner_tier": "special"}
+            # special counts only with an active Plus subscription (plus_expires_at).
+            profile = {
+                "phone": "09123333333",
+                "status": "approved",
+                "partner_tier": "special",
+                "plus_expires_at": "2999-01-01T00:00:00Z",
+            }
             sess = {"user_phone": "09123333333"}
             resolved = resolve_portals(
                 "09123333333", session=sess, partner_profile=profile

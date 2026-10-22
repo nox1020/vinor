@@ -8,7 +8,7 @@ Uploads API for Vinor (vinor.ir)
 from __future__ import annotations
 import os
 import uuid
-import imghdr
+from app.utils import imgtype as imghdr
 from datetime import datetime
 from typing import Tuple
 from flask import Blueprint, current_app, request, jsonify, send_from_directory

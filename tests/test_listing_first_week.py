@@ -435,10 +435,13 @@ def test_missing_and_corrupt_view_and_visit_files(home):
 
 
 def json_dup(code):
+    # Relative to now: the listing is published 80h ago, so fixed dates
+    # eventually fall before publish and the test starts failing by itself.
     import json
+    base = utcnow() - timedelta(hours=2)
     return json.dumps([
-        {"code": code, "ip": "1.1.1.1", "timestamp": "2026-10-17T00:00:00Z"},
-        {"code": code, "ip": "1.1.1.1", "timestamp": "2026-10-17T01:00:00Z"},
+        {"code": code, "ip": "1.1.1.1", "timestamp": iso_z(base)},
+        {"code": code, "ip": "1.1.1.1", "timestamp": iso_z(base + timedelta(minutes=30))},
     ])
 
 
