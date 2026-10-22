@@ -104,3 +104,33 @@ def test_client_extras_validation_writes_nothing(client, bad):
     assert r.status_code == 400
     s = client.get(S).get_json()["settings"]
     assert "annual_withdrawal_pct" not in s and s["theme"] != "light"
+
+
+@pytest.mark.parametrize("bad", [
+    {"price_refresh_seconds": "abc"}, {"price_refresh_seconds": 2}, {"price_refresh_seconds": 99999},
+    {"goal_roi_pct": "x"}, {"goal_roi_pct": "nan"}, {"calendar": "mayan"}, {"currency": "btc"},
+    {"theme": "pink"}, {"notify_trades": "maybe"}, {"live_prices_enabled": [1]},
+    {"wallex_markets_url": "ftp://x"}, {"usdt_tmn_rate": -1}, {"gold_tmn_per_gram": "zz"},
+])
+def test_settings_validation_is_400_and_writes_nothing(client, bad):
+    _login(client, OWNER)
+    r = client.put(S, json={**bad, "theme": bad.get("theme", "light"), "annual_withdrawal_pct": 44})
+    assert r.status_code == 400, r.get_json()
+    assert r.get_json()["error"] == "validation"
+    assert r.get_json()["message"]
+    s = client.get(S).get_json()["settings"]
+    assert "annual_withdrawal_pct" not in s and s["theme"] != "light"
+
+
+def test_settings_valid_values_roundtrip(client):
+    _login(client, OWNER)
+    body = {"calendar": "gregorian", "currency": "usdt", "theme": "light", "price_refresh_seconds": 5,
+            "goal_roi_pct": "12.5", "notify_trades": "false", "live_prices_enabled": 0,
+            "usdt_tmn_rate": "100,000"}
+    r = client.put(S, json=body)
+    assert r.status_code == 200, r.get_json()
+    s = client.get(S).get_json()["settings"]
+    assert (s["calendar"], s["currency"], s["theme"]) == ("gregorian", "usdt", "light")
+    assert s["price_refresh_seconds"] == 5 and s["goal_roi_pct"] == 12.5
+    assert s["notify_trades"] is False and s["live_prices_enabled"] is False
+    assert s["usdt_tmn_rate"] == 100000

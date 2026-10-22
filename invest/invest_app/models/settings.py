@@ -77,7 +77,7 @@ class AppSettings:
     def from_dict(cls, data: dict[str, str]) -> AppSettings:
         merged = {**DEFAULT_SETTINGS, **data}
         refresh = _as_int(merged.get(SETTING_PRICE_REFRESH_SEC), 60)
-        refresh = max(15, min(refresh, 3600))
+        refresh = max(5, min(refresh, 3600))
         return cls(
             calendar=merged.get(SETTING_CALENDAR, CALENDAR_JALALI),
             currency=merged.get(SETTING_CURRENCY, CURRENCY_TOMAN),

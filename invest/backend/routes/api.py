@@ -481,6 +481,98 @@ _CLIENT_PREFIX = "client_ext:"
 _CLIENT_MAX_BYTES = 2_000_000
 
 
+_BOOL_SETTING_KEYS = (
+    "first_run_done", "live_prices_enabled", "usdt_api_enabled", "gold_api_enabled",
+    "gold_auto_update_assets", "notifications_enabled", "notify_trades",
+    "notify_withdrawals", "notify_price_moves",
+)
+_CHOICES = {
+    "calendar": ({"jalali", "gregorian"}, "تقویم"),
+    "currency": ({"toman", "rial", "usd", "usdt"}, "واحد پول"),
+    "theme": ({"dark", "light"}, "پوسته"),
+}
+
+
+def _as_bool_strict(val):
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)) and val in (0, 1):
+        return bool(val)
+    if isinstance(val, str) and val.strip().lower() in ("1", "0", "true", "false", "yes", "no", "on", "off"):
+        return val.strip().lower() in ("1", "true", "yes", "on")
+    raise ValueError
+
+
+def _as_number(val):
+    if isinstance(val, bool):
+        raise ValueError
+    num = float(str(val).strip().replace(",", "")) if isinstance(val, str) else float(val)
+    if num != num or num in (float("inf"), float("-inf")):
+        raise ValueError
+    return num
+
+
+def _validate_settings_body(data: dict) -> tuple[dict, str | None]:
+    """همهٔ ورودی‌های PUT /settings را قبل از هر نوشتنی بررسی و نرمال می‌کند."""
+    out: dict = {}
+    for key, (allowed, label) in _CHOICES.items():
+        if key in data:
+            val = str(data.get(key) or "").strip().lower()
+            if val not in allowed:
+                return {}, f"{label} نامعتبر است."
+            out[key] = val
+    for key in _BOOL_SETTING_KEYS:
+        if key in data:
+            try:
+                out[key] = _as_bool_strict(data.get(key))
+            except ValueError:
+                return {}, f"مقدار {key} باید درست/نادرست باشد."
+    if "price_refresh_seconds" in data:
+        try:
+            sec = _as_number(data.get("price_refresh_seconds"))
+            if sec != int(sec) or not 5 <= sec <= 3600:
+                raise ValueError
+            out["price_refresh_seconds"] = int(sec)
+        except (TypeError, ValueError):
+            return {}, "فاصلهٔ به‌روزرسانی باید بین ۵ تا ۳۶۰۰ ثانیه باشد."
+    if "goal_roi_pct" in data:
+        raw = data.get("goal_roi_pct")
+        if raw in (None, ""):
+            out["goal_roi_pct"] = None
+        else:
+            try:
+                val = _as_number(raw)
+                if not -100 <= val <= 100000:
+                    raise ValueError
+                out["goal_roi_pct"] = val
+            except (TypeError, ValueError):
+                return {}, "هدف بازده نامعتبر است."
+    for key, label in (("wallex_markets_url", "آدرس والکس"), ("persiantoolbox_url", "آدرس پرشین‌تولباکس")):
+        if key in data:
+            url = str(data.get(key) or "").strip()
+            if url and (len(url) > 500 or not url.lower().startswith(("http://", "https://"))):
+                return {}, f"{label} نامعتبر است."
+            out[key] = url
+    for key, label in (("usdt_tmn_rate", "نرخ تتر"), ("gold_tmn_per_gram", "قیمت طلا")):
+        if key in data and data.get(key) not in (None, ""):
+            try:
+                val = _as_number(data.get(key))
+                if not 0 < val < 1e12:
+                    raise ValueError
+                out[key] = val
+            except (TypeError, ValueError):
+                return {}, f"{label} نامعتبر است."
+    if "annual_withdrawal_pct" in data:
+        try:
+            pct = _as_number(data.get("annual_withdrawal_pct"))
+            if pct < 1 or pct > 100:
+                raise ValueError
+            out["annual_withdrawal_pct"] = int(round(pct))
+        except (TypeError, ValueError):
+            return {}, "درصد برداشت سالانه باید بین ۱ تا ۱۰۰ باشد."
+    return out, None
+
+
 def _parse_client_extras(data: dict) -> tuple[dict, str | None]:
     import json
 
@@ -585,81 +677,31 @@ def put_settings():
     extras, extras_error = _parse_client_extras(data)
     if extras_error:
         return _json_err(extras_error, error="validation")
+    v, v_error = _validate_settings_body(data)
+    if v_error:
+        return _json_err(v_error, error="validation")
     s = ctx.settings
-    if "calendar" in data:
-        s.calendar = str(data["calendar"])
-    if "currency" in data:
-        s.currency = str(data["currency"])
-    if "theme" in data:
-        s.theme = str(data["theme"])
-    if "first_run_done" in data:
-        s.first_run_done = bool(data["first_run_done"])
-    if "live_prices_enabled" in data:
-        s.live_prices_enabled = bool(data["live_prices_enabled"])
-    if "usdt_api_enabled" in data:
-        s.usdt_api_enabled = bool(data["usdt_api_enabled"])
-    if "gold_api_enabled" in data:
-        s.gold_api_enabled = bool(data["gold_api_enabled"])
-    if "gold_auto_update_assets" in data:
-        s.gold_auto_update_assets = bool(data["gold_auto_update_assets"])
-    if "price_refresh_seconds" in data:
-        s.price_refresh_seconds = int(data["price_refresh_seconds"])
-    if "goal_roi_pct" in data:
-        raw = data.get("goal_roi_pct")
-        s.goal_roi_pct = float(raw) if raw not in (None, "") else None
-    if "notifications_enabled" in data:
-        s.notifications_enabled = bool(data["notifications_enabled"])
-    if "notify_trades" in data:
-        s.notify_trades = bool(data["notify_trades"])
-    if "notify_withdrawals" in data:
-        s.notify_withdrawals = bool(data["notify_withdrawals"])
-    if "notify_price_moves" in data:
-        s.notify_price_moves = bool(data["notify_price_moves"])
-    if "wallex_markets_url" in data:
-        url = str(data.get("wallex_markets_url") or "").strip()
-        if url:
-            s.wallex_markets_url = url
-    if "persiantoolbox_url" in data:
-        url = str(data.get("persiantoolbox_url") or "").strip()
-        if url:
-            s.persiantoolbox_url = url
-    annual_pct_error = None
-    if _ANNUAL_PCT_KEY in data:
-        try:
-            pct = float(data.get(_ANNUAL_PCT_KEY))
-            if pct != pct or pct < 1 or pct > 100:
-                raise ValueError
-            ctx.settings_repo.set(_ANNUAL_PCT_KEY, str(int(round(pct))))
-        except (TypeError, ValueError):
-            annual_pct_error = "درصد برداشت سالانه باید بین ۱ تا ۱۰۰ باشد."
-    if annual_pct_error:
-        return _json_err(annual_pct_error, error="validation")
+    for key in ("calendar", "currency", "theme", *_BOOL_SETTING_KEYS,
+                "price_refresh_seconds", "goal_roi_pct"):
+        if key in v:
+            setattr(s, key, v[key])
+    for key in ("wallex_markets_url", "persiantoolbox_url"):
+        if v.get(key):
+            setattr(s, key, v[key])
+    if _ANNUAL_PCT_KEY in v:
+        ctx.settings_repo.set(_ANNUAL_PCT_KEY, str(v[_ANNUAL_PCT_KEY]))
     if extras:
-        ctx.settings_repo.set_many({_CLIENT_PREFIX + k: v for k, v in extras.items()})
+        ctx.settings_repo.set_many({_CLIENT_PREFIX + k: val for k, val in extras.items()})
     ctx.save_settings(s)
     # Optional cached rates (also written by /quotes).
-    if "usdt_tmn_rate" in data and data.get("usdt_tmn_rate") not in (None, ""):
-        try:
-            from invest_app.config import SETTING_USDT_TMN_RATE
+    if "usdt_tmn_rate" in v:
+        from invest_app.config import SETTING_USDT_TMN_RATE
 
-            ctx.settings_repo.set(
-                SETTING_USDT_TMN_RATE, f"{float(data['usdt_tmn_rate']):.4f}"
-            )
-        except (TypeError, ValueError):
-            pass
-    if "gold_tmn_per_gram" in data and data.get("gold_tmn_per_gram") not in (
-        None,
-        "",
-    ):
-        try:
-            from invest_app.config import SETTING_GOLD_TMN_PER_GRAM
+        ctx.settings_repo.set(SETTING_USDT_TMN_RATE, f"{v['usdt_tmn_rate']:.4f}")
+    if "gold_tmn_per_gram" in v:
+        from invest_app.config import SETTING_GOLD_TMN_PER_GRAM
 
-            ctx.settings_repo.set(
-                SETTING_GOLD_TMN_PER_GRAM,
-                f"{float(data['gold_tmn_per_gram']):.4f}",
-            )
-        except (TypeError, ValueError):
-            pass
+        ctx.settings_repo.set(SETTING_GOLD_TMN_PER_GRAM, f"{v['gold_tmn_per_gram']:.4f}")
     ctx.apply_price_api_settings()
     phone = current_invest_phone()
     if phone and "first_run_done" in data:
