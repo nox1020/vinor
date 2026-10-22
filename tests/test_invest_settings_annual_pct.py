@@ -78,6 +78,7 @@ def test_client_extras_persist_and_echo(client):
         "notify_background": False,
         "app_lock_hash": "abc",
         "app_lock_biometric": True,
+        "withdrawal_cap_base": "nav",
     }
     r = client.put(S, json=body)
     assert r.status_code == 200, r.get_json()
@@ -97,6 +98,7 @@ def test_client_extras_persist_and_echo(client):
 @pytest.mark.parametrize("bad", [
     {"client_withdrawals": "nope"}, {"price_alerts": {"a": 1}}, {"price_alerts": [1, 2]},
     {"notify_background": "maybe"}, {"app_lock_hash": 5},
+    {"withdrawal_cap_base": "salary"},
 ])
 def test_client_extras_validation_writes_nothing(client, bad):
     _login(client, OWNER)
@@ -134,3 +136,8 @@ def test_settings_valid_values_roundtrip(client):
     assert s["price_refresh_seconds"] == 5 and s["goal_roi_pct"] == 12.5
     assert s["notify_trades"] is False and s["live_prices_enabled"] is False
     assert s["usdt_tmn_rate"] == 100000
+
+
+def test_cap_base_absent_by_default(client):
+    _login(client, OWNER)
+    assert "withdrawal_cap_base" not in client.get(S).get_json()["settings"]

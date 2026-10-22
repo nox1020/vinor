@@ -477,6 +477,8 @@ def _attach_annual_withdrawal_pct(ctx, payload: dict) -> None:
 _CLIENT_LIST_KEYS = ("client_withdrawals", "price_alerts", "profit_alerts", "year_nav_history")
 _CLIENT_BOOL_KEYS = ("notify_background", "app_lock_biometric")
 _CLIENT_TEXT_KEYS = ("app_lock_hash",)
+# مبنای سقف برداشت سالانه؛ نبودنش یعنی پیش‌فرض قبلی (inflows).
+_CLIENT_CHOICE_KEYS = {"withdrawal_cap_base": ("inflows", "open_cost", "nav")}
 _CLIENT_PREFIX = "client_ext:"
 _CLIENT_MAX_BYTES = 2_000_000
 
@@ -613,6 +615,13 @@ def _parse_client_extras(data: dict) -> tuple[dict, str | None]:
         if not isinstance(val, str) or len(val) > 512:
             return {}, f"مقدار {key} نامعتبر است."
         out[key] = val.strip()
+    for key, allowed in _CLIENT_CHOICE_KEYS.items():
+        if key not in data:
+            continue
+        val = str(data.get(key) or "").strip().lower()
+        if val not in allowed:
+            return {}, "مبنای سقف برداشت نامعتبر است."
+        out[key] = val
     return out, None
 
 
@@ -634,6 +643,10 @@ def _attach_client_extras(ctx, payload: dict) -> None:
     for key in _CLIENT_TEXT_KEYS:
         raw = ctx.settings_repo.get(_CLIENT_PREFIX + key)
         if raw is not None:
+            payload[key] = raw
+    for key, allowed in _CLIENT_CHOICE_KEYS.items():
+        raw = ctx.settings_repo.get(_CLIENT_PREFIX + key)
+        if raw in allowed:
             payload[key] = raw
 
 
