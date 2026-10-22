@@ -454,8 +454,21 @@ def get_settings():
             payload["gold_tmn_per_gram"] = float(gold)
     except (TypeError, ValueError):
         pass
+    _attach_annual_withdrawal_pct(ctx, payload)
     _attach_client_checks(ctx, payload, None)
     return _json_ok(settings=payload)
+
+
+_ANNUAL_PCT_KEY = "annual_withdrawal_pct"
+
+
+def _attach_annual_withdrawal_pct(ctx, payload: dict) -> None:
+    raw = ctx.settings_repo.get(_ANNUAL_PCT_KEY)
+    try:
+        if raw not in (None, ""):
+            payload[_ANNUAL_PCT_KEY] = max(1, min(100, int(float(raw))))
+    except (TypeError, ValueError):
+        pass
 
 
 def _attach_client_checks(ctx, payload: dict, incoming) -> None:
@@ -533,6 +546,17 @@ def put_settings():
         url = str(data.get("persiantoolbox_url") or "").strip()
         if url:
             s.persiantoolbox_url = url
+    annual_pct_error = None
+    if _ANNUAL_PCT_KEY in data:
+        try:
+            pct = float(data.get(_ANNUAL_PCT_KEY))
+            if pct != pct or pct < 1 or pct > 100:
+                raise ValueError
+            ctx.settings_repo.set(_ANNUAL_PCT_KEY, str(int(round(pct))))
+        except (TypeError, ValueError):
+            annual_pct_error = "درصد برداشت سالانه باید بین ۱ تا ۱۰۰ باشد."
+    if annual_pct_error:
+        return _json_err(annual_pct_error, error="validation")
     ctx.save_settings(s)
     # Optional cached rates (also written by /quotes).
     if "usdt_tmn_rate" in data and data.get("usdt_tmn_rate") not in (None, ""):
@@ -562,6 +586,7 @@ def put_settings():
     if phone and "first_run_done" in data:
         update_profile(phone, first_run_done=bool(data["first_run_done"]))
     payload = settings_to_dict(ctx.settings)
+    _attach_annual_withdrawal_pct(ctx, payload)
     _attach_client_checks(ctx, payload, data)
     return _json_ok(settings=payload)
 
