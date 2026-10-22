@@ -116,3 +116,30 @@ def test_trade_crud_and_validation(client):
     assert client.put(B + "/months/1405/13", json={"staff": 1}).status_code == 400
     client.put(B + "/months/1405/2", json={"income": 5})
     assert client.delete(B + "/months/1405/2").status_code == 200
+
+
+def test_export_roundtrip_all_years(client):
+    _login(client, OWNER)
+    client.post(B + "/import", json=_seed())
+    client.put(B + "/months/1404/12", json={"income": 9})
+    ex = client.get(B + "/export").get_json()["export"]
+    assert len(ex["trades"]) == 3 and len(ex["months"]) == 3
+    assert {(m["year"], m["month"]) for m in ex["months"]} == {(1405, 1), (1405, 2), (1404, 12)}
+    _login(client, OTHER)
+    assert client.post(B + "/import", json=ex).get_json()["written"] == 6
+    assert client.get(B + "/export").get_json()["export"]["months"][0]["year"] == 1404
+
+
+def test_pwo_import_transactions_guarded(client):
+    _login(client, OTHER)
+    body = {"withdrawers": [{"name": "M"}],
+            "entries": [{"withdrawer": "M", "year": 1405, "month": 1, "amount": 10}],
+            "transactions": [{"withdrawer": "M", "year": 1405, "month": 1, "amount": 5, "note": "x"}]}
+    r = client.post("/invest/api/v1/pwo/import", json=body)
+    assert r.status_code == 200, r.get_json()
+    pwo = r.get_json()["pwo"]
+    assert len(pwo["transactions"]) == 1
+    assert pwo["totals"]["months"][0]["total"] == 15
+    r = client.post("/invest/api/v1/pwo/import", json=body)
+    assert r.get_json()["already_has_data"] is True
+    assert len(r.get_json()["pwo"]["transactions"]) == 1

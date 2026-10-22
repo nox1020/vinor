@@ -392,6 +392,23 @@ def register_pwo_routes() -> None:
                                    _int(e.get("month"), 1, 12, "ماه"), parse_amount(e.get("amount")),
                                    str(e.get("note") or "")[:500], overwrite=overwrite)
                 written, skipped = written + ok, skipped + (not ok)
+            # برداشت‌های تکی (اختیاری، از پشتیبان). فقط وقتی حساب خالی بود به اینجا می‌رسیم.
+            for tx in ([] if overwrite else b.get("transactions") or []):
+                if not isinstance(tx, dict):
+                    raise PwoError("ردیف نامعتبر است.")
+                name = _name(tx.get("withdrawer"))
+                if name not in by_name:
+                    by_name[name] = _add_withdrawer(conn, name)
+                amount = parse_amount(tx.get("amount"))
+                if amount <= 0:
+                    continue
+                ts = now_iso()
+                conn.execute("INSERT INTO pwo_transactions (withdrawer_id, year, month, amount, note,"
+                             " created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+                             (by_name[name], _int(tx.get("year"), 1300, 1600, "سال"),
+                              _int(tx.get("month"), 1, 12, "ماه"), amount,
+                              str(tx.get("note") or "")[:500], ts, ts))
+                written += 1
             conn.commit()
             return _json_ok(written=written, skipped=skipped, pwo=snapshot(conn))
         return _run(_do)

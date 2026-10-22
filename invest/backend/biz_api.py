@@ -239,6 +239,18 @@ def register_biz_routes() -> None:
     def biz_delete_month_post(year: int, month: int):
         return _del_month(year, month)
 
+    @invest_api_bp.get("/biz/export")
+    @require_invest_auth
+    def biz_export():
+        """همهٔ معاملات و همهٔ ردیف‌های ماهانه (همهٔ سال‌ها) به شکل قابل ورود برای پشتیبان."""
+        conn = _conn()
+        trades = [{k: r[k] for k in ("buy_date", "sell_date", "buy_amount", "sell_amount", "area",
+                                     "title", "extra_cost", "note")}
+                  for r in conn.execute("SELECT * FROM biz_property_trades ORDER BY buy_date, id")]
+        months = [{k: r[k] for k in ("year", "month", "staff", "ads", "income", "note")}
+                  for r in conn.execute("SELECT * FROM biz_monthly_ops ORDER BY year, month")]
+        return _json_ok(export={"trades": trades, "months": months})
+
     @invest_api_bp.post("/biz/import")
     @require_invest_auth
     def biz_import():
