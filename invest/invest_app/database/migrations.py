@@ -250,10 +250,61 @@ def _migrate_3(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 3 (theme default if missing)")
 
 
+PREMIGRATION_DIR = "premigration"
+PREMIGRATION_KEEP = 5
+
+
+def _db_file(conn: sqlite3.Connection):
+    from pathlib import Path
+
+    for row in conn.execute("PRAGMA database_list").fetchall():
+        name, path = row[1], row[2]
+        if name == "main" and path:
+            return Path(path)
+    return None
+
+
+def backup_before_migration(conn: sqlite3.Connection, current: int, target: int):
+    """کپی تاریخ‌دار و کامل دیتابیس پیش از اجرای مایگریشن (sqlite backup API).
+
+    فقط کپی‌های همین تابع (پوشهٔ premigration) مشمول نگه‌داری می‌شوند: آخرین
+    PREMIGRATION_KEEP کپی هر دیتابیس می‌مانند؛ هیچ پشتیبان دیگری حذف نمی‌شود.
+    """
+    from datetime import datetime, timezone
+
+    src = _db_file(conn)
+    if src is None:  # :memory:
+        return None
+    folder = src.parent / PREMIGRATION_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    dest = folder / f"{src.stem}.v{current}-to-v{target}.{stamp}.db"
+    out = sqlite3.connect(str(dest))
+    try:
+        conn.commit()
+        conn.backup(out)
+    finally:
+        out.close()
+    mine = sorted(folder.glob(f"{src.stem}.v*-to-v*.*.db"), key=lambda p: p.name.rsplit(".", 2)[-2])
+    for old in mine[:-PREMIGRATION_KEEP]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    logger.info("Pre-migration copy written: %s", dest)
+    return dest
+
+
 def run_migrations(conn: sqlite3.Connection) -> None:
     """Apply pending migrations without dropping user data."""
     conn.execute(MIGRATION_TABLE)
     applied = _applied_versions(conn)
+    current = max(applied) if applied else 0
+    if applied and current < CURRENT_SCHEMA_VERSION:
+        try:
+            backup_before_migration(conn, current, CURRENT_SCHEMA_VERSION)
+        except Exception:  # noqa: BLE001 — migrations are additive; never block startup
+            logger.exception("Pre-migration copy failed; continuing with additive migrations")
 
     if 1 not in applied:
         _record(conn, 1)
