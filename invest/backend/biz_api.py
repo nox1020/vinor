@@ -15,7 +15,7 @@ from invest_app.utils.dates import now_iso
 
 from .auth import require_invest_auth
 from .pwo_api import PwoError as BizError
-from .pwo_api import _body, _conn, _int, parse_amount
+from .pwo_api import _body, _conn, _int, idempotent, parse_amount, remember_key
 from .pwo_api import snapshot as pwo_snapshot
 from .routes.api import _json_err, _json_ok, invest_api_bp
 
@@ -157,13 +157,18 @@ def _year_arg() -> int | None:
 
 def _run(fn, year=None):
     conn = _conn()
-    try:
-        result = fn(conn)
-        conn.commit()
-        return result if result is not None else _json_ok(biz=snapshot(conn, year))
-    except BizError as exc:
-        conn.rollback()
-        return _json_err(exc.message, error=exc.code, status=exc.status)
+
+    def ok(key):
+        try:
+            result = fn(conn)
+            remember_key(conn, key)
+            conn.commit()
+            return result if result is not None else _json_ok(biz=snapshot(conn, year))
+        except BizError as exc:
+            conn.rollback()
+            return _json_err(exc.message, error=exc.code, status=exc.status)
+
+    return idempotent(conn, ok, lambda: _json_ok(biz=snapshot(conn, year), replayed=True))
 
 
 def _trade_row(conn, tid: int):

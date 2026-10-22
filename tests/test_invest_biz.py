@@ -143,3 +143,39 @@ def test_pwo_import_transactions_guarded(client):
     r = client.post("/invest/api/v1/pwo/import", json=body)
     assert r.get_json()["already_has_data"] is True
     assert len(r.get_json()["pwo"]["transactions"]) == 1
+
+
+def test_idempotency_key_writes_once_per_account(client):
+    _login(client, OWNER)
+    h = {"Idempotency-Key": "q-0001-abcdef"}
+    body = {"buy_date": "1405/01/01", "buy_amount": 10}
+    r1 = client.post(B + "/trades", json=body, headers=h)
+    r2 = client.post(B + "/trades", json=body, headers=h)
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r2.get_json().get("replayed") is True
+    assert len(client.get(B).get_json()["biz"]["trades"]) == 1
+    # same key on another route is refused, nothing written
+    r3 = client.put(B + "/months/1405/1", json={"income": 5}, headers=h)
+    assert r3.status_code == 409
+    assert not any(m["has_ops"] for m in client.get(B).get_json()["biz"]["months"])
+    # bad key format
+    assert client.post(B + "/trades", json=body, headers={"Idempotency-Key": "x"}).status_code == 400
+    # a failed write does not burn the key
+    h2 = {"Idempotency-Key": "q-0002-abcdef"}
+    assert client.post(B + "/trades", json={"buy_amount": 1}, headers=h2).status_code == 400
+    assert client.post(B + "/trades", json=body, headers=h2).get_json().get("replayed") is None
+    # keys are per account: another account's DB has its own table
+    _login(client, OTHER)
+    r4 = client.post(B + "/trades", json=body, headers=h)
+    assert r4.get_json().get("replayed") is None
+    assert len(r4.get_json()["biz"]["trades"]) == 1
+
+
+def test_pwo_idempotency_key(client):
+    _login(client, OWNER)
+    P = "/invest/api/v1/pwo"
+    h = {"Idempotency-Key": "q-pwo-000001"}
+    assert client.put(P + "/target", json={"target": 5}, headers=h).status_code == 200
+    r = client.put(P + "/target", json={"target": 9}, headers=h)
+    assert r.get_json()["replayed"] is True
+    assert r.get_json()["pwo"]["target"] == 5

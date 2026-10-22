@@ -2,6 +2,7 @@
 """PWO (برداشت ماهانه) — /invest/api/v1/pwo. ذخیره per-account در DB همان کاربر، مثل چک‌ها."""
 from __future__ import annotations
 
+import re
 import sqlite3
 
 from flask import request
@@ -185,15 +186,47 @@ def _active_count(conn) -> int:
     return conn.execute("SELECT COUNT(*) FROM pwo_withdrawers WHERE archived=0").fetchone()[0]
 
 
+_IDEM_RE = re.compile(r"^[A-Za-z0-9_\-]{8,100}$")
+
+
+def idempotent(conn, fn_ok, fn_replay):
+    """Idempotency-Key: یک نوشتن با همان کلید فقط یک بار اجرا می‌شود.
+
+    تکرار همان کلید هیچ چیزی را دوباره نمی‌نویسد و فقط وضعیت فعلی را برمی‌گرداند."""
+    key = (request.headers.get("Idempotency-Key") or "").strip()
+    if not key:
+        return fn_ok(None)
+    if not _IDEM_RE.match(key):
+        return _json_err("کلید تکرارنشدن نامعتبر است.", error="validation", status=400)
+    row = conn.execute("SELECT method, path FROM idempotency_keys WHERE key=?", (key,)).fetchone()
+    if row:
+        if row["method"] != request.method or row["path"] != request.path:
+            return _json_err("این کلید قبلاً برای درخواست دیگری استفاده شده.",
+                             error="idempotency_conflict", status=409)
+        return fn_replay()
+    return fn_ok(key)
+
+
+def remember_key(conn, key) -> None:
+    if key:
+        conn.execute("INSERT INTO idempotency_keys (key, method, path, created_at) VALUES (?,?,?,?)",
+                     (key, request.method, request.path, now_iso()))
+
+
 def _run(fn):
     conn = _conn()
-    try:
-        result = fn(conn)
-        conn.commit()
-        return result if result is not None else _json_ok(pwo=snapshot(conn))
-    except PwoError as exc:
-        conn.rollback()
-        return _json_err(exc.message, error=exc.code, status=exc.status)
+
+    def ok(key):
+        try:
+            result = fn(conn)
+            remember_key(conn, key)
+            conn.commit()
+            return result if result is not None else _json_ok(pwo=snapshot(conn))
+        except PwoError as exc:
+            conn.rollback()
+            return _json_err(exc.message, error=exc.code, status=exc.status)
+
+    return idempotent(conn, ok, lambda: _json_ok(pwo=snapshot(conn), replayed=True))
 
 
 def register_pwo_routes() -> None:

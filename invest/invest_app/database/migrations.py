@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -240,6 +240,23 @@ def _migrate_7(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 7 (biz property/monthly)")
 
 
+_MIGRATION_8_SQL = """
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key        TEXT PRIMARY KEY,
+    method     TEXT NOT NULL,
+    path       TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+"""
+
+
+def _migrate_8(conn: sqlite3.Connection) -> None:
+    """کلیدهای Idempotency-Key برای صف نوشتن آفلاین اپ (افزودنی)."""
+    conn.executescript(_MIGRATION_8_SQL)
+    conn.commit()
+    logger.info("Applied schema migration version 8 (idempotency keys)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -339,6 +356,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 7 not in applied:
         _migrate_7(conn)
         _record(conn, 7)
+        applied = _applied_versions(conn)
+
+    if 8 not in applied:
+        _migrate_8(conn)
+        _record(conn, 8)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0
