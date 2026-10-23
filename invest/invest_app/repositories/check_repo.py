@@ -20,13 +20,15 @@ _COLUMNS = (
     "note",
     "status",
     "settled_date",
+    "archived_at",
     "created_at",
     "updated_at",
 )
 
 
 def _as_dict(row: sqlite3.Row) -> dict[str, Any]:
-    return {key: row[key] for key in _COLUMNS}
+    keys = row.keys()
+    return {key: (row[key] if key in keys else None) for key in _COLUMNS}
 
 
 class CheckRepository:
@@ -54,14 +56,14 @@ class CheckRepository:
                 INSERT INTO checks (
                     direction, amount, issue_date, due_date, check_number, sayad_id,
                     bank_name, branch, counterparty, purpose, note, status,
-                    settled_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    settled_date, archived_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["direction"], row["amount"], row["issue_date"], row["due_date"],
                     row["check_number"], row["sayad_id"], row["bank_name"], row["branch"],
                     row["counterparty"], row["purpose"], row["note"], row["status"],
-                    row.get("settled_date"), row["created_at"], row["updated_at"],
+                    row.get("settled_date"), row.get("archived_at"), row["created_at"], row["updated_at"],
                 ),
             )
             new_id = int(cur.lastrowid)
@@ -71,15 +73,15 @@ class CheckRepository:
                 INSERT INTO checks (
                     id, direction, amount, issue_date, due_date, check_number, sayad_id,
                     bank_name, branch, counterparty, purpose, note, status,
-                    settled_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    settled_date, archived_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     int(explicit),
                     row["direction"], row["amount"], row["issue_date"], row["due_date"],
                     row["check_number"], row["sayad_id"], row["bank_name"], row["branch"],
                     row["counterparty"], row["purpose"], row["note"], row["status"],
-                    row.get("settled_date"), row["created_at"], row["updated_at"],
+                    row.get("settled_date"), row.get("archived_at"), row["created_at"], row["updated_at"],
                 ),
             )
             new_id = int(explicit)
@@ -96,14 +98,14 @@ class CheckRepository:
                 direction = ?, amount = ?, issue_date = ?, due_date = ?,
                 check_number = ?, sayad_id = ?, bank_name = ?, branch = ?,
                 counterparty = ?, purpose = ?, note = ?, status = ?,
-                settled_date = ?, updated_at = ?
+                settled_date = ?, archived_at = ?, updated_at = ?
             WHERE id = ?
             """,
             (
                 row["direction"], row["amount"], row["issue_date"], row["due_date"],
                 row["check_number"], row["sayad_id"], row["bank_name"], row["branch"],
                 row["counterparty"], row["purpose"], row["note"], row["status"],
-                row.get("settled_date"), row["updated_at"], int(check_id),
+                row.get("settled_date"), row.get("archived_at"), row["updated_at"], int(check_id),
             ),
         )
         self._conn.commit()
@@ -125,15 +127,15 @@ class CheckRepository:
                     INSERT INTO checks (
                         id, direction, amount, issue_date, due_date, check_number, sayad_id,
                         bank_name, branch, counterparty, purpose, note, status,
-                        settled_date, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        settled_date, archived_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         int(row["id"]),
                         row["direction"], row["amount"], row["issue_date"], row["due_date"],
                         row["check_number"], row["sayad_id"], row["bank_name"], row["branch"],
                         row["counterparty"], row["purpose"], row["note"], row["status"],
-                        row.get("settled_date"), row["created_at"], row["updated_at"],
+                        row.get("settled_date"), row.get("archived_at"), row["created_at"], row["updated_at"],
                     ),
                 )
             self._conn.commit()

@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS checks (
     note          TEXT NOT NULL DEFAULT '',
     status        TEXT NOT NULL DEFAULT 'pending',
     settled_date  TEXT,
+    archived_at   TEXT,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );

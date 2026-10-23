@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 9
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -257,6 +257,15 @@ def _migrate_8(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 8 (idempotency keys)")
 
 
+def _migrate_9(conn: sqlite3.Connection) -> None:
+    """بایگانی چک: ستون تهی‌پذیر افزودنی. هیچ ردیفی تغییر نمی‌کند."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(checks)").fetchall()}
+    if "archived_at" not in cols:
+        conn.execute("ALTER TABLE checks ADD COLUMN archived_at TEXT")
+    conn.commit()
+    logger.info("Applied schema migration version 9 (checks.archived_at)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -361,6 +370,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 8 not in applied:
         _migrate_8(conn)
         _record(conn, 8)
+        applied = _applied_versions(conn)
+
+    if 9 not in applied:
+        _migrate_9(conn)
+        _record(conn, 9)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0

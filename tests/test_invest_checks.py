@@ -303,3 +303,51 @@ def test_reminders_and_settings_mirror(client):
     assert body["theme"] == "dark"
     assert body["client_checks_error"]["error"] == "validation"
     assert [row["id"] for row in body["client_checks"]] == [88001]
+
+
+def test_archive_hides_from_totals_and_reminders_and_restores(client):
+    _login(client, OWNER)
+    item = client.post("/invest/api/v1/checks", json=_payload()).get_json()["item"]
+    assert item["is_archived"] is False and item["archived_at"] is None
+
+    archived = client.patch(f"/invest/api/v1/checks/{item['id']}", json={"archived": True})
+    assert archived.status_code == 200
+    row = archived.get_json()["item"]
+    assert row["is_archived"] is True and row["archived_at"]
+    assert row["status"] == "pending"
+    assert row["counts_as_receivable"] is False
+
+    listed = client.get("/invest/api/v1/checks").get_json()
+    assert listed["count"] == 1  # data is kept
+    assert listed["summary"]["open_receivable"] == 0
+    assert listed["summary"]["due_soon_count"] == 0
+    assert client.get("/invest/api/v1/checks?archived=exclude").get_json()["items"] == []
+    assert len(client.get("/invest/api/v1/checks?archived=only").get_json()["items"]) == 1
+    assert client.get("/invest/api/v1/checks/reminders").get_json()["items"] == []
+
+    # An older client that omits the field keeps the archive flag.
+    kept = client.patch(f"/invest/api/v1/checks/{item['id']}", json={"note": "x"}).get_json()["item"]
+    assert kept["archived_at"] == row["archived_at"]
+
+    restored = client.patch(f"/invest/api/v1/checks/{item['id']}", json={"archived": False}).get_json()["item"]
+    assert restored["is_archived"] is False
+    assert client.get("/invest/api/v1/checks").get_json()["summary"]["open_receivable"] == 1_500_000
+
+
+def test_migration_9_adds_archived_column_without_touching_rows(tmp_path):
+    import sqlite3
+
+    from invest_app.database.migrations import _migrate_9
+
+    conn = sqlite3.connect(tmp_path / "old.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE checks (id INTEGER PRIMARY KEY, direction TEXT, amount REAL, status TEXT,"
+        " settled_date TEXT, created_at TEXT, updated_at TEXT)"
+    )
+    conn.execute("INSERT INTO checks VALUES (1, 'payable', 5, 'pending', NULL, 'a', 'b')")
+    _migrate_9(conn)
+    _migrate_9(conn)  # idempotent
+    row = dict(conn.execute("SELECT * FROM checks").fetchone())
+    assert row["archived_at"] is None
+    assert row["amount"] == 5 and row["updated_at"] == "b"

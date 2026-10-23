@@ -302,6 +302,7 @@ class CheckService:
         )
         stamp = now_iso()
         created = str(_pick(data, "created_at", "createdAt") or "").strip() or stamp
+        archived_at = _archived_value(data, current, stamp)
         return {
             "id": check_id,
             "direction": direction,
@@ -317,6 +318,7 @@ class CheckService:
             "note": note,
             "status": status,
             "settled_date": settled,
+            "archived_at": archived_at,
             "created_at": created,
             "updated_at": stamp,
         }
@@ -362,6 +364,22 @@ class CheckService:
         return CheckError("چکی با همین شماره و بانک قبلاً ثبت شده است.", code="conflict", status=409)
 
 
+def _archived_value(data: dict[str, Any], current: dict[str, Any] | None, stamp: str) -> str | None:
+    """`archived` (bool) یا `archived_at` (متن). نبودِ هر دو یعنی همان مقدار قبلی."""
+    previous = str((current or {}).get("archived_at") or "").strip() or None
+    if "archived" in data or "isArchived" in data:
+        flag = data.get("archived", data.get("isArchived"))
+        if isinstance(flag, str):
+            flag = flag.strip().lower() in ("1", "true", "yes")
+        if not flag:
+            return None
+        explicit = str(_pick(data, "archived_at", "archivedAt") or "").strip()
+        return explicit or previous or stamp
+    if "archived_at" in data or "archivedAt" in data:
+        return str(_pick(data, "archived_at", "archivedAt") or "").strip() or None
+    return previous
+
+
 def summarize(items: list[dict[str, Any]]) -> dict[str, Any]:
     open_receivable = 0
     open_receivable_count = 0
@@ -378,6 +396,8 @@ def summarize(items: list[dict[str, Any]]) -> dict[str, Any]:
     cleared_payable = 0.0
     next_due = None
     for item in items:
+        if item.get("is_archived"):
+            continue
         amount = float(item.get("amount") or 0)
         if item.get("counts_as_receivable"):
             open_receivable += amount
@@ -430,6 +450,8 @@ def reminder_groups(items: list[dict[str, Any]], *, within_days: int = 7) -> dic
     due_soon = []
     bounced = []
     for item in items:
+        if item.get("is_archived"):
+            continue
         if item.get("status") == "bounced":
             bounced.append(item)
         if item.get("status") not in OPEN_STATUSES:

@@ -38,8 +38,13 @@ def _filtered(items: list[dict]) -> list[dict]:
     direction = str(request.args.get("direction") or "").strip().lower()
     due = str(request.args.get("due") or "").strip().lower()
     query = str(request.args.get("q") or "").strip()
+    archived = str(request.args.get("archived") or "").strip().lower()
     shown = []
     for item in items:
+        if archived in ("only", "1", "true") and not item.get("is_archived"):
+            continue
+        if archived in ("exclude", "0", "false") and item.get("is_archived"):
+            continue
         if status == "open" and not item.get("is_open"):
             continue
         if status == "settled" and item.get("is_open"):

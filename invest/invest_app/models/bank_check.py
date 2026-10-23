@@ -91,6 +91,8 @@ def row_to_public(row: dict[str, Any], *, today) -> dict[str, Any]:
         days = 0
     amount = json_amount(float(row.get("amount") or 0))
     open_row = status in OPEN_STATUSES
+    archived_at = str(row.get("archived_at") or "").strip() or None
+    live = archived_at is None
     return {
         "id": int(row["id"]),
         "direction": direction,
@@ -112,8 +114,10 @@ def row_to_public(row: dict[str, Any], *, today) -> dict[str, Any]:
         "settled_date": settled or None,
         "settled_date_jalali": format_short_date(settled, CALENDAR_JALALI) if settled else None,
         "is_open": open_row,
-        "counts_as_receivable": direction == DIRECTION_RECEIVABLE and status == STATUS_PENDING,
-        "counts_as_debt": direction == DIRECTION_PAYABLE and status in OPEN_STATUSES,
+        "archived_at": archived_at,
+        "is_archived": not live,
+        "counts_as_receivable": live and direction == DIRECTION_RECEIVABLE and status == STATUS_PENDING,
+        "counts_as_debt": live and direction == DIRECTION_PAYABLE and status in OPEN_STATUSES,
         "days_until_due": days,
         "due_label": due_label(days),
         "created_at": str(row.get("created_at") or ""),
