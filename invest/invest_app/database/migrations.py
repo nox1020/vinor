@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 9
+CURRENT_SCHEMA_VERSION = 10
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -266,6 +266,31 @@ def _migrate_9(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 9 (checks.archived_at)")
 
 
+_MIGRATION_10_SQL = """
+CREATE TABLE IF NOT EXISTS biz_projects (
+    id              INTEGER PRIMARY KEY,
+    title           TEXT NOT NULL DEFAULT '',
+    work_type       TEXT NOT NULL DEFAULT '',
+    start_date      TEXT NOT NULL DEFAULT '',
+    end_date        TEXT NOT NULL DEFAULT '',
+    contract_amount REAL NOT NULL DEFAULT 0,
+    cost            REAL NOT NULL DEFAULT 0,
+    status_mode     TEXT NOT NULL DEFAULT 'auto',
+    note            TEXT NOT NULL DEFAULT '',
+    archived_at     TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+"""
+
+
+def _migrate_10(conn: sqlite3.Connection) -> None:
+    """پروژه‌ها / پیمانکاری: جدول تازه (افزودنی). جدول‌های دیگر دست نمی‌خورند."""
+    conn.executescript(_MIGRATION_10_SQL)
+    conn.commit()
+    logger.info("Applied schema migration version 10 (biz projects)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -375,6 +400,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 9 not in applied:
         _migrate_9(conn)
         _record(conn, 9)
+        applied = _applied_versions(conn)
+
+    if 10 not in applied:
+        _migrate_10(conn)
+        _record(conn, 10)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0

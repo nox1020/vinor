@@ -760,3 +760,7 @@ def insights():
 from ..biz_api import register_biz_routes  # noqa: E402
 
 register_biz_routes()
+
+from ..projects_api import register_project_routes  # noqa: E402
+
+register_project_routes()
