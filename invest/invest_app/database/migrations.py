@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 10
+CURRENT_SCHEMA_VERSION = 11
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -291,6 +291,25 @@ def _migrate_10(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 10 (biz projects)")
 
 
+_MIGRATION_11_SQL = """
+CREATE TABLE IF NOT EXISTS idempotency_responses (
+    key        TEXT PRIMARY KEY,
+    method     TEXT NOT NULL,
+    path       TEXT NOT NULL,
+    status     INTEGER NOT NULL,
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+"""
+
+
+def _migrate_11(conn: sqlite3.Connection) -> None:
+    """صف آفلاین اپ: پاسخ ذخیره‌شدهٔ نوشتن‌های دارایی/معامله/چک/تنظیمات برای تکرار امن (افزودنی)."""
+    conn.executescript(_MIGRATION_11_SQL)
+    conn.commit()
+    logger.info("Applied schema migration version 11 (idempotency responses)")
+
+
 def _migrate_3(conn: sqlite3.Connection) -> None:
     """Ensure a theme key exists; never overwrite a user's saved preference."""
     conn.execute(
@@ -405,6 +424,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 10 not in applied:
         _migrate_10(conn)
         _record(conn, 10)
+        applied = _applied_versions(conn)
+
+    if 11 not in applied:
+        _migrate_11(conn)
+        _record(conn, 11)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0

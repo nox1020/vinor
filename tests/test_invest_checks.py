@@ -351,3 +351,20 @@ def test_migration_9_adds_archived_column_without_touching_rows(tmp_path):
     row = dict(conn.execute("SELECT * FROM checks").fetchone())
     assert row["archived_at"] is None
     assert row["amount"] == 5 and row["updated_at"] == "b"
+
+
+def test_idempotency_key_replays_core_write_once(client):
+    _login(client, "09120000000")
+    h = {"Idempotency-Key": "q-offline-check-0001"}
+    a = client.post("/invest/api/v1/checks", json=_payload(), headers=h)
+    b = client.post("/invest/api/v1/checks", json=_payload(), headers=h)
+    assert a.status_code == b.status_code
+    assert b.headers.get("Idempotent-Replayed") == "true"
+    assert a.get_json()["item"]["id"] == b.get_json()["item"]["id"]
+    items = client.get("/invest/api/v1/checks").get_json()
+    rows = items.get("items") or items.get("checks") or []
+    assert len(rows) == 1
+    other = client.put(f"/invest/api/v1/checks/{a.get_json()['item']['id']}", json=_payload(), headers=h)
+    assert other.status_code == 409
+    bad = client.post("/invest/api/v1/checks", json=_payload(), headers={"Idempotency-Key": "x"})
+    assert bad.status_code == 400
