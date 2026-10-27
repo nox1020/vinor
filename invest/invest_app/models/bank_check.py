@@ -115,6 +115,8 @@ def row_to_public(row: dict[str, Any], *, today) -> dict[str, Any]:
         "settled_date_jalali": format_short_date(settled, CALENDAR_JALALI) if settled else None,
         "is_open": open_row,
         "archived_at": archived_at,
+        "endorsed_to": str(row.get("endorsed_to") or ""),
+        "endorsed_for": str(row.get("endorsed_for") or ""),
         "is_archived": not live,
         "counts_as_receivable": live and direction == DIRECTION_RECEIVABLE and status == STATUS_PENDING,
         "counts_as_debt": live and direction == DIRECTION_PAYABLE and status in OPEN_STATUSES,

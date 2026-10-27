@@ -33,6 +33,8 @@ _LIMITS = {
     "counterparty": (80, "طرف حساب"),
     "purpose": (120, "بابت"),
     "note": (300, "یادداشت"),
+    "endorsed_to": (80, "خرج شده به"),
+    "endorsed_for": (120, "بابت خرج"),
 }
 
 
@@ -303,6 +305,8 @@ class CheckService:
         stamp = now_iso()
         created = str(_pick(data, "created_at", "createdAt") or "").strip() or stamp
         archived_at = _archived_value(data, current, stamp)
+        endorsed_to = self._endorse_field(data, current, "endorsed_to", "endorsedTo")
+        endorsed_for = self._endorse_field(data, current, "endorsed_for", "endorsedFor")
         return {
             "id": check_id,
             "direction": direction,
@@ -319,9 +323,18 @@ class CheckService:
             "status": status,
             "settled_date": settled,
             "archived_at": archived_at,
+            "endorsed_to": endorsed_to,
+            "endorsed_for": endorsed_for,
             "created_at": created,
             "updated_at": stamp,
         }
+
+    @staticmethod
+    def _endorse_field(data: dict[str, Any], current: dict[str, Any] | None, key: str, alt: str) -> str:
+        """خرج‌شده به / بابت. نبودِ کلید یعنی همان مقدار قبلی (کلاینت قدیمی پاکش نمی‌کند)."""
+        if key in data or alt in data:
+            return _fold(_pick(data, key, alt, default=""), key)
+        return str((current or {}).get(key) or "")
 
     def _ensure_unique(
         self,

@@ -368,3 +368,40 @@ def test_idempotency_key_replays_core_write_once(client):
     assert other.status_code == 409
     bad = client.post("/invest/api/v1/checks", json=_payload(), headers={"Idempotency-Key": "x"})
     assert bad.status_code == 400
+
+
+def test_endorsed_to_and_for_are_kept_and_searchable(client):
+    _login(client, OWNER)
+    item = client.post("/invest/api/v1/checks", json=_payload()).get_json()["item"]
+    assert item["endorsed_to"] == "" and item["endorsed_for"] == ""
+
+    spent = client.patch(
+        f"/invest/api/v1/checks/{item['id']}",
+        json={"status": "endorsed", "endorsed_to": " فروشگاه  نمونه ", "endorsed_for": "خرید مصالح"},
+    ).get_json()["item"]
+    assert spent["status"] == "endorsed"
+    assert spent["endorsed_to"] == "فروشگاه نمونه"
+    assert spent["endorsed_for"] == "خرید مصالح"
+
+    # An older client that omits the fields keeps them.
+    kept = client.patch(f"/invest/api/v1/checks/{item['id']}", json={"note": "x"}).get_json()["item"]
+    assert kept["endorsed_to"] == "فروشگاه نمونه" and kept["endorsed_for"] == "خرید مصالح"
+
+    found = client.get("/invest/api/v1/checks?q=مصالح").get_json()["items"]
+    assert [r["id"] for r in found] == [item["id"]]
+
+
+def test_migration_12_adds_endorse_columns_without_touching_rows(tmp_path):
+    import sqlite3
+
+    from invest_app.database.migrations import _migrate_12
+
+    conn = sqlite3.connect(tmp_path / "old.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE checks (id INTEGER PRIMARY KEY, amount REAL, status TEXT, updated_at TEXT)")
+    conn.execute("INSERT INTO checks VALUES (1, 5, 'endorsed', 'b')")
+    _migrate_12(conn)
+    _migrate_12(conn)
+    row = dict(conn.execute("SELECT * FROM checks").fetchone())
+    assert row["endorsed_to"] == "" and row["endorsed_for"] == ""
+    assert row["amount"] == 5 and row["status"] == "endorsed" and row["updated_at"] == "b"

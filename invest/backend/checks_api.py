@@ -76,7 +76,7 @@ def _haystack(item: dict) -> str:
         str(item.get(key) or "")
         for key in (
             "check_number", "sayad_id", "bank_name", "branch",
-            "counterparty", "purpose", "note", "direction_label", "status_label",
+            "counterparty", "purpose", "note", "endorsed_to", "endorsed_for", "direction_label", "status_label",
         )
     )
 

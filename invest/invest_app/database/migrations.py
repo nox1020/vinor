@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -303,6 +303,17 @@ CREATE TABLE IF NOT EXISTS idempotency_responses (
 """
 
 
+def _migrate_12(conn: sqlite3.Connection) -> None:
+    """چک خرج‌شده: به چه کسی / بابت چه. دو ستون افزودنی با پیش‌فرض خالی؛ هیچ ردیفی تغییر نمی‌کند."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(checks)").fetchall()}
+    if "endorsed_to" not in cols:
+        conn.execute("ALTER TABLE checks ADD COLUMN endorsed_to TEXT NOT NULL DEFAULT ''")
+    if "endorsed_for" not in cols:
+        conn.execute("ALTER TABLE checks ADD COLUMN endorsed_for TEXT NOT NULL DEFAULT ''")
+    conn.commit()
+    logger.info("Applied schema migration version 12 (checks.endorsed_to/endorsed_for)")
+
+
 def _migrate_11(conn: sqlite3.Connection) -> None:
     """صف آفلاین اپ: پاسخ ذخیره‌شدهٔ نوشتن‌های دارایی/معامله/چک/تنظیمات برای تکرار امن (افزودنی)."""
     conn.executescript(_MIGRATION_11_SQL)
@@ -429,6 +440,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 11 not in applied:
         _migrate_11(conn)
         _record(conn, 11)
+        applied = _applied_versions(conn)
+
+    if 12 not in applied:
+        _migrate_12(conn)
+        _record(conn, 12)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0

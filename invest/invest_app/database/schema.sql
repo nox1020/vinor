@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS checks (
     status        TEXT NOT NULL DEFAULT 'pending',
     settled_date  TEXT,
     archived_at   TEXT,
+    endorsed_to   TEXT NOT NULL DEFAULT '',
+    endorsed_for  TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
