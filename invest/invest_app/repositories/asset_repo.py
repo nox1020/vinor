@@ -92,6 +92,23 @@ class AssetRepository:
             self._conn.commit()
         return asset
 
+    def purge(self, asset_id: int) -> bool:
+        """حذف دارایی همراه با همهٔ معاملاتش (باز و بسته) به درخواست صریح کاربر.
+
+        Idempotent: missing asset returns False and changes nothing.
+        """
+        row = self._conn.execute("SELECT id FROM assets WHERE id = ?", (asset_id,)).fetchone()
+        if row is None:
+            return False
+        try:
+            self._conn.execute("DELETE FROM trades WHERE asset_id = ?", (asset_id,))
+            self._conn.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        return True
+
     def delete(self, asset_id: int) -> None:
         open_count = self._conn.execute(
             "SELECT COUNT(*) AS c FROM trades WHERE asset_id = ? AND status = 'open'",

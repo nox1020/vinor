@@ -313,6 +313,27 @@ def delete_asset(asset_id: int):
         return _json_err(str(exc))
 
 
+@invest_api_bp.post("/assets/<int:asset_id>/purge")
+@require_invest_auth
+def purge_asset(asset_id: int):
+    """User-initiated: remove the asset and all of its trades. Needs confirm=true."""
+    body = request.get_json(silent=True) or {}
+    if body.get("confirm") is not True:
+        return _json_err("برای حذف دارایی و معاملاتش تأیید لازم است.", error="confirm_required")
+    ctx = get_request_context()
+    try:
+        deleted = ctx.trades.assets.purge(asset_id)
+        if deleted:
+            try:
+                ctx.trades.portfolio.record_snapshot()
+            except Exception:
+                pass
+        ctx.invalidate_caches()
+        return _json_ok(deleted=deleted, id=asset_id)
+    except Exception as exc:
+        return _json_err(str(exc))
+
+
 @invest_api_bp.get("/trades/open")
 @require_invest_auth
 def trades_open():
