@@ -4467,6 +4467,17 @@ def home_page():
             }
     except Exception:
         divar_ads_ctx = {}
+    # Even when promotions are off, the published Vinor catalog belongs on Home.
+    if not (divar_ads_ctx.get('divar_pro_ads') or []):
+        try:
+            published_ads, _ = _home_ads_for_api()
+            if published_ads:
+                divar_ads_ctx = dict(divar_ads_ctx)
+                divar_ads_ctx['divar_pro_ads_enabled'] = True
+                divar_ads_ctx['divar_pro_ads'] = published_ads
+                divar_ads_ctx['divar_pro_ads_title'] = 'آگهی‌های ملک'
+        except Exception:
+            current_app.logger.exception('public home feed fallback failed')
     # ai_quick_prompts بعد از **ai_ctx تا با کلید هم‌نام در context بازنویسی نشود
     resp = make_response(render_template(
         'express_partner/home.html',
