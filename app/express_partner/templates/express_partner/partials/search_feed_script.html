@@ -1,0 +1,276 @@
+{# رفتار فید آگهی‌ها (فیلتر، جستجو، شیت‌ها) — مشترک بین /home و /search #}
+<script>
+(function () {
+  var root = document.getElementById('vinorSearchPage');
+  if (!root) return;
+  var stateEl = document.getElementById('vinorSearchState');
+  var state = {};
+  try { state = JSON.parse(stateEl ? stateEl.textContent || '{}' : '{}'); } catch (_) { state = {}; }
+  state.districts = Array.isArray(state.districts) ? state.districts : [];
+
+  var meta = document.querySelector('meta[name="theme-color"]');
+  function forceTheme() {
+    if (meta && meta.getAttribute('content') !== '#000000') meta.setAttribute('content', '#000000');
+  }
+  forceTheme();
+  try {
+    if (meta) new MutationObserver(forceTheme).observe(meta, { attributes: true, attributeFilter: ['content'] });
+  } catch (_) {}
+
+  var fa = '۰۱۲۳۴۵۶۷۸۹';
+  var ar = '٠١٢٣٤٥٦٧٨٩';
+  function latin(s) {
+    return String(s || '')
+      .replace(/[۰-۹]/g, function (d) { return String(fa.indexOf(d)); })
+      .replace(/[٠-٩]/g, function (d) { return String(ar.indexOf(d)); });
+  }
+  function faDigits(s) {
+    return String(s).replace(/\d/g, function (d) { return fa.charAt(Number(d)); });
+  }
+  function faGrouped(digits) {
+    var s = String(digits || '').replace(/\D/g, '');
+    if (!s) return '';
+    return faDigits(s.replace(/\B(?=(\d{3})+(?!\d))/g, '،'));
+  }
+  function parseDigits(value) {
+    var raw = latin(value).replace(/\D/g, '');
+    if (!raw) return null;
+    var n = parseInt(raw, 10);
+    return isFinite(n) ? n : null;
+  }
+
+  function go() {
+    var params = new URLSearchParams();
+    var q = String(state.q || '').trim();
+    if (q) params.set('q', latin(q));
+    if (state.city) params.set('city', state.city);
+    if (state.districts && state.districts.length) params.set('district', state.districts.join(','));
+    if (state.price_min != null && state.price_min !== '') params.set('price_min', String(state.price_min));
+    if (state.price_max != null && state.price_max !== '') params.set('price_max', String(state.price_max));
+    if (state.area_min != null && state.area_min !== '') params.set('area_min', String(state.area_min));
+    if (state.area_max != null && state.area_max !== '') params.set('area_max', String(state.area_max));
+    if (state.sort && state.sort !== 'newest') params.set('sort', state.sort);
+    var qs = params.toString();
+    var url = window.location.pathname + (qs ? '?' + qs : '');
+    try { history.replaceState(null, '', url); } catch (_) {}
+    var skel = document.getElementById('vinorSearchSkeleton');
+    var list = document.getElementById('vinorSearchList');
+    if (skel) { skel.hidden = false; skel.setAttribute('aria-hidden', 'false'); }
+    if (list) list.hidden = true;
+    window.location.reload();
+  }
+
+  var input = document.getElementById('vinorSearchInput');
+  var clearBtn = document.getElementById('vinorSearchClear');
+  var qTimer = 0;
+  if (input) {
+    input.addEventListener('input', function () {
+      if (clearBtn) clearBtn.hidden = !input.value;
+      clearTimeout(qTimer);
+      qTimer = setTimeout(function () {
+        state.q = input.value.trim();
+        go();
+      }, 400);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      clearTimeout(qTimer);
+      state.q = input.value.trim();
+      go();
+    });
+  }
+  if (clearBtn && input) {
+    clearBtn.addEventListener('click', function () {
+      clearTimeout(qTimer);
+      input.value = '';
+      clearBtn.hidden = true;
+      state.q = '';
+      go();
+    });
+  }
+
+  root.querySelectorAll('[data-clear-filters]').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      state.q = '';
+      state.districts = [];
+      state.price_min = null;
+      state.price_max = null;
+      state.area_min = null;
+      state.area_max = null;
+      state.sort = 'newest';
+      go();
+    });
+  });
+
+  /* عکس خراب: مثل اپ، placeholder زیر عکس دیده شود */
+  Array.prototype.forEach.call(root.querySelectorAll('img[data-search-thumb]'), function (img) {
+    function drop() { if (img.parentNode) img.parentNode.removeChild(img); }
+    if (img.complete && img.naturalWidth === 0) drop();
+    else img.addEventListener('error', drop, { once: true });
+  });
+
+  var retry = document.getElementById('vinorSearchRetry');
+  if (retry) retry.addEventListener('click', function () { window.location.reload(); });
+
+  document.addEventListener('vinor:city-picker-applied', function (ev) {
+    var detail = ev.detail || {};
+    if (detail.hiddenId && detail.hiddenId !== 'searchCityHidden') return;
+    state.city = detail.value || '';
+    var label = document.getElementById('searchCityLabel');
+    if (label) label.textContent = state.city || 'همه استان‌ها';
+    go();
+  });
+
+  var sticky = document.getElementById('vinorSearchSticky');
+  function onScroll() {
+    if (!sticky) return;
+    var y = window.scrollY || document.documentElement.scrollTop || 0;
+    sticky.classList.toggle('is-scrolled', y > 8);
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  var sheets = {
+    price: document.getElementById('vinorSheetPrice'),
+    area: document.getElementById('vinorSheetArea'),
+    district: document.getElementById('vinorSheetDistrict'),
+    sort: document.getElementById('vinorSheetSort')
+  };
+  var openName = '';
+  function focusables(sheet) {
+    return Array.prototype.filter.call(
+      sheet.querySelectorAll('button, input, a, [tabindex]'),
+      function (el) { return !el.disabled && el.offsetParent !== null; }
+    );
+  }
+  function lock(on) {
+    var overlay = window.vinorExpressModalOverlay;
+    if (overlay && overlay.open && overlay.close) {
+      if (on) overlay.open(); else overlay.close();
+      return;
+    }
+    document.body.style.overflow = on ? 'hidden' : '';
+  }
+  function closeSheet() {
+    if (!openName || !sheets[openName]) return;
+    sheets[openName].hidden = true;
+    openName = '';
+    lock(false);
+  }
+  function openSheet(name) {
+    var sheet = sheets[name];
+    if (!sheet) return;
+    closeSheet();
+    sheet.hidden = false;
+    openName = name;
+    lock(true);
+    var nodes = focusables(sheet);
+    if (nodes[0]) { try { nodes[0].focus(); } catch (_) {} }
+  }
+  root.querySelectorAll('[data-open-sheet]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openSheet(btn.getAttribute('data-open-sheet')); });
+  });
+  root.querySelectorAll('[data-sheet-close]').forEach(function (el) {
+    el.addEventListener('click', closeSheet);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!openName) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return; }
+    if (e.key !== 'Tab') return;
+    var sheet = sheets[openName];
+    var nodes = focusables(sheet);
+    if (!nodes.length) return;
+    var first = nodes[0];
+    var last = nodes[nodes.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  function paintMoney(el, n) {
+    if (!el) return;
+    el.value = n == null || n === '' ? '' : faGrouped(String(n));
+  }
+  root.querySelectorAll('[data-price-min]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      paintMoney(document.getElementById('vinorPriceMin'), btn.getAttribute('data-price-min'));
+      paintMoney(document.getElementById('vinorPriceMax'), btn.getAttribute('data-price-max'));
+    });
+  });
+  function paintArea(el, n) {
+    if (!el) return;
+    el.value = n == null || n === '' ? '' : faDigits(String(n));
+  }
+  root.querySelectorAll('[data-area-min]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      paintArea(document.getElementById('vinorAreaMin'), btn.getAttribute('data-area-min'));
+      paintArea(document.getElementById('vinorAreaMax'), btn.getAttribute('data-area-max'));
+    });
+  });
+  ['vinorPriceMin', 'vinorPriceMax'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function () { paintMoney(el, parseDigits(el.value)); });
+  });
+  ['vinorAreaMin', 'vinorAreaMax'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function () {
+      var n = parseDigits(el.value);
+      el.value = n == null ? '' : faDigits(String(n));
+    });
+  });
+  var districtSearch = document.getElementById('vinorDistrictSearch');
+  if (districtSearch) {
+    districtSearch.addEventListener('input', function () {
+      var q = latin(districtSearch.value).replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').trim();
+      root.querySelectorAll('[data-district-row]').forEach(function (row) {
+        var name = latin(row.getAttribute('data-district-row') || '').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک');
+        row.hidden = !!(q && name.indexOf(q) === -1);
+      });
+    });
+  }
+
+  function readPair(minId, maxId) {
+    var a = parseDigits((document.getElementById(minId) || {}).value);
+    var b = parseDigits((document.getElementById(maxId) || {}).value);
+    if (a != null && b != null && a > b) { var t = a; a = b; b = t; }
+    return [a, b];
+  }
+  root.querySelectorAll('[data-sheet-apply]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var kind = btn.getAttribute('data-sheet-apply');
+      if (kind === 'price') {
+        var price = readPair('vinorPriceMin', 'vinorPriceMax');
+        state.price_min = price[0];
+        state.price_max = price[1];
+      } else if (kind === 'area') {
+        var area = readPair('vinorAreaMin', 'vinorAreaMax');
+        state.area_min = area[0];
+        state.area_max = area[1];
+      } else if (kind === 'district') {
+        var picked = [];
+        root.querySelectorAll('#vinorDistrictList input:checked').forEach(function (box) {
+          if (box.value) picked.push(box.value);
+        });
+        state.districts = picked;
+      } else if (kind === 'sort') {
+        var on = root.querySelector('input[name="vnSearchSort"]:checked');
+        state.sort = on ? on.value : 'newest';
+      }
+      go();
+    });
+  });
+  root.querySelectorAll('[data-sheet-clear]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var kind = btn.getAttribute('data-sheet-clear');
+      if (kind === 'price') { state.price_min = null; state.price_max = null; }
+      else if (kind === 'area') { state.area_min = null; state.area_max = null; }
+      else if (kind === 'district') { state.districts = []; }
+      else if (kind === 'sort') { state.sort = 'newest'; }
+      go();
+    });
+  });
+})();
+</script>

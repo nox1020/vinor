@@ -169,57 +169,29 @@ MARKETER_LABEL = "می‌خواهم بازاریاب وینور شوم"
 HOME = "/express/partner/home"
 
 
-def _hub_tiles(html: str) -> str:
-    start = html.find('class="vn-hub__tiles"')
-    assert start != -1
-    end = html.find('class="vn-hub__grid"', start)
-    assert end != -1
-    return html[start:end]
+def test_home_is_the_app_listing_feed_for_every_role(client, app):
+    """خانهٔ وب = خانهٔ اپ: فقط جستجو، فیلترها و فهرست آگهی‌ها. کاشی‌ها و ابزار حساب در «وینور من»."""
+    def assert_feed(html: str) -> None:
+        assert 'id="vinorSearchPage"' in html
+        assert 'placeholder="جستجو در همه آگهی‌ها"' in html
+        assert "همه استان‌ها" in html
+        for label in ("جدیدترین", "محله", "قیمت", "متراژ"):
+            assert label in html
+        assert 'class="vn-hub__tiles"' not in html
+        assert 'class="vn-hub__hero"' not in html
+        assert re.findall(r'class="vn-divar-tab__label">([^<]+)', html) == [
+            "خانه", "مشتریان", "افزودن", "AI چت", "وینور من",
+        ]
 
-
-def test_home_category_tiles_are_short_and_keep_their_links(client, app):
-    """کاشی‌های خانه: برچسب کوتاه، همان لینک، پیگیری فقط برای همکار تأییدشده."""
-    guest = client.get(HOME).get_data(as_text=True)
-    guest_tiles = _hub_tiles(guest)
-    assert re.findall(r'vn-hub__tile-label">([^<]+)', guest_tiles) == ["آموزش", "خبر"]
-    assert 'href="/express/partner/training"' in guest_tiles
-    assert 'href="/express/partner/news"' in guest_tiles
-    assert 'href="/express/partner/requests"' not in guest_tiles
-    assert "آموزش فروش" not in guest
-    assert "خبر وینور" not in guest
-    assert "پیگیری مشتری‌ها" not in guest
-    assert "سطوح همکاری" in guest
-    assert "overflow-x: auto" in guest
-    assert "flex-direction: row" in guest
-    assert "direction: rtl" in guest
-
+    assert_feed(client.get(HOME).get_data(as_text=True))
     _login(client)
     with app.app_context():
-        from app.utils.storage import save_express_partners, save_express_visit_requests
+        from app.utils.storage import save_express_partners
 
         save_express_partners([
             {"phone": PHONE, "name": "همکار", "status": "approved"},
         ])
-        save_express_visit_requests([{
-            "id": "home-tile-visit",
-            "partner_phone": PHONE,
-            "partner_name": "همکار",
-            "land_code": "H-1",
-            "status": "approved",
-            "visit_date": "2026-11-02",
-            "created_at": "2026-10-01T00:00:00Z",
-            "updated_at": "2026-10-01T00:00:00Z",
-        }])
-    approved = client.get(HOME).get_data(as_text=True)
-    tiles = _hub_tiles(approved)
-    assert re.findall(r'vn-hub__tile-label">([^<]+)', tiles) == ["آموزش", "خبر", "پیگیری"]
-    assert 'href="/express/partner/requests"' in tiles
-    assert "vn-hub__tile-badge" in tiles
-    assert "سطوح همکاری" not in _hub_tiles(approved)
-    data = client.get("/express/partner/home/data").get_json()
-    assert "آموزش فروش" not in str(data)
-    assert "خبر وینور" not in str(data)
-    assert "پیگیری مشتری‌ها" not in str(data)
+    assert_feed(client.get(HOME).get_data(as_text=True))
 
 
 def test_marketer_banner_moves_to_vinor_man(client, app):
@@ -253,8 +225,7 @@ def test_marketer_banner_moves_to_vinor_man(client, app):
         ])
     pending_home = client.get(HOME).get_data(as_text=True)
     assert MARKETER_LABEL not in pending_home
-    assert "وضعیت درخواست" in pending_home
-    assert 'href="/express/partner/thanks"' in pending_home
+    assert 'id="vinorSearchPage"' in pending_home
     pending_me = client.get(PROFILE).get_data(as_text=True)
     assert MARKETER_LABEL not in pending_me
     assert "وضعیت درخواست" in pending_me
@@ -268,7 +239,7 @@ def test_marketer_banner_moves_to_vinor_man(client, app):
         ])
     approved_home = client.get(HOME).get_data(as_text=True)
     assert MARKETER_LABEL not in approved_home
-    assert "مشتری دارم" in approved_home
+    assert 'id="vinorSearchPage"' in approved_home
     approved_me = client.get(PROFILE).get_data(as_text=True)
     assert MARKETER_LABEL not in approved_me
     assert "وضعیت درخواست" not in _chunk(approved_me)

@@ -992,9 +992,17 @@
     } catch (_) {}
   }
 
+  /* بدو ورود خانه = فید آگهی‌ها (مثل اپ): اسکرول را به انتهای چت نبر */
+  function homeFeedShowing() {
+    if (!homeInline || homeChatLayerOpen) return false;
+    var feedHost = document.getElementById('aiHomeEmpty');
+    return !!(feedHost && !feedHost.hasAttribute('hidden') && feedHost.querySelector('#vinorSearchPage'));
+  }
+
   function scrollChatToEnd(opts) {
     opts = opts || {};
     var force = !!opts.force;
+    if (homeFeedShowing()) return;
     /* ارسال/آخرین پیام: force بر قفل کارت آگهی اولویت دارد */
     if (!force) {
       var focus = landChatFocusWrap();
@@ -1072,6 +1080,7 @@
   /* بدو ورود / تعویض ترد: همیشه آخرین پیام — چند تلاش برای layout دیرگاه */
   function scrollChatToLatest(opts) {
     opts = opts || {};
+    if (homeFeedShowing()) return;
     if (!opts.forceLatest && hasLandChatFocus() && !landChatFocusWrap()) {
       return;
     }

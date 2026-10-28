@@ -51,25 +51,7 @@
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
-    {% if not home_ai_enabled|default(false) %}
-    {% include 'express_partner/partials/home_divar_ads_carousel.html' %}
-    <div class="vn-home-top" data-vn-home-top>
-      {% if me_phone and is_approved|default(false) and not home_ai_limited|default(false) %}
-      <div class="vn-home-feed">
-        <section class="vn-home-empty" aria-label="بازاریاب فروش" data-view="home-marketer">
-          <div class="vn-home-empty__body">
-            <p class="vn-home-empty__title">از چت شروع کن</p>
-            <p class="vn-home-empty__sub">مشتری داری مشخصاتش را بفرست — یا بگو چه فایلی برای بازاریابی می‌خواهی تا معرفی کنم</p>
-          </div>
-        </section>
-      </div>
-      {% endif %}
-    </div>
-    {% else %}
-    {# حالت AI: نوار آگهی دیوار بالای بدو ورود چت #}
-    {% include 'express_partner/partials/home_divar_ads_carousel.html' %}
-    {% endif %}
-
+    {# بالای خانه چیزی جز فید آگهی‌ها نیست — هم‌تراز با DashboardFragment اپ (فید داخل aiHomeEmpty است) #}
     <div id="vnHomeScroll" class="vn-home-scroll">
       {% include 'express_partner/partials/ai_chat_inline.html' %}
     </div>
@@ -110,6 +92,7 @@
 {% block scripts %}
 {{ super() }}
 <script src="{{ 'express-partner/express-home-pull-refresh.js'|static_version }}" defer></script>
+{% include 'express_partner/partials/search_feed_script.html' %}
 <script>
 (function () {
   /* یک‌بار در عمر سند: جمع/باز کارت سفر — پایدار بین رفرش و soft-nav */

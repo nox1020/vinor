@@ -242,4 +242,8 @@ def test_home_shows_published_cards_when_promotion_system_is_off(client, monkeyp
     html = home.get_data(as_text=True)
     # Swipe gesture handles refresh; do not restore a redundant toolbar button.
     assert 'data-vn-home-refresh' not in html
-    assert 'vn-home-divar__card' in html
+    # Home = the APK home: the same search header and listing rows as /search.
+    assert 'id="vinorSearchPage"' in html
+    for code in ("1", "3", "4"):
+        assert f'data-land-code="{code}"' in html
+    assert 'vn-home-divar__card' not in html

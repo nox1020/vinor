@@ -952,12 +952,13 @@
   {% endif %}
   {% set _open_land_chat = request.args.get('land') or request.args.get('divar') %}
   <div id="aiHomeEmpty"
-       class="ai-home-empty"
+       class="ai-home-empty ai-home-empty--feed"
        role="region"
        aria-label="شروع گفتگو"
        {% if _empty_user_msgs or _open_land_chat %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
     <h1 class="sr-only">{{ home_ai_empty_title|default('دنبال خرید ملکی یا همکاری با وینور؟') }}</h1>
-    {% include 'express_partner/partials/home_partner_hub.html' %}
+    {# بدو ورود خانه = همان خانهٔ اپ: جستجو + فیلتر + فهرست آگهی‌ها. ابزار حساب در «وینور من» است. #}
+    {% include 'express_partner/partials/search_feed.html' %}
   </div>
   {% set chat_mode = 'home-inline' %}
   {% set omit_composer = true %}

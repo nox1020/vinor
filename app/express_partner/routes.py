@@ -4518,6 +4518,7 @@ def home_page():
         next_auto_visit_by_plus=customer_modal_ctx.get('next_auto_visit_by_plus') or {},
         visit_slots_by_plus=customer_modal_ctx.get('visit_slots_by_plus') or {},
         **divar_ads_ctx,
+        **_search_feed_context(),
     ))
     if not me_phone:
         # مهمان هم چت محدود دارد — کش عمومی ممنوع
@@ -6106,17 +6107,15 @@ def _search_view_state(flt: Dict[str, Any], count: int) -> Dict[str, Any]:
     }
 
 
-@express_partner_bp.get('/search', endpoint='search')
-@require_partner_access(allow_pending=True, allow_guest=True)
-def search_page():
-    """جستجوی خرید ملک — فیلتر و مرتب‌سازی سمت سرور روی آگهی‌های خانه."""
-    me_phone = (session.get('user_phone') or '').strip()
-    profile = getattr(g, 'express_partner_profile', None)
-    is_approved = _is_partner_approved(profile)
+def _search_feed_context() -> Dict[str, Any]:
+    """فید آگهی‌ها با فیلترهای URL — خانهٔ وب و /search همان فهرست خانهٔ اپ را نشان می‌دهند."""
+    from .listing_card import card_fields
+
     search_error = False
     try:
         raw_ads, _ads_count = _home_ads_for_api()
     except Exception:
+        current_app.logger.exception('listing feed failed')
         raw_ads = []
         search_error = True
     if not isinstance(raw_ads, list):
@@ -6128,20 +6127,41 @@ def search_page():
             district_options.append(name)
     shown = [ad for ad in raw_ads if _search_ad_visible(ad, flt)]
     shown = _search_sort_ads(shown, str(flt.get('sort') or 'newest'))[:_SEARCH_CAP]
+    rows: List[Dict[str, Any]] = []
+    for ad in shown:
+        row = dict(ad)
+        try:
+            row.update(card_fields(ad))
+        except Exception:
+            row.setdefault('card_price', str(ad.get('price') or '').strip() or 'توافقی')
+        rows.append(row)
     try:
         cities = [str(c).strip() for c in (_active_cities_cached() or []) if str(c).strip()]
     except Exception:
         cities = []
+    return {
+        'search_ads': rows,
+        'search_error': search_error,
+        'search_query': _search_view_state(flt, len(rows)),
+        'search_cities': cities,
+        'search_districts': district_options,
+    }
+
+
+@express_partner_bp.get('/search', endpoint='search')
+@require_partner_access(allow_pending=True, allow_guest=True)
+def search_page():
+    """جستجوی خرید ملک — فیلتر و مرتب‌سازی سمت سرور روی آگهی‌های خانه."""
+    me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    is_approved = _is_partner_approved(profile)
+    feed_ctx = _search_feed_context()
     resp = make_response(render_template(
         'express_partner/search.html',
         me_phone=me_phone,
         is_approved=is_approved,
-        search_ads=shown,
-        search_error=search_error,
-        search_query=_search_view_state(flt, len(shown)),
-        search_cities=cities,
-        search_districts=district_options,
         hide_header=True,
+        **feed_ctx,
     ))
     _append_partner_tab_prefetch(resp)
     return resp
