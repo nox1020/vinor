@@ -5485,24 +5485,21 @@ def _home_ads_for_api() -> tuple:
         from .home_ads_config import (
             get_home_ads_settings,
             home_ads_show_divar,
-            home_ads_show_vinor,
             home_ads_system_enabled,
         )
 
-        if not home_ads_system_enabled():
-            return [], 0
-        cfg = get_home_ads_settings() or {}
-        divar_ads_ctx = home_divar_ads_context() or {}
-        vinor_lands: List[Dict[str, Any]] = []
-        if home_ads_show_vinor():
-            try:
-                vinor_lands = _home_public_carousel_lands(
-                    limit=int(cfg.get('vinor_limit') or 40)
-                )
-            except Exception:
-                vinor_lands = []
+        promotions_enabled = home_ads_system_enabled()
+        cfg = get_home_ads_settings() or {} if promotions_enabled else {}
+        divar_ads_ctx = home_divar_ads_context() or {} if promotions_enabled else {}
+        # Published properties are the base home catalog, not optional promos.
+        try:
+            vinor_lands = _home_public_carousel_lands(
+                limit=int(cfg.get('vinor_limit') or 40)
+            )
+        except Exception:
+            vinor_lands = []
         divar_list: List[Dict[str, Any]] = []
-        if home_ads_show_divar():
+        if promotions_enabled and home_ads_show_divar():
             raw = divar_ads_ctx.get('divar_pro_ads')
             divar_list = raw if isinstance(raw, list) else []
         ads = _merge_home_ads_carousel(divar_list, vinor_lands)
