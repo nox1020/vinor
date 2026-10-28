@@ -192,3 +192,29 @@ def test_public_api_limit_is_applied_after_visibility_filter(app):
 
     with app.test_request_context("/express/partner/api/public-lands"):
         assert [row["code"] for row in _public_lands_payload(limit=1)] == ["1"]
+
+
+def test_public_feed_accepts_numeric_size_and_unformatted_price(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.express_partner.routes.load_express_lands_cached",
+        lambda: [
+            {
+                "code": "41",
+                "title": "ملک تست",
+                "city": "تهران",
+                "is_express": True,
+                "public": True,
+                "size": 250,
+                "price": "توافقی",
+                "images": ["/uploads/a.jpg"],
+            }
+        ],
+    )
+    response = client.get("/express/partner/api/public-lands")
+    assert response.status_code == 200
+    rows = response.get_json()["public_lands"]
+    assert len(rows) == 1
+    assert rows[0]["code"] == "41"
+    assert rows[0]["size"] == "250"
+    assert rows[0]["price_total"] == 0
+    assert rows[0]["image_count"] == 1
