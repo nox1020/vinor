@@ -51,7 +51,13 @@
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
 
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
+    <div class="vn-home-refresh-toolbar" data-vn-home-refresh-toolbar>
+      <button type="button" class="vn-home-refresh-button" data-vn-home-refresh aria-label="تازه‌سازی آگهی‌های ملک">
+        ↻ تازه‌سازی آگهی‌ها
+      </button>
+    </div>
     {% if not home_ai_enabled|default(false) %}
+    {% include 'express_partner/partials/home_divar_ads_carousel.html' %}
     <div class="vn-home-top" data-vn-home-top>
       {% if me_phone and is_approved|default(false) and not home_ai_limited|default(false) %}
       <div class="vn-home-feed">
@@ -97,6 +103,33 @@
   </div>
 </div>
 
+<style id="vinor-home-refresh-styles">
+  #homeDashboardPage .vn-home-refresh-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: calc(2.55rem + env(safe-area-inset-top, 0px));
+    padding: 0.2rem 0.9rem 0;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+  }
+  #homeDashboardPage .vn-home-refresh-button {
+    min-height: 2.5rem;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid rgba(52, 211, 153, 0.38);
+    border-radius: 0.6rem;
+    color: #6ee7b7;
+    background: rgba(9, 23, 18, 0.85);
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  #homeDashboardPage .vn-home-refresh-button:disabled { opacity: 0.55; }
+  #homeDashboardPage.ai-home-is-empty #homeDivarAdsCarousel.vn-home-divar,
+  #homeDashboardPage:not(.home-dashboard-page--ai) #homeDivarAdsCarousel.vn-home-divar {
+    margin-top: 0.25rem !important;
+  }
+</style>
 {% include 'express_partner/partials/partner_tab_footer.html' %}
 {% if home_ai_enabled|default(false) and is_approved|default(false) %}
 {% include 'express_partner/partials/home_customer_modal.html' %}
@@ -109,6 +142,31 @@
 {% block scripts %}
 {{ super() }}
 <script src="{{ 'express-partner/express-home-pull-refresh.js'|static_version }}" defer></script>
+<script>
+(function () {
+  if (window.__vinorHomeRefreshClickBound) return;
+  window.__vinorHomeRefreshClickBound = true;
+  document.addEventListener('click', function (event) {
+    var button = event.target && event.target.closest && event.target.closest('[data-vn-home-refresh]');
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    try {
+      var update = typeof window.vinorExpressSoftRefresh === 'function'
+        ? window.vinorExpressSoftRefresh() : window.location.reload();
+      Promise.resolve(update).catch(function () {
+        window.location.reload();
+      }).finally(function () {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      });
+    } catch (_) {
+      window.location.reload();
+    }
+  });
+})();
+</script>
 <script>
 (function () {
   /* یک‌بار در عمر سند: جمع/باز کارت سفر — پایدار بین رفرش و soft-nav */
