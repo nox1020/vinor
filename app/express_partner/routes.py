@@ -5287,34 +5287,49 @@ def _public_lands_payload(limit=50):
     express_lands = _sort_by_created_at_desc(express_lands)
     lands_json = []
     for land in express_lands:
-        if not is_publicly_visible_listing(land):
+        if not isinstance(land, dict):
             continue
-        code = (land.get('code') or '').strip()
+        try:
+            if not is_publicly_visible_listing(land):
+                continue
+        except Exception:
+            continue
+        code = str(land.get('code') or '').strip()
         if not code:
             continue
         try:
+            price_total = int(land.get('price_total') or land.get('price') or 0)
+        except (TypeError, ValueError):
+            price_total = 0
+        try:
             detail_url = url_for('express_partner.land_detail', code=code, _external=True)
         except Exception:
-            detail_url = ''
+            detail_url = f'/express/partner/lands/{code}'
+        try:
+            image_url = _img_url(land)
+        except Exception:
+            image_url = None
+        images = land.get('images')
+        image_count = len(images) if isinstance(images, list) else int(bool(image_url))
         lands_json.append({
             'code': code,
-            'title': (land.get('title') or '—').strip(),
-            'price_total': int(land.get('price_total') or land.get('price') or 0),
+            'title': str(land.get('title') or '—').strip(),
+            'price_total': price_total,
             'commission_amount': 0,
             'commission_pct': None,
             'assignment_status': 'active',
             'is_expired': False,
-            'size': (land.get('size') or '').strip(),
-            'location': (land.get('location') or '').strip(),
-            'city': (land.get('city') or '').strip(),
-            'category': (land.get('category') or '').strip(),
-            'created_at': (land.get('created_at') or '').strip(),
-            'image_url': _img_url(land),
+            'size': str(land.get('size') or '').strip(),
+            'location': str(land.get('location') or '').strip(),
+            'city': str(land.get('city') or '').strip(),
+            'category': str(land.get('category') or '').strip(),
+            'created_at': str(land.get('created_at') or '').strip(),
+            'image_url': image_url,
             'detail_url': detail_url,
             'url': detail_url,
             'source': 'vinor',
             'published_for_sale': True,
-            'image_count': len(land.get('images') or []) if isinstance(land.get('images'), list) else int(bool(_img_url(land))),
+            'image_count': image_count,
         })
         if len(lands_json) >= max(1, int(limit or 50)):
             break
