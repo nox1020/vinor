@@ -5662,12 +5662,15 @@ def dashboard_data():
 
 @express_partner_bp.get('/api/public-lands')
 def api_public_lands():
-    """لیست فایل‌های عمومی اکسپرس برای اپ - بدون نیاز به لاگین یا کوکی."""
+    """لیست فایل‌های عمومی منتشرشدهٔ اکسپرس برای اپ، مستقل از ورود."""
     try:
         payload = _public_lands_payload(limit=50)
     except Exception:
-        payload = []
-    return jsonify({'success': True, 'public_lands': payload})
+        current_app.logger.exception('could not load public listing feed')
+        return jsonify({'success': False, 'public_lands': []}), 503
+    response = jsonify({'success': True, 'public_lands': payload})
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return response
 
 
 @express_partner_bp.post('/api/repost')
