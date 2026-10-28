@@ -238,5 +238,6 @@ def test_home_shows_published_cards_when_promotion_system_is_off(client, monkeyp
     home = client.get("/express/partner/home")
     assert home.status_code == 200
     html = home.get_data(as_text=True)
-    assert 'data-vn-home-refresh' in html
+    # Swipe gesture handles refresh; do not restore a redundant toolbar button.
+    assert 'data-vn-home-refresh' not in html
     assert 'vn-home-divar__card' in html
