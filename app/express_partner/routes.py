@@ -5272,8 +5272,9 @@ def _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, 
 
 
 def _public_lands_payload(limit=50):
-    """لیست فایل‌های عمومی اکسپرس برای نمایش به مهمان در اپ (بدون لاگین)."""
+    """فقط ملک‌های عمومی منتشرشده؛ فید اپ مستقل از تنظیمات تبلیغات خانه."""
     from ..utils.images import partner_card_image_url
+    from app.utils.public_listings import is_publicly_visible_listing
 
     def _img_url(land):
         url = partner_card_image_url(land if isinstance(land, dict) else {})
@@ -5285,7 +5286,9 @@ def _public_lands_payload(limit=50):
         express_lands = []
     express_lands = _sort_by_created_at_desc(express_lands)
     lands_json = []
-    for land in express_lands[:limit]:
+    for land in express_lands:
+        if not is_publicly_visible_listing(land):
+            continue
         code = (land.get('code') or '').strip()
         if not code:
             continue
@@ -5308,7 +5311,13 @@ def _public_lands_payload(limit=50):
             'created_at': (land.get('created_at') or '').strip(),
             'image_url': _img_url(land),
             'detail_url': detail_url,
+            'url': detail_url,
+            'source': 'vinor',
+            'published_for_sale': True,
+            'image_count': len(land.get('images') or []) if isinstance(land.get('images'), list) else int(bool(_img_url(land))),
         })
+        if len(lands_json) >= max(1, int(limit or 50)):
+            break
     return lands_json
 
 
