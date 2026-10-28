@@ -218,3 +218,25 @@ def test_public_feed_accepts_numeric_size_and_unformatted_price(client, monkeypa
     assert rows[0]["size"] == "250"
     assert rows[0]["price_total"] == 0
     assert rows[0]["image_count"] == 1
+
+
+def test_home_shows_published_cards_when_promotion_system_is_off(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.express_partner.home_ads_config.home_ads_system_enabled",
+        lambda: False,
+    )
+    data = client.get("/express/partner/home/data")
+    assert data.status_code == 200
+    ads = data.get_json()["divar_pro_ads"]
+    assert [ad["token"] for ad in ads if ad.get("source") == "vinor"] == ["1", "3", "4"]
+
+    search = client.get("/express/partner/search")
+    assert search.status_code == 200
+    for code in ("1", "3", "4"):
+        assert f'data-land-code="{code}"' in search.get_data(as_text=True)
+
+    home = client.get("/express/partner/home")
+    assert home.status_code == 200
+    html = home.get_data(as_text=True)
+    assert 'data-vn-home-refresh' in html
+    assert 'vn-home-divar__card' in html
