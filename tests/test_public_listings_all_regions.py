@@ -173,3 +173,22 @@ def test_home_data_and_search_return_listings_1_3_and_4(client):
     assert 'data-land-code="8"' not in html
     assert "زمین فروخته‌شده" not in html
     assert "زمین خصوصی" not in html
+
+
+def test_public_api_home_feed_filters_private_sold_and_works_without_ad_carousel(client):
+    resp = client.get("/express/partner/api/public-lands", follow_redirects=False)
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["success"] is True
+    ads = payload["public_lands"]
+    assert [item["code"] for item in ads] == ["1", "3", "4"]
+    assert all(item["published_for_sale"] is True for item in ads)
+    assert all(item["source"] == "vinor" and item["url"] for item in ads)
+    assert all("زمین خصوصی" != item["title"] for item in ads)
+
+
+def test_public_api_limit_is_applied_after_visibility_filter(app):
+    from app.express_partner.routes import _public_lands_payload
+
+    with app.test_request_context("/express/partner/api/public-lands"):
+        assert [row["code"] for row in _public_lands_payload(limit=1)] == ["1"]
