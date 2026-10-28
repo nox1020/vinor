@@ -227,8 +227,10 @@ def test_home_shows_published_cards_when_promotion_system_is_off(client, monkeyp
     )
     data = client.get("/express/partner/home/data")
     assert data.status_code == 200
-    ads = data.get_json()["divar_pro_ads"]
+    home_data = data.get_json()
+    ads = home_data["divar_pro_ads"]
     assert [ad["token"] for ad in ads if ad.get("source") == "vinor"] == ["1", "3", "4"]
+    assert [ad["code"] for ad in home_data["public_lands"]] == ["1", "3", "4"]
 
     search = client.get("/express/partner/search")
     assert search.status_code == 200
