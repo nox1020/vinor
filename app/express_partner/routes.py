@@ -4548,6 +4548,13 @@ def home_data():
         )
     except Exception:
         payload['ai_quick_prompts'] = []
+    # The Android Home feed must not depend on promotional carousel settings.
+    # Give Home a direct, public-safe catalog as well as the optional promoted ads.
+    try:
+        payload['public_lands'] = _public_lands_payload(limit=50)
+    except Exception:
+        current_app.logger.exception('could not build public Home listing feed')
+        payload['public_lands'] = []
     ads_out, ads_count = _home_ads_for_api()
     payload['divar_pro_ads'] = ads_out
     payload['divar_pro_ads_count'] = ads_count
