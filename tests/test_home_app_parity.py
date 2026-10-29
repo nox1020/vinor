@@ -31,3 +31,19 @@ def test_hidden_skeleton_is_not_forced_visible():
     css = FEED.read_text(encoding="utf-8")
     assert "#vinorSearchPage .vn-search-list[hidden] { display: none; }" in css
     assert "--vn-search-chrome: #141416;" in css
+
+
+def test_footer_has_follow_not_ai_chat():
+    from pathlib import Path
+
+    nav = Path("app/express_partner/templates/express_partner/partials/bottom_nav.html").read_text(encoding="utf-8")
+    assert 'data-divar-tab="follow"' in nav and "پیگیری" in nav
+    assert 'data-divar-tab="chat"' not in nav and "AI چت" not in nav
+
+
+def test_listing_detail_footer_has_call_not_chat():
+    from pathlib import Path
+
+    tpl = Path("app/express_partner/templates/express_partner/listing_detail_native.html").read_text(encoding="utf-8")
+    assert 'href="tel:{{ d.call_phone }}"' in tpl and ">تماس<" in tpl
+    assert ">گفتگو<" not in tpl

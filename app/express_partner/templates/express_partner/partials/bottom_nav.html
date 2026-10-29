@@ -211,13 +211,12 @@
       </span>
       <span class="vn-divar-tab__label">افزودن</span>
     </a>
-    <a class="vn-divar-tab" href="{{ url_for('express_partner.home') }}" data-divar-tab="chat" aria-label="AI چت">
+    <a class="vn-divar-tab" href="/express/partner/requests" data-divar-tab="follow" aria-label="پیگیری">
       <span class="vn-divar-tab__icon" aria-hidden="true">
-        <svg class="vn-divar-ico vn-divar-ico--off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M5.2 5.2h13.6A1.4 1.4 0 0 1 20.2 6.6v9.05a1.4 1.4 0 0 1-1.4 1.4H8.15L4.8 19.8V6.6A1.4 1.4 0 0 1 6.2 5.2z"/></svg>
-        <svg class="vn-divar-ico vn-divar-ico--on" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-        <span class="vn-divar-chat-badge" data-divar-chat-badge hidden></span>
+        <svg class="vn-divar-ico vn-divar-ico--off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M9 4V3h6v1"/></svg>
+        <svg class="vn-divar-ico vn-divar-ico--on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M9 4V3h6v1"/></svg>
       </span>
-      <span class="vn-divar-tab__label">AI چت</span>
+      <span class="vn-divar-tab__label">پیگیری</span>
     </a>
     <a class="vn-divar-tab{% if _tab_me %} is-active{% endif %}" href="{{ url_for('express_partner.profile') }}" data-divar-tab="me" aria-label="وینور من">
       <span class="vn-divar-tab__icon" aria-hidden="true">
@@ -1082,7 +1081,7 @@
     if (/\/listings\/new$/.test(p) || /\/my-propert/.test(p) || /[?&]register=1(?:&|$)/.test(q)) return 'post';
     if (/\/search\/?$/.test(p)) return 'ads';
     if (/\/customers/.test(p)) return 'customers';
-    if (homeChatOpen() && (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p))) return 'chat';
+    if (/\/requests\/?$/.test(p)) return 'follow';
     if (/\/home$/.test(p) || /\/express\/partner$/.test(p) || /\/dashboard$/.test(p)) return 'ads';
     if (
       /\/favorites/.test(p) ||
@@ -1091,7 +1090,6 @@
       /\/settings/.test(p) ||
       /\/training/.test(p) ||
       /\/invite/.test(p) ||
-      /\/requests/.test(p) ||
       /\/listings/.test(p) ||
       /\/apply/.test(p) ||
       /\/thanks/.test(p) ||
@@ -1162,18 +1160,6 @@
     if (!tab) return;
     var key = tab.getAttribute('data-divar-tab');
     var href = tab.getAttribute('href') || '';
-    if (key === 'chat') {
-      e.preventDefault();
-      e.stopPropagation();
-      if (openChat()) {
-        markTab('chat');
-        return;
-      }
-      try { sessionStorage.setItem('vinor_open_home_chat', '1'); } catch (_) {}
-      markTab('chat');
-      goTab(href);
-      return;
-    }
     if (key === 'ads') {
       e.preventDefault();
       e.stopPropagation();

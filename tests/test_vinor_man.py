@@ -180,7 +180,7 @@ def test_home_is_the_app_listing_feed_for_every_role(client, app):
         assert 'class="vn-hub__tiles"' not in html
         assert 'class="vn-hub__hero"' not in html
         assert re.findall(r'class="vn-divar-tab__label">([^<]+)', html) == [
-            "خانه", "مشتریان", "افزودن", "AI چت", "وینور من",
+            "خانه", "مشتریان", "افزودن", "پیگیری", "وینور من",
         ]
 
     assert_feed(client.get(HOME).get_data(as_text=True))

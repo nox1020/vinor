@@ -300,6 +300,14 @@
     font-size: 0.9rem;
     text-decoration: none;
   }
+  #vinorListingDetail .vn-ld__sticky { display: flex; gap: 0.5rem; }
+  #vinorListingDetail .vn-ld__sticky > * { flex: 1 1 0; min-width: 0; }
+  #vinorListingDetail .vn-ld__sticky a.vn-ld__call {
+    background: var(--vn-ld-accent);
+    border-color: var(--vn-ld-accent);
+    color: #04140e;
+    font-weight: 800;
+  }
   #vinorListingDetail.vn-ld--no-sticky {
     padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   }
@@ -502,6 +510,7 @@
 
   {% if d.can_request_visit %}
   <div class="vn-ld__sticky">
+    {% if d.call_phone %}<a class="vn-ld__call" href="tel:{{ d.call_phone }}" data-vinor-direct-action>تماس</a>{% endif %}
     <button type="button" id="listingVisitOpen">بازدید</button>
   </div>
   <div id="listingVisitSheet" class="vn-ld__sheet" hidden>
@@ -553,6 +562,7 @@
   }|tojson }}</script>
   {% elif (not d.logged_in) and d.source != 'divar' %}
   <div class="vn-ld__sticky">
+    {% if d.call_phone %}<a class="vn-ld__call" href="tel:{{ d.call_phone }}" data-vinor-direct-action>تماس</a>{% endif %}
     <a href="{{ url_for('express_partner.login', next=request.path) }}">بازدید</a>
   </div>
   {% elif d.show_divar and d.divar_url %}

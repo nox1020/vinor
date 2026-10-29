@@ -515,6 +515,16 @@ def _visit_booking_for_listing(code: str) -> Dict[str, Any]:
         return {}
 
 
+def listing_call_phone() -> str:
+    """شماره تماس آگهی — همان خطی که جزئیات چت برای تماس نشان می‌دهد."""
+    try:
+        from app.crm.config import VISIT_CALL_TARGET
+
+        return str(VISIT_CALL_TARGET or "09121471301").strip()
+    except Exception:
+        return "09121471301"
+
+
 def native_listing_detail_payload(
     code: str,
     *,
@@ -597,6 +607,7 @@ def native_listing_detail_payload(
         published = False
         sale_flag = True
     return {
+        "call_phone": listing_call_phone(),
         "ok": True,
         "source": source,
         "code": code_out,
