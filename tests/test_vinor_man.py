@@ -176,6 +176,14 @@ MARKETER_LABEL = "می‌خواهم بازاریاب وینور شوم"
 HOME = "/express/partner/home"
 
 
+def test_vinor_man_news_page_and_shortcut_are_removed(client):
+    """The retired news page has no URL or Vinor Man shortcut."""
+    assert client.get("/express/partner/news").status_code == 404
+    _login(client)
+    profile_html = client.get(PROFILE).get_data(as_text=True)
+    assert 'href="/express/partner/news"' not in profile_html
+
+
 def test_home_is_the_app_listing_feed_for_every_role(client, app):
     """خانهٔ وب = خانهٔ اپ: فقط جستجو، فیلترها و فهرست آگهی‌ها. کاشی‌ها و ابزار حساب در «وینور من»."""
     def assert_feed(html: str) -> None:
