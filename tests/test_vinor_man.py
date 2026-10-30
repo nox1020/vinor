@@ -148,6 +148,11 @@ def test_vinor_man_menu_locks(client, monkeypatch):
     page = _chunk(body)
     assert "#2563eb" not in page.lower()
     assert "#4ade80" not in page.lower()
+    # A section heading must not look like a second copy of an action.
+    row_labels = re.findall(r'class="vn-me-row__title[^"]*">([^<]+)', page)
+    group_labels = re.findall(r'class="vn-me-label">([^<]+)', page)
+    assert len(row_labels) == len(set(row_labels))
+    assert set(row_labels).isdisjoint(group_labels)
     for block in re.findall(r"<style\b[^>]*>(.*?)</style>", body, flags=re.I | re.S):
         if ".vn-divar-tab" not in block:
             continue
@@ -159,6 +164,8 @@ def test_vinor_man_menu_locks(client, monkeypatch):
     off = client.get(PROFILE)
     off_body = off.get_data(as_text=True)
     assert off.status_code == 200
+    assert "درخواست همکاری" in off_body
+    assert not re.search(r'class="vn-me-label">آگهی‌های من<', off_body)
     assert "همکاری با وینور" in off_body
     assert 'href="/express/partner/apply"' in off_body
     assert 'href="/express/partner/consultant"' not in off_body
