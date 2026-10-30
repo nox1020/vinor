@@ -16,7 +16,7 @@
 {% set _my_ads = url_for('express_partner.my_property') %}
 {% set _favs = url_for('express_partner.favorites') %}
 {% set _collab = url_for('express_partner.consultant_gate') if _consultant_on else url_for('express_partner.apply') %}
-{% set _collab_label = 'می‌خواهم بازاریاب وینور شوم' if _consultant_on else 'همکاری با وینور' %}
+{% set _collab_label = 'می‌خواهم بازاریاب وینور شوم' if _consultant_on else 'درخواست همکاری' %}
 {% set _collab_href = _collab if _logged else url_for('express_partner.home', menu=1, login_next=_collab) %}
 {% set _lawyer_dest = url_for('express_partner.home', ai=1, thread='__lawyer__') %}
 
@@ -53,7 +53,7 @@
     </section>
     {% endif %}
 
-    <h2 class="vn-me-label">آگهی‌های من</h2>
+    <h2 class="vn-me-label">ملک و علاقه‌مندی‌ها</h2>
     {{ profile_menu_row(_my_ads if _logged else url_for('express_partner.login') ~ '?next=' ~ (_my_ads|quote_next), 'fa-house', 'آگهی‌های من') }}
     {{ profile_menu_row(_favs if _logged else url_for('express_partner.login') ~ '?next=' ~ (_favs|quote_next), 'fa-bookmark', 'نشان‌شده‌ها') }}
     {% if _logged %}
