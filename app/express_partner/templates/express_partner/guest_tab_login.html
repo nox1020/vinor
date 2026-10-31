@@ -22,6 +22,34 @@
   if (!frame || !shell) return;
   var destination = shell.getAttribute('data-login-target') || '';
   // Move the outer page to the requested tab once the canonical form authenticates.
+  // ناوبری نرم داخل iframe رویداد load ندارد؛ مثل شیت ورود، مسیر iframe پایش می‌شود.
+  var tabDone = false;
+  setInterval(function () {
+    if (tabDone) return;
+    try {
+      var loc = frame.contentWindow.location;
+      if (loc.protocol === 'about:' || /^\/express\/partner\/(login|verify)/.test(loc.pathname)) return;
+    } catch (_) { return; }
+    tabDone = true;
+    fetch('/express/partner/api/auth-state', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.logged_in) window.location.replace(destination || window.location.href);
+        else { tabDone = false; frame.src = frame.getAttribute('src'); }
+      })
+      .catch(function () { tabDone = false; });
+  }, 400);
+  // login-sheet.js داخل iframe به‌جای ناوبری خبر می‌دهد؛ اگر وارد شده بود همین تب تازه می‌شود.
+  window.addEventListener('message', function (e) {
+    if (e.origin !== window.location.origin || !e.data || e.data.type !== 'vinor-login-leave') return;
+    fetch('/express/partner/api/auth-state', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.logged_in) window.location.replace(destination || window.location.href);
+        else frame.src = frame.getAttribute('src');
+      })
+      .catch(function () {});
+  });
   frame.addEventListener('load', function () {
     try {
       var actual = new URL(frame.contentWindow.location.href);

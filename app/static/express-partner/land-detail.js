@@ -56,6 +56,7 @@
   function redirectExpressGuestToLogin() {
     var next = window.location.pathname + window.location.search;
     var url = '/express/partner/login?next=' + encodeURIComponent(next);
+    if (window.vinorOpenLoginSheet && window.vinorOpenLoginSheet(url)) return;
     if (window.vinorExpressNavigate) {
       window.vinorExpressNavigate(url, { forward: true });
       return;

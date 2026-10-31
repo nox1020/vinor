@@ -577,7 +577,8 @@
       }
     } catch (_) {}
     try {
-      window.location.assign(loginUrlForPartnerDest(dest));
+      if (window.vinorGoLogin) window.vinorGoLogin(loginUrlForPartnerDest(dest));
+      else window.location.assign(loginUrlForPartnerDest(dest));
     } catch (_) {}
     return true;
   }
@@ -1629,7 +1630,8 @@
           }
           var blockedPath = normPath(parseUrl(href).pathname);
           if (!opts.postLogin && !isLoggedInUser() && requiresLoginPath(blockedPath)) {
-            window.location.assign(loginUrlForPartnerDest(href));
+            if (window.vinorGoLogin) window.vinorGoLogin(loginUrlForPartnerDest(href));
+            else window.location.assign(loginUrlForPartnerDest(href));
             return null;
           }
           throw new Error('nav');

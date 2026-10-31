@@ -10440,6 +10440,14 @@ def api_logout():
     return resp
 
 
+@express_partner_bp.get('/api/auth-state')
+def api_auth_state():
+    """فقط «واردشده یا نه» برای باتم‌شیت ورود درجا؛ هیچ داده‌ای از کاربر برنمی‌گرداند."""
+    r = jsonify({'logged_in': bool((session.get('user_phone') or '').strip())})
+    r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    return r
+
+
 @express_partner_bp.post('/api/login-request')
 def api_login_request():
     """درخواست ارسال کد OTP برای اپ اندروید (ورود نیتیو). ورودی JSON: {"phone": "09..."}."""
