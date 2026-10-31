@@ -731,8 +731,7 @@
       }
     } catch (_) {}
     try {
-      if (window.vinorGoLogin) window.vinorGoLogin('/express/partner/login');
-      else window.location.assign('/express/partner/login');
+      window.location.assign('/express/partner/login');
     } catch (_) {}
     return false;
   }

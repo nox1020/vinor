@@ -1004,10 +1004,7 @@
       close: function () {},
       toggle: function () { window.location.href = profileUrl; },
       isOpen: function () { return false; },
-      openLogin: function (dest) {
-        var u = loginUrl + (dest ? '?next=' + encodeURIComponent(dest) : '');
-        if (window.vinorGoLogin) window.vinorGoLogin(u); else window.location.href = u;
-      },
+      openLogin: function () { window.location.href = loginUrl; },
       destroy: function () {}
     };
   }

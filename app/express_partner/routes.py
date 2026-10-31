@@ -6244,12 +6244,8 @@ def customers_page():
     """Phase 1 CRM — مشتریان من (فلگ VINOR_CRM_* پیش‌فرض ON)."""
     me_phone = (session.get('user_phone') or '').strip()
     if not me_phone:
-        return render_template(
-            'express_partner/guest_tab_login.html',
-            tab_title='مشتریان',
-            tab_login_next=url_for('express_partner.customers'),
-            hide_header=True,
-        )
+        # ورود یک صفحهٔ داخلی واحد است؛ بعد از ورود به همین تب برمی‌گردد.
+        return redirect(url_for('express_partner.login', next=url_for('express_partner.customers')))
     _crm_ui_or_404()
     from app.crm.config import VISIT_CALL_TARGET
     from .customers import partner_customers_view
@@ -6676,12 +6672,8 @@ def requests_page():
     """پیگیری فروش — درخواست، بازدید و معامله در یک صفحه."""
     me_phone = (session.get('user_phone') or '').strip()
     if not me_phone:
-        return render_template(
-            'express_partner/guest_tab_login.html',
-            tab_title='پیگیری',
-            tab_login_next=url_for('express_partner.requests'),
-            hide_header=True,
-        )
+        # ورود یک صفحهٔ داخلی واحد است؛ بعد از ورود به همین تب برمی‌گردد.
+        return redirect(url_for('express_partner.login', next=url_for('express_partner.requests')))
     profile = getattr(g, 'express_partner_profile', None)
     from .partner_roles import partner_coop_level
     from .visit_requests import (
@@ -10438,14 +10430,6 @@ def api_logout():
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     resp.headers['Pragma'] = 'no-cache'
     return resp
-
-
-@express_partner_bp.get('/api/auth-state')
-def api_auth_state():
-    """فقط «واردشده یا نه» برای باتم‌شیت ورود درجا؛ هیچ داده‌ای از کاربر برنمی‌گرداند."""
-    r = jsonify({'logged_in': bool((session.get('user_phone') or '').strip())})
-    r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
-    return r
 
 
 @express_partner_bp.post('/api/login-request')

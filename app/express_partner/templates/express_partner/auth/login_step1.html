@@ -15,9 +15,9 @@
   <header class="vinor-auth-topbar">
     <a href="{{ login_close_href }}"
        class="{{ auth_header_btn() }} vinor-auth-topbar-action"
-       data-vinor-express-nav="back"
-       aria-label="بستن">
-      <i class="fas fa-xmark" aria-hidden="true"></i>
+       data-vinor-express-nav="back" id="loginStep1Back"
+       aria-label="برگشت">
+      <i class="fas fa-arrow-right" aria-hidden="true"></i>
     </a>
     <h1 class="vinor-auth-topbar-title">تأیید شماره موبایل</h1>
   </header>
@@ -93,6 +93,18 @@
   var sigOpts = sig ? { signal: sig } : false;
   var passiveSig = sig ? { passive: true, signal: sig } : { passive: true };
   var LOGIN_CLOSE_URL = '{{ login_close_href }}';
+  // مثل صفحه‌های داخلی اپ: «برگشت» به همان صفحه‌ای که کاربر از آن آمد.
+  (function () {
+    var back = document.getElementById('loginStep1Back');
+    if (!back) return;
+    var prev = window.__vinorExpressLastHref || document.referrer || '';
+    try {
+      var u = new URL(prev, window.location.origin);
+      if (u.origin === window.location.origin && !/^\/express\/partner\/(login|verify)/.test(u.pathname)) {
+        back.setAttribute('href', u.pathname + u.search + u.hash);
+      }
+    } catch (_) {}
+  })();
 
   var form = document.getElementById('loginStep1Form');
   var btn = document.getElementById('loginSubmitBtn');

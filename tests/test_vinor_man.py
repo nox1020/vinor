@@ -268,18 +268,11 @@ def test_marketer_banner_moves_to_vinor_man(client, app):
         ("/express/partner/requests", "پیگیری"),
     ],
 )
-def test_guest_private_tabs_render_inline_login_without_redirect(client, path, title):
+def test_guest_private_tabs_open_the_single_login_page(client, path, title):
     response = client.get(path, follow_redirects=False)
-    assert response.status_code == 200
-    assert "no-store" in (response.headers.get("Cache-Control") or "")
-    html = response.get_data(as_text=True)
-    assert 'id="vinorGuestTabLogin"' in html
-    # The tab embeds the canonical login page (same form, OTP and next handling).
-    assert f'data-login-target="{path}"' in html
-    assert title in html
-    assert 'id="vinorSharedLogin"' in html
-    assert f"/express/partner/login?next={path}" in html or "/express/partner/login?next=" + path.replace("/", "%2F") in html
-    assert 'id="bottomNavMenu"' in html
+    assert response.status_code in (302, 303)
+    loc = response.headers["Location"]
+    assert "/express/partner/login" in loc and ("next=" + path in loc or "next=" + path.replace("/", "%2F") in loc)
 
 
 @pytest.mark.parametrize("error, created_at, phone, expected_success", [
@@ -316,9 +309,6 @@ def test_partner_otp_cooldown_reuses_only_matching_live_challenge(
 def test_web_inline_otp_has_safe_retry_and_autofill_controls(client):
     from pathlib import Path
 
-    response = client.get("/express/partner/customers")
-    assert response.status_code == 200
-    assert 'allow="otp-credentials"' in response.get_data(as_text=True)
     otp = Path("app/express_partner/templates/express_partner/auth/login_step2.html").read_text(encoding="utf-8")
     assert 'id="resendBtn"' in otp
     assert "vinorFillOtpFromApp" in otp
