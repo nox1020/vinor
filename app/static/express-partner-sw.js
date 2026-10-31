@@ -379,6 +379,10 @@ async function cachePartnerNavigation(request, response) {
   if (!response || !response.ok) return;
   const url = new URL(request.url);
   if (isAuthPartnerPath(url.pathname)) return;
+  try {
+    // مهمانِ صفحهٔ محافظت‌شده به /login هدایت می‌شود؛ آن HTML نباید زیر آدرس مقصد کش شود.
+    if (response.redirected && isAuthPartnerPath(new URL(response.url).pathname)) return;
+  } catch (_) {}
   if (!isExpressPartnerRoute(url)) return;
   const ct = (response.headers.get('content-type') || '').toLowerCase();
   if (!ct.includes('text/html')) return;

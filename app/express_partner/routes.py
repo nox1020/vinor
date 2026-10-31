@@ -963,7 +963,15 @@ def _resolve_login_next_url(raw: str) -> str | None:
         return None
     if not any(ch.isspace() for ch in raw) and raw.lower() in _APPLY_LOGIN_NEXT_ALIASES:
         return url_for('express_partner.apply')
-    return safe_internal_path_or_home(raw)
+    resolved = safe_internal_path_or_home(raw)
+    # مقصد بعد از ورود هرگز خودِ صفحهٔ ورود/کد نیست (حلقهٔ برگشت به لاگین).
+    path_only = (resolved or '').split('?', 1)[0].split('#', 1)[0].rstrip('/')
+    if path_only in (
+        '/express/partner/login', '/express/partner/login/otp',
+        '/express/partner/verify', '/express/partner/logout',
+    ):
+        return None
+    return resolved
 
 
 def _login_next_preserve():

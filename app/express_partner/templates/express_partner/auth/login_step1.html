@@ -193,11 +193,12 @@
     if (window.vinorExpressInvalidatePrefetch) {
       try { window.vinorExpressInvalidatePrefetch(url); } catch (_) {}
     }
+    // مرحلهٔ کد جای مرحلهٔ شماره را در تاریخچه می‌گیرد؛ بعد از ورود «برگشت» به صفحهٔ ورود نمی‌رسد.
     if (window.vinorExpressNavigate) {
-      window.vinorExpressNavigate(url, { forward: 1 });
+      window.vinorExpressNavigate(url, { forward: 1, replace: true });
       return;
     }
-    window.location.assign(url);
+    window.location.replace(url);
   }
 
   form.addEventListener('submit', function (e) {

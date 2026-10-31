@@ -199,14 +199,30 @@
     }
   }
 
+  // بعد از ورود: بارگذاری کامل با replace (نه ناوبری نرم/push). وضعیت مهمانِ JS صفحه
+  // (meta احراز، فوتر، کش prefetch) دور ریخته می‌شود و صفحهٔ ورود در تاریخچه نمی‌ماند.
+  function safeAfterLoginDest(dest) {
+    try {
+      var u = new URL(dest || '/express/partner/home', window.location.origin);
+      if (u.origin !== window.location.origin) return '/express/partner/home';
+      if (/^\/express\/partner\/(login|verify|otp)(\/|$)/.test(u.pathname)) return '/express/partner/home';
+      return u.pathname + u.search + u.hash;
+    } catch (_) {
+      return '/express/partner/home';
+    }
+  }
+
   function goAfterLogin(dest) {
     if (!dest || (sig && sig.aborted)) return;
-    if (window.vinorPostLoginNavigate) {
-      window.vinorPostLoginNavigate(dest);
-      return;
-    }
-    if (window.vinorExpressClearAuthCache) window.vinorExpressClearAuthCache();
-    window.location.replace(dest);
+    var target = safeAfterLoginDest(dest);
+    var go = function () { window.location.replace(target); };
+    try { if (window.vinorExpressClearAuthCache) window.vinorExpressClearAuthCache(); } catch (_) {}
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_PARTNER_RUNTIME' });
+      }
+    } catch (_) {}
+    go();
   }
 
   function submitOtpAjax() {
