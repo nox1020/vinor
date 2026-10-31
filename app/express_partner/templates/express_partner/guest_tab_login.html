@@ -50,6 +50,9 @@
         <button type="submit" class="w-full rounded-xl bg-emerald-600 p-3 font-bold text-white disabled:opacity-50">
           تأیید و ورود
         </button>
+        <button type="button" id="vinorTabResend" class="w-full p-2 text-sm text-emerald-400 disabled:text-zinc-500" disabled>
+          ارسال مجدد کد
+        </button>
         <button type="button" id="vinorTabChangePhone" class="w-full p-2 text-sm text-zinc-400">
           تغییر شماره موبایل
         </button>
@@ -72,6 +75,8 @@
   var error = document.getElementById('vinorTabLoginError');
   var phoneInput = document.getElementById('vinorTabPhone');
   var otpInput = document.getElementById('vinorTabOtp');
+  var resendButton = document.getElementById('vinorTabResend');
+  var cooldownUntil = 0;
   var target = {{ tab_login_next|tojson }};
   var fa = '۰۱۲۳۴۵۶۷۸۹', ar = '٠١٢٣٤٥٦٧٨٩';
   function digits(text) {
@@ -83,12 +88,14 @@
     error.textContent = msg || '';
     error.classList.toggle('hidden', !msg);
   }
-  async function post(form) {
+  async function post(form, action) {
+    if (form.dataset.busy === '1') return null;
+    form.dataset.busy = '1';
     var btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     report('');
     try {
-      var resp = await fetch(form.action, {
+      var resp = await fetch(action || form.action, {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         body: new FormData(form), redirect: 'follow'
@@ -99,7 +106,21 @@
     } catch (e) {
       report(e && e.message ? e.message : 'خطا در ارتباط. دوباره تلاش کنید.');
       return null;
-    } finally { btn.disabled = false; }
+    } finally {
+      btn.disabled = false;
+      form.dataset.busy = '0';
+    }
+  }
+  function updateResend() {
+    if (!root.isConnected) return;
+    var seconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+    resendButton.disabled = seconds > 0 || otpForm.dataset.busy === '1';
+    resendButton.textContent = seconds > 0 ? 'ارسال مجدد تا ' + seconds + ' ثانیه' : 'ارسال مجدد کد';
+    if (seconds > 0) setTimeout(updateResend, 1000);
+  }
+  function startResendCooldown() {
+    cooldownUntil = Date.now() + 60000;
+    updateResend();
   }
   phoneForm.addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -115,13 +136,42 @@
     phoneForm.classList.add('hidden');
     otpForm.classList.remove('hidden');
     otpInput.focus();
+    startResendCooldown();
   });
   otpForm.addEventListener('submit', async function(e) {
     e.preventDefault();
     otpInput.value = digits(otpInput.value);
-    if (otpInput.value.length < 5) { report('کد تأیید را کامل وارد کنید.'); return; }
+    if (otpInput.value.length !== 5) { report('کد تأیید پنج‌رقمی را کامل وارد کنید.'); return; }
     var ok = await post(otpForm);
     if (ok) window.location.assign(target);
+  });
+  resendButton.addEventListener('click', async function() {
+    if (Date.now() < cooldownUntil || otpForm.dataset.busy === '1') return;
+    var response = await post(otpForm, {{ url_for('express_partner.otp_resend')|tojson }});
+    if (response && root.isConnected) {
+      otpInput.value = '';
+      startResendCooldown();
+      document.getElementById('vinorTabOtpHint').textContent = 'کد جدید ارسال شد.';
+    } else {
+      updateResend();
+    }
+  });
+  // Works with browser one-time-code autofill and APK WebView's existing bridge.
+  window.vinorFillOtpFromApp = function(received) {
+    if (!root.isConnected || otpForm.classList.contains('hidden')) return false;
+    var value = digits(received).slice(0, 5);
+    if (value.length !== 5) return false;
+    otpInput.value = value;
+    otpForm.requestSubmit();
+    return true;
+  };
+  otpInput.addEventListener('input', function() {
+    if (otpForm.classList.contains('hidden')) return;
+    var value = digits(otpInput.value).slice(0, 5);
+    if (value.length === 5 && otpForm.dataset.busy !== '1') {
+      otpInput.value = value;
+      otpForm.requestSubmit();
+    }
   });
   document.getElementById('vinorTabChangePhone').addEventListener('click', function() {
     otpForm.classList.add('hidden');
