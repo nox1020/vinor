@@ -8326,7 +8326,15 @@ def login():
 
         otp_url = _login_otp_redirect_url()
         if wants_json:
-            r = jsonify({'ok': True, 'redirect': otp_url})
+            r = jsonify({
+                'ok': True,
+                'redirect': otp_url,
+                'otp_pending': already_sent,
+                'message': (
+                    'کد قبلی هنوز معتبر است؛ همان کد را وارد کنید.'
+                    if already_sent else 'کد تأیید ارسال شد.'
+                ),
+            })
             r.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
             return r
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

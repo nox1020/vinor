@@ -132,7 +132,7 @@
     var ok = await post(phoneForm);
     if (!ok || !root.isConnected) return;
     document.getElementById('vinorTabOtpPhone').value = phoneInput.value;
-    document.getElementById('vinorTabOtpHint').textContent = 'کد تأیید به ' + phoneInput.value + ' ارسال شد.';
+    document.getElementById('vinorTabOtpHint').textContent = ok.message || ('کد تأیید به ' + phoneInput.value + ' ارسال شد.');
     phoneForm.classList.add('hidden');
     otpForm.classList.remove('hidden');
     otpInput.focus();
