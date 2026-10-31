@@ -6197,11 +6197,18 @@ def _crm_ui_or_404():
 
 
 @express_partner_bp.get('/customers', endpoint='customers')
-@require_partner_access()
+@require_partner_access(allow_guest=True)
 def customers_page():
     """Phase 1 CRM — مشتریان من (فلگ VINOR_CRM_* پیش‌فرض ON)."""
-    _crm_ui_or_404()
     me_phone = (session.get('user_phone') or '').strip()
+    if not me_phone:
+        return render_template(
+            'express_partner/guest_tab_login.html',
+            tab_title='مشتریان',
+            tab_login_next=url_for('express_partner.customers'),
+            hide_header=True,
+        )
+    _crm_ui_or_404()
     from app.crm.config import VISIT_CALL_TARGET
     from .customers import partner_customers_view
 
@@ -6622,10 +6629,17 @@ def _sales_pipeline_url(tab: str = 'requests', **extra):
 
 
 @express_partner_bp.get('/requests', endpoint='requests')
-@require_partner_access(allow_pending=True)
+@require_partner_access(allow_pending=True, allow_guest=True)
 def requests_page():
     """پیگیری فروش — درخواست، بازدید و معامله در یک صفحه."""
     me_phone = (session.get('user_phone') or '').strip()
+    if not me_phone:
+        return render_template(
+            'express_partner/guest_tab_login.html',
+            tab_title='پیگیری',
+            tab_login_next=url_for('express_partner.requests'),
+            hide_header=True,
+        )
     profile = getattr(g, 'express_partner_profile', None)
     from .partner_roles import partner_coop_level
     from .visit_requests import (
