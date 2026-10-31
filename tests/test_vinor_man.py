@@ -274,13 +274,12 @@ def test_guest_private_tabs_render_inline_login_without_redirect(client, path, t
     assert "no-store" in (response.headers.get("Cache-Control") or "")
     html = response.get_data(as_text=True)
     assert 'id="vinorGuestTabLogin"' in html
-    assert f'data-tab-login="{path}"' in html
+    # The tab embeds the canonical login page (same form, OTP and next handling).
+    assert f'data-login-target="{path}"' in html
     assert title in html
-    assert 'id="vinorTabPhoneForm"' in html
-    assert 'id="vinorTabOtpForm"' in html
-    assert f'value="{path}"' in html
+    assert 'id="vinorSharedLogin"' in html
+    assert f"/express/partner/login?next={path}" in html or "/express/partner/login?next=" + path.replace("/", "%2F") in html
     assert 'id="bottomNavMenu"' in html
-    assert 'action="/express/partner/verify"' in html
 
 
 @pytest.mark.parametrize("error, created_at, phone, expected_success", [
@@ -315,10 +314,12 @@ def test_partner_otp_cooldown_reuses_only_matching_live_challenge(
 
 
 def test_web_inline_otp_has_safe_retry_and_autofill_controls(client):
+    from pathlib import Path
+
     response = client.get("/express/partner/customers")
-    html = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'id="vinorTabResend"' in html
-    assert "vinorFillOtpFromApp" in html
-    assert "otpForm.dataset.busy" in html
-    assert 'autocomplete="one-time-code"' in html
+    assert 'allow="otp-credentials"' in response.get_data(as_text=True)
+    otp = Path("app/express_partner/templates/express_partner/auth/login_step2.html").read_text(encoding="utf-8")
+    assert 'id="resendBtn"' in otp
+    assert "vinorFillOtpFromApp" in otp
+    assert 'autocomplete="one-time-code"' in otp

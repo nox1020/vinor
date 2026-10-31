@@ -84,7 +84,7 @@
           </button>
           <p id="timerLine" class="vinor-auth-timer">
             <i class="fas fa-circle-info" aria-hidden="true"></i>
-            <span>لطفاً برای دریافت کد کمی صبر کنید</span>
+            <span>{% if otp_expired %}کد قبلی منقضی شده؛ «درخواست دوباره» را بزنید.{% else %}کد را دریافت نکردید؟ «درخواست دوباره» را بزنید.{% endif %}</span>
           </p>
         </div>
         <p id="otpResendStatus" class="vinor-auth-hint vinor-auth-hint--ok" role="status"></p>
@@ -262,12 +262,18 @@
       });
   }
 
+  var RESEND_READY_TEXT = 'کد را دریافت نکردید؟ «درخواست دوباره» را بزنید.';
   function startResendCooldown(seconds) {
     if (resendTimerId) clearInterval(resendTimerId);
     var c = seconds;
     if (resendBtn) resendBtn.disabled = true;
     if (timerLine) {
       timerLine.innerHTML = timerIcon + '<span>ارسال مجدد تا ' + toFaNum(c) + ' ثانیه دیگر</span>';
+    }
+    if (!(c > 0)) {
+      if (timerLine) timerLine.innerHTML = timerIcon + '<span>' + RESEND_READY_TEXT + '</span>';
+      if (resendBtn) resendBtn.disabled = false;
+      return;
     }
     resendTimerId = setInterval(function () {
       c--;
@@ -278,7 +284,7 @@
         clearInterval(resendTimerId);
         resendTimerId = null;
         if (timerLine) {
-          timerLine.innerHTML = timerIcon + '<span>لطفاً برای دریافت کد کمی صبر کنید</span>';
+          timerLine.innerHTML = timerIcon + '<span>' + RESEND_READY_TEXT + '</span>';
         }
         if (resendBtn) resendBtn.disabled = false;
       }
@@ -376,7 +382,7 @@
     } catch (_) {}
   })();
 
-  startResendCooldown(60);
+  startResendCooldown({{ resend_wait|default(60)|int }});
 
   function readCsrfToken() {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
@@ -419,13 +425,18 @@
           syncSubmitBtn();
           try { otpInput.focus(); } catch (_) {}
           if (window.vinorApkRestartOtpRetriever) window.vinorApkRestartOtpRetriever();
-          startResendCooldown(60);
+          startResendCooldown((data && data.retry_after > 0) ? data.retry_after : 60);
         } else {
           var errMsg = (data && data.error) ? data.error : (resp.ok ? 'خطا در ارسال مجدد' : 'خطا در ارتباط با سرور');
-          if (timerLine) {
-            timerLine.innerHTML = timerIcon + '<span>' + errMsg + '</span>';
+          if (data && data.retry_after > 0) {
+            startResendCooldown(data.retry_after);
+            if (resendStatus) { resendStatus.textContent = errMsg; resendStatus.classList.add('is-visible'); }
+          } else {
+            if (timerLine) {
+              timerLine.innerHTML = timerIcon + '<span>' + errMsg + '</span>';
+            }
+            setTimeout(function () { resendBtn.disabled = false; }, 2000);
           }
-          setTimeout(function () { resendBtn.disabled = false; }, 2000);
         }
       } catch (_) {
         if (timerLine) {

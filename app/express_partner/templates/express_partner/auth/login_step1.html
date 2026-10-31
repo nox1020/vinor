@@ -45,7 +45,7 @@
 
         <div class="vinor-auth-field">
           <input id="loginPhone" type="tel" name="phone" required inputmode="numeric" autocomplete="tel" dir="ltr"
-                 placeholder="شماره موبایل" minlength="11" maxlength="11" pattern="09[0-9]{9}"
+                 placeholder="شماره موبایل" maxlength="20" pattern="09[0-9]{9}"
                  title="شماره موبایل ۱۱ رقمی با ۰۹ شروع شود"
                  class="{{ auth_input() }}">
           <button type="button" id="loginPhoneClear"
@@ -110,7 +110,12 @@
     var s = String(raw || '');
     s = s.replace(/[۰-۹]/g, function (c) { return String(faDigits.indexOf(c)); });
     s = s.replace(/[٠-٩]/g, function (c) { return String(arDigits.indexOf(c)); });
-    return s.replace(/\D+/g, '').slice(0, 11);
+    s = s.replace(/\D+/g, '');
+    // پیش‌شمارهٔ +98 / 0098 / 98 و شمارهٔ ۱۰ رقمی بدون صفر (اتوفیل گوشی) → 09…
+    if (s.indexOf('0098') === 0) s = '0' + s.slice(4);
+    else if (s.indexOf('98') === 0 && s.length >= 12) s = '0' + s.slice(2);
+    else if (s.charAt(0) === '9' && s.length === 10) s = '0' + s;
+    return s.slice(0, 11);
   }
 
   function syncClearBtn() {

@@ -798,8 +798,7 @@ def _verify_otp_for_phone(code: str, phone: str) -> str | None:
     norm_phone = _otp_canonical_phone(phone)
     if not norm_phone:
         return None
-    if _otp_session_expired():
-        _clear_otp_session()
+    # انقضای کد را خود سرویس OTP می‌سنجد؛ شماره در سشن می‌ماند تا «درخواست دوباره» کار کند.
     sess_phone = _otp_session_phone()
     if sess_phone and sess_phone != norm_phone:
         return None
@@ -812,6 +811,10 @@ def _verify_otp_for_phone(code: str, phone: str) -> str | None:
         digits=partner_login_digits(),
     )
     if not result.ok:
+        try:
+            g.vinor_otp_verify_error = str(result.error or "")
+        except Exception:
+            pass
         return None
     return _canonical_partner_phone(result.phone)
 
@@ -877,6 +880,33 @@ def _partner_otp_fail_payload(issued_err: str, retry_after: int = 0) -> tuple[st
     if issued_err == OTP_RATE_LIMITED:
         return "سقف ارسال کد برای این شماره پر شده. حدود یک ساعت دیگر دوباره تلاش کنید.", 429
     return "ارسال کد ممکن نشد. کمی بعد دوباره تلاش کنید.", 502
+
+
+def _otp_verify_fail_message(err: str) -> str:
+    """پیام روشن برای کاربر؛ شماره از قبل در سشن است، پس افشای وضعیت کد مشکلی ندارد."""
+    from app.auth.otp.errors import OTP_ALREADY_USED, OTP_EXPIRED, OTP_TOO_MANY_ATTEMPTS
+
+    if err == OTP_TOO_MANY_ATTEMPTS:
+        return 'تعداد تلاش‌ها بیش از حد شد. «درخواست دوباره» را بزنید تا کد جدید بگیرید.'
+    if err in (OTP_EXPIRED, OTP_ALREADY_USED):
+        return 'این کد دیگر معتبر نیست. «درخواست دوباره» را بزنید.'
+    return 'کد تأیید نادرست است. لطفاً دوباره تلاش کنید.'
+
+
+def otp_resend_wait_seconds() -> int:
+    """ثانیه‌های باقی‌ماندهٔ مهلت ارسال مجدد بر اساس زمان صدور کد در سشن."""
+    try:
+        from app.auth.otp.config import otp_resend_cooldown_seconds
+
+        cooldown = int(otp_resend_cooldown_seconds())
+    except Exception:
+        cooldown = 60
+    ts = session.get('otp_created_at')
+    try:
+        elapsed = time.time() - float(ts)
+    except (TypeError, ValueError):
+        return cooldown
+    return max(0, min(cooldown, int(cooldown - elapsed + 0.999)))
 
 
 def _issue_partner_login_otp(phone: str) -> tuple[bool, str, int]:
@@ -8366,10 +8396,8 @@ def login_otp():
         if not _is_prefetch_request():
             flash('ابتدا شماره موبایل خود را وارد کنید.', FLASH_AUTH_ERROR)
         return redirect(url_for('express_partner.login'))
-    if _otp_session_expired():
-        _clear_otp_session()
-        flash('کد تأیید منقضی شده است. لطفاً دوباره شماره موبایل را وارد کنید.', FLASH_AUTH_ERROR)
-        return redirect(url_for('express_partner.login', change=1))
+    # بعد از انقضا صفحه می‌ماند؛ «درخواست دوباره» کد تازه می‌فرستد (نه برگشت به شماره).
+    otp_expired = _otp_session_expired()
 
     login_next = _login_next_preserve() or _session_next_safe()
     is_likely_partner = _is_phone_approved_partner(phone)
@@ -8378,6 +8406,8 @@ def login_otp():
         phone=phone,
         login_next=login_next,
         is_likely_partner=is_likely_partner,
+        resend_wait=0 if otp_expired else otp_resend_wait_seconds(),
+        otp_expired=otp_expired,
     )
 
 
@@ -8445,7 +8475,7 @@ def verify():
         flash('ورود شما با موفقیت انجام شد.', FLASH_AUTH_SUCCESS)
         return redirect(dest)
 
-    msg = 'کد تأیید نادرست است. لطفاً دوباره تلاش کنید.'
+    msg = _otp_verify_fail_message(str(getattr(g, 'vinor_otp_verify_error', '') or ''))
     if wants_json:
         return jsonify({'ok': False, 'error': msg}), 400
     flash(msg, FLASH_AUTH_ERROR)
@@ -10434,10 +10464,16 @@ def api_login_request():
                 'success': True,
                 'otp_pending': True,
                 'message': 'کد قبلی هنوز معتبر است؛ همان کد پیامک‌شده را وارد کنید.',
+                'retry_after': otp_resend_wait_seconds(),
             })
         msg, status = _partner_otp_fail_payload(issued_err, retry_after)
-        return jsonify({'success': False, 'error': msg}), status
-    return jsonify({'success': True, 'otp_pending': False, 'message': 'کد تأیید ارسال شد.'})
+        return jsonify({'success': False, 'error': msg, 'retry_after': int(retry_after or 0)}), status
+    return jsonify({
+        'success': True,
+        'otp_pending': False,
+        'message': 'کد تأیید ارسال شد.',
+        'retry_after': otp_resend_wait_seconds(),
+    })
 
 
 @express_partner_bp.post('/api/verify')
@@ -10457,7 +10493,10 @@ def api_verify():
         return jsonify({'success': False, 'error': 'شماره با درخواست ورود همخوانی ندارد.'}), 400
     verified_phone = _verify_otp_for_phone(code, req_phone)
     if not verified_phone:
-        return jsonify({'success': False, 'error': 'کد تأیید نادرست است.'}), 400
+        return jsonify({
+            'success': False,
+            'error': _otp_verify_fail_message(str(getattr(g, 'vinor_otp_verify_error', '') or '')),
+        }), 400
     try:
         from .referrals import capture_ref_on_login
         capture_ref_on_login()
@@ -10478,11 +10517,7 @@ def otp_resend():
         if request.is_json:
             return jsonify({'ok': False, 'error': 'ابتدا شماره را وارد کنید.'}), 400
         return jsonify({'ok': False, 'error': 'ابتدا شماره را وارد کنید.'}), 400
-    if _otp_session_expired():
-        _clear_otp_session()
-        if request.is_json:
-            return jsonify({'ok': False, 'error': 'کد منقضی شده. دوباره وارد شوید.'}), 400
-        return jsonify({'ok': False, 'error': 'کد منقضی شده. دوباره وارد شوید.'}), 400
+    # کد منقضی‌شده مانع ارسال مجدد نیست؛ سقف ارسال سرویس OTP همچنان اعمال می‌شود.
     req_phone = _otp_canonical_phone(
         (data.get('phone') or request.form.get('phone') or '').strip()
     )
@@ -10499,10 +10534,11 @@ def otp_resend():
         issued_ok, issued_err, retry_after = _issue_partner_login_otp(phone)
         if not issued_ok:
             msg, status = _partner_otp_fail_payload(issued_err, retry_after)
-            return jsonify({'ok': False, 'error': msg}), status
+            return jsonify({'ok': False, 'error': msg, 'retry_after': int(retry_after or 0)}), status
+        wait = otp_resend_wait_seconds()
         if request.is_json:
-            return jsonify({'ok': True, 'message': 'کد تأیید مجدد ارسال شد.'})
-        return jsonify({'ok': True})
+            return jsonify({'ok': True, 'message': 'کد تأیید مجدد ارسال شد.', 'retry_after': wait})
+        return jsonify({'ok': True, 'retry_after': wait})
     except Exception:
         if request.is_json:
             return jsonify({'ok': False, 'error': 'خطا در ارسال مجدد کد.'}), 502
