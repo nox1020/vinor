@@ -847,6 +847,18 @@ def _store_otp_session(phone: str, code: str | None = None) -> None:
         pass
 
 
+def _can_use_existing_partner_otp(phone: str, error: str) -> bool:
+    """On SMS cooldown, allow entering the already-delivered unexpired challenge."""
+    from app.auth.otp.errors import OTP_COOLDOWN
+
+    return (
+        error == OTP_COOLDOWN
+        and _otp_session_phone() == phone
+        and session.get('otp_code') == OTP_SESSION_PENDING
+        and not _otp_session_expired()
+    )
+
+
 def _partner_otp_fail_payload(issued_err: str, retry_after: int = 0) -> tuple[str, int]:
     from app.auth.otp.errors import (
         OTP_COOLDOWN,
@@ -8300,7 +8312,8 @@ def login():
             return redirect(url_for('express_partner.login', next=_login_next_preserve() or None))
 
         issued_ok, issued_err, retry_after = _issue_partner_login_otp(phone)
-        if not issued_ok:
+        already_sent = (not issued_ok and _can_use_existing_partner_otp(phone, issued_err))
+        if not issued_ok and not already_sent:
             msg, status = _partner_otp_fail_payload(issued_err, retry_after)
             if wants_json:
                 return jsonify({'ok': False, 'error': msg}), status
@@ -10408,9 +10421,15 @@ def api_login_request():
 
     issued_ok, issued_err, retry_after = _issue_partner_login_otp(phone)
     if not issued_ok:
+        if _can_use_existing_partner_otp(phone, issued_err):
+            return jsonify({
+                'success': True,
+                'otp_pending': True,
+                'message': 'کد قبلی هنوز معتبر است؛ همان کد پیامک‌شده را وارد کنید.',
+            })
         msg, status = _partner_otp_fail_payload(issued_err, retry_after)
         return jsonify({'success': False, 'error': msg}), status
-    return jsonify({'success': True, 'message': 'کد تأیید ارسال شد.'})
+    return jsonify({'success': True, 'otp_pending': False, 'message': 'کد تأیید ارسال شد.'})
 
 
 @express_partner_bp.post('/api/verify')
