@@ -1,183 +1,36 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}{{ tab_title }} | وینور{% endblock %}
 {% block content %}
-<div id="vinorGuestTabLogin" data-tab-login="{{ tab_login_next }}"
-     class="min-h-[70dvh] bg-[#030712] text-white"
-     style="padding:28px 18px calc(110px + env(safe-area-inset-bottom,0px));">
-  <div class="mx-auto max-w-md" dir="rtl">
-    <h1 class="text-lg font-bold mb-7">{{ tab_title }}</h1>
-    <section class="rounded-2xl border border-white/10 bg-[#12181f] p-5 shadow-lg"
-             aria-labelledby="vinorTabLoginTitle">
-      <div class="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600/15 text-emerald-400">
-        <i class="fas fa-lock" aria-hidden="true"></i>
-      </div>
-      <h2 id="vinorTabLoginTitle" class="mb-2 text-center text-lg font-bold">ورود به وینور</h2>
-      <p class="mb-6 text-center text-sm leading-7 text-zinc-400">
-        برای مشاهده {{ tab_title }}، شماره موبایل خود را تأیید کنید.
-      </p>
-      <p id="vinorTabLoginError" role="alert" aria-live="polite"
-         class="mb-4 hidden rounded-lg bg-red-950/40 p-3 text-sm text-red-200"></p>
-
-      <form id="vinorTabPhoneForm" method="post" action="{{ url_for('express_partner.login') }}"
-            class="space-y-4">
-        {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-        <input type="hidden" name="next" value="{{ tab_login_next }}">
-        <input type="hidden" name="accept_legal" value="1">
-        <label for="vinorTabPhone" class="block text-sm text-zinc-300">شماره موبایل</label>
-        <input id="vinorTabPhone" name="phone" type="tel" dir="ltr" inputmode="tel" autocomplete="tel"
-               maxlength="11" required placeholder="09123456789"
-               class="w-full rounded-xl border border-white/20 bg-[#090e14] p-3 text-left text-white outline-none focus:border-emerald-500">
-        <p class="text-xs leading-6 text-zinc-400">
-          با ورود، <a class="text-emerald-400 underline" target="_blank" rel="noopener"
-          href="{{ url_for('express_partner.legal_terms') }}">قوانین استفاده</a> و
-          <a class="text-emerald-400 underline" target="_blank" rel="noopener"
-          href="{{ url_for('main.privacy') }}">حریم خصوصی</a> را می‌پذیرید.
-        </p>
-        <button type="submit" class="w-full rounded-xl bg-emerald-600 p-3 font-bold text-white disabled:opacity-50">
-          دریافت کد تأیید
-        </button>
-      </form>
-      <form id="vinorTabOtpForm" method="post" action="{{ url_for('express_partner.verify') }}"
-            class="hidden space-y-4">
-        {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-        <input type="hidden" name="next" value="{{ tab_login_next }}">
-        <input type="hidden" name="phone" id="vinorTabOtpPhone">
-        <p id="vinorTabOtpHint" class="text-sm text-zinc-400"></p>
-        <label for="vinorTabOtp" class="block text-sm text-zinc-300">کد پیامک‌شده</label>
-        <input id="vinorTabOtp" name="otp_code" type="text" inputmode="numeric"
-               autocomplete="one-time-code" dir="ltr" maxlength="6" required
-               class="w-full rounded-xl border border-white/20 bg-[#090e14] p-3 text-center text-xl tracking-widest text-white outline-none focus:border-emerald-500">
-        <button type="submit" class="w-full rounded-xl bg-emerald-600 p-3 font-bold text-white disabled:opacity-50">
-          تأیید و ورود
-        </button>
-        <button type="button" id="vinorTabResend" class="w-full p-2 text-sm text-emerald-400 disabled:text-zinc-500" disabled>
-          ارسال مجدد کد
-        </button>
-        <button type="button" id="vinorTabChangePhone" class="w-full p-2 text-sm text-zinc-400">
-          تغییر شماره موبایل
-        </button>
-      </form>
-      <noscript><a href="{{ url_for('express_partner.login', next=tab_login_next) }}">ورود به حساب</a></noscript>
-    </section>
-  </div>
-  {% include 'express_partner/partials/partner_tab_footer.html' %}
+{# Embed the canonical login form and OTP logic as-is instead of cloning them. #}
+<div id="vinorGuestTabLogin" class="bg-[#050a0e] text-white"
+     data-login-target="{{ tab_login_next }}"
+     style="height:calc(100dvh - 140px - env(safe-area-inset-bottom, 0px));min-height:420px;overflow:hidden">
+  <iframe id="vinorSharedLogin" title="ورود به وینور"
+          src="{{ url_for('express_partner.login', next=tab_login_next) }}"
+          allow="otp-credentials"
+          style="display:block;width:100%;height:100%;border:0;background:#050a0e"
+          loading="eager"></iframe>
 </div>
+{% include 'express_partner/partials/partner_tab_footer.html' %}
 {% endblock %}
 {% block scripts %}
 {{ super() }}
 <script>
 (function () {
-  var root = document.getElementById('vinorGuestTabLogin');
-  if (!root || root.dataset.ready === '1') return;
-  root.dataset.ready = '1';
-  var phoneForm = document.getElementById('vinorTabPhoneForm');
-  var otpForm = document.getElementById('vinorTabOtpForm');
-  var error = document.getElementById('vinorTabLoginError');
-  var phoneInput = document.getElementById('vinorTabPhone');
-  var otpInput = document.getElementById('vinorTabOtp');
-  var resendButton = document.getElementById('vinorTabResend');
-  var cooldownUntil = 0;
-  var target = {{ tab_login_next|tojson }};
-  var fa = '۰۱۲۳۴۵۶۷۸۹', ar = '٠١٢٣٤٥٦٧٨٩';
-  function digits(text) {
-    return String(text || '').replace(/[۰-۹]/g, function(c){return String(fa.indexOf(c));})
-      .replace(/[٠-٩]/g, function(c){return String(ar.indexOf(c));})
-      .replace(/[^0-9]/g,'');
-  }
-  function report(msg) {
-    error.textContent = msg || '';
-    error.classList.toggle('hidden', !msg);
-  }
-  async function post(form, action) {
-    if (form.dataset.busy === '1') return null;
-    form.dataset.busy = '1';
-    var btn = form.querySelector('button[type=submit]');
-    btn.disabled = true;
-    report('');
+  var frame = document.getElementById('vinorSharedLogin');
+  var shell = document.getElementById('vinorGuestTabLogin');
+  if (!frame || !shell) return;
+  var destination = shell.getAttribute('data-login-target') || '';
+  // Move the outer page to the requested tab once the canonical form authenticates.
+  frame.addEventListener('load', function () {
     try {
-      var resp = await fetch(action || form.action, {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        body: new FormData(form), redirect: 'follow'
-      });
-      var payload = await resp.json();
-      if (!resp.ok || !payload.ok) throw new Error(payload.error || 'در ارتباط با سرور خطایی رخ داد.');
-      return payload;
-    } catch (e) {
-      report(e && e.message ? e.message : 'خطا در ارتباط. دوباره تلاش کنید.');
-      return null;
-    } finally {
-      btn.disabled = false;
-      form.dataset.busy = '0';
-    }
-  }
-  function updateResend() {
-    if (!root.isConnected) return;
-    var seconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
-    resendButton.disabled = seconds > 0 || otpForm.dataset.busy === '1';
-    resendButton.textContent = seconds > 0 ? 'ارسال مجدد تا ' + seconds + ' ثانیه' : 'ارسال مجدد کد';
-    if (seconds > 0) setTimeout(updateResend, 1000);
-  }
-  function startResendCooldown() {
-    cooldownUntil = Date.now() + 60000;
-    updateResend();
-  }
-  phoneForm.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    phoneInput.value = digits(phoneInput.value);
-    if (!/^09[0-9]{9}$/.test(phoneInput.value)) {
-      report('لطفاً شماره موبایل معتبر وارد کنید.');
-      return;
-    }
-    var ok = await post(phoneForm);
-    if (!ok || !root.isConnected) return;
-    document.getElementById('vinorTabOtpPhone').value = phoneInput.value;
-    document.getElementById('vinorTabOtpHint').textContent = ok.message || ('کد تأیید به ' + phoneInput.value + ' ارسال شد.');
-    phoneForm.classList.add('hidden');
-    otpForm.classList.remove('hidden');
-    otpInput.focus();
-    startResendCooldown();
-  });
-  otpForm.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    otpInput.value = digits(otpInput.value);
-    if (otpInput.value.length !== 5) { report('کد تأیید پنج‌رقمی را کامل وارد کنید.'); return; }
-    var ok = await post(otpForm);
-    if (ok) window.location.assign(target);
-  });
-  resendButton.addEventListener('click', async function() {
-    if (Date.now() < cooldownUntil || otpForm.dataset.busy === '1') return;
-    var response = await post(otpForm, {{ url_for('express_partner.otp_resend')|tojson }});
-    if (response && root.isConnected) {
-      otpInput.value = '';
-      startResendCooldown();
-      document.getElementById('vinorTabOtpHint').textContent = 'کد جدید ارسال شد.';
-    } else {
-      updateResend();
-    }
-  });
-  // Works with browser one-time-code autofill and APK WebView's existing bridge.
-  window.vinorFillOtpFromApp = function(received) {
-    if (!root.isConnected || otpForm.classList.contains('hidden')) return false;
-    var value = digits(received).slice(0, 5);
-    if (value.length !== 5) return false;
-    otpInput.value = value;
-    otpForm.requestSubmit();
-    return true;
-  };
-  otpInput.addEventListener('input', function() {
-    if (otpForm.classList.contains('hidden')) return;
-    var value = digits(otpInput.value).slice(0, 5);
-    if (value.length === 5 && otpForm.dataset.busy !== '1') {
-      otpInput.value = value;
-      otpForm.requestSubmit();
-    }
-  });
-  document.getElementById('vinorTabChangePhone').addEventListener('click', function() {
-    otpForm.classList.add('hidden');
-    phoneForm.classList.remove('hidden');
-    otpInput.value = '';
-    report('');
+      var actual = new URL(frame.contentWindow.location.href);
+      var target = new URL(destination, window.location.origin);
+      if (actual.origin === window.location.origin && target.origin === actual.origin &&
+          actual.pathname === target.pathname && actual.search === target.search) {
+        window.location.replace(target.pathname + target.search + target.hash);
+      }
+    } catch (_) { /* Keep the ordinary login available if frame inspection fails. */ }
   });
 })();
 </script>
