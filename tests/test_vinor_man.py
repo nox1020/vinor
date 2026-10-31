@@ -281,3 +281,44 @@ def test_guest_private_tabs_render_inline_login_without_redirect(client, path, t
     assert f'value="{path}"' in html
     assert 'id="bottomNavMenu"' in html
     assert 'action="/express/partner/verify"' in html
+
+
+@pytest.mark.parametrize("error, created_at, phone, expected_success", [
+    ("OTP_COOLDOWN", "recent", "09120000001", True),
+    ("OTP_COOLDOWN", "expired", "09120000001", False),
+    ("OTP_COOLDOWN", "recent", "09120000002", False),
+    ("OTP_RATE_LIMITED", "recent", "09120000001", False),
+])
+def test_partner_otp_cooldown_reuses_only_matching_live_challenge(
+    client, monkeypatch, error, created_at, phone, expected_success,
+):
+    import time
+    from app.express_partner import routes
+
+    with client.session_transaction() as session:
+        session["otp_code"] = routes.OTP_SESSION_PENDING
+        session["otp_phone"] = "09120000001"
+        session["otp_created_at"] = time.time() if created_at == "recent" else 1
+    monkeypatch.setattr(
+        routes, "_issue_partner_login_otp",
+        lambda _phone: (False, error, 40),
+    )
+    response = client.post(
+        "/express/partner/api/login-request",
+        json={"phone": phone, "accept_legal": True},
+    )
+    assert response.get_json()["success"] is expected_success
+    assert response.status_code == (200 if expected_success else 429)
+    if expected_success:
+        assert response.get_json()["otp_pending"] is True
+        assert "قبلی" in response.get_json()["message"]
+
+
+def test_web_inline_otp_has_safe_retry_and_autofill_controls(client):
+    response = client.get("/express/partner/customers")
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'id="vinorTabResend"' in html
+    assert "vinorFillOtpFromApp" in html
+    assert "otpForm.dataset.busy" in html
+    assert 'autocomplete="one-time-code"' in html
