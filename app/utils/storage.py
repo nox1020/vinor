@@ -486,7 +486,11 @@ def load_partner_bank_accounts(app=None):
 
 
 def save_partner_bank_accounts(items, app=None):
-    return _save(ensure_file('EXPRESS_PARTNER_BANK_ACCOUNTS_FILE', 'express_partner_bank_accounts.json', [], app), items)
+    scrubbed = [
+        {k: v for k, v in row.items() if k != 'pan'} if isinstance(row, dict) else row
+        for row in items
+    ]
+    return _save(ensure_file('EXPRESS_PARTNER_BANK_ACCOUNTS_FILE', 'express_partner_bank_accounts.json', [], app), scrubbed)
 
 # درخواست‌های برداشت پورسانت همکار
 def load_partner_withdrawals(app=None):

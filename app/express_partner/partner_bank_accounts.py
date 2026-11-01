@@ -103,7 +103,7 @@ def validate_new_account(
         "abbr": bk["abbr"],
         "color": bk["color"],
         "holder_name": name,
-        "pan": pan,
+        # Store masked metadata only, never a full payment-card number.
         "pan_prefix4": prefix4,
         "pan_last4": last4,
         "sheba": sheba,
@@ -121,13 +121,28 @@ def apply_account_fields(
     sheba_raw: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """به‌روزرسانی فیلدهای حساب موجود پس از اعتبارسنجی."""
-    rec, err = validate_new_account(bank_key, pan16, holder_name, sheba_raw)
-    if err or not rec:
-        return None, err
+    digits = _digits(pan16)
+    if not digits:
+        bk = bank_by_key(bank_key)
+        name = (holder_name or "").strip()
+        prefix = _digits(str(row.get("pan_prefix4") or ""))[:4]
+        last = _digits(str(row.get("pan_last4") or ""))[-4:]
+        sheba = normalize_sheba(sheba_raw) if (sheba_raw or "").strip() else ""
+        if not bk: return None, "invalid_bank"
+        if len(name) < 2 or len(name) > 80: return None, "invalid_holder"
+        if len(prefix) != 4 or len(last) != 4: return None, "invalid_pan"
+        if (sheba_raw or "").strip() and not sheba: return None, "invalid_sheba"
+        rec = dict(bank_key=bk["key"], bank_name=bk["name"], abbr=bk["abbr"],
+                   color=bk["color"], holder_name=name, pan_prefix4=prefix,
+                   pan_last4=last, sheba=sheba)
+    else:
+        rec, err = validate_new_account(bank_key, digits, holder_name, sheba_raw)
+        if err or not rec: return None, err
     updated = dict(row)
+    updated.pop("pan", None)
     for key in (
         'bank_key', 'bank_name', 'abbr', 'color', 'holder_name',
-        'pan', 'pan_prefix4', 'pan_last4', 'sheba',
+        'pan_prefix4', 'pan_last4', 'sheba',
     ):
         if key in rec:
             updated[key] = rec[key]
@@ -156,14 +171,10 @@ def public_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def admin_account_dict(row: Dict[str, Any]) -> Dict[str, Any]:
-    """فیلدهای حساب بانکی برای پنل ادمین — شامل شماره کارت کامل."""
+    """پنل مدیریت فقط شماره کارت ماسک‌شده را دریافت می‌کند."""
     out = public_account_dict(row)
     out["sheba"] = str(row.get("sheba") or "").strip()
-    pan = _digits(str(row.get("pan") or ""))
-    if len(pan) == 16:
-        out["display_pan"] = format_pan_display(pan)
-    else:
-        out["display_pan"] = out.get("masked_pan") or ""
+    out["display_pan"] = out.get("masked_pan") or ""
     return out
 
 

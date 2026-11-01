@@ -903,7 +903,7 @@
         if (elFormErr) { elFormErr.textContent = 'بانک را انتخاب کنید.'; elFormErr.classList.remove('hidden'); }
         return null;
       }
-      if (pan.length !== 16) {
+      if (pan.length !== 16 && !(editingAccountId && pan.length === 0)) {
         if (elFormErr) { elFormErr.textContent = 'شماره کارت باید ۱۶ رقم باشد.'; elFormErr.classList.remove('hidden'); }
         return null;
       }

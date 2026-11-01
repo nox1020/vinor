@@ -7927,6 +7927,8 @@ def bank_accounts_update():
     if err or not updated:
         return jsonify({'success': False, 'error': err or 'invalid'}), 400
 
+    if _bank_account_has_active_withdrawal(acc_id, me_phone):
+        return jsonify({'success': False, 'error': 'active_withdrawal'}), 409
     all_rows[target_idx] = updated
     try:
         save_partner_bank_accounts(all_rows)
