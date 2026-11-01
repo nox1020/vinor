@@ -133,6 +133,7 @@ def register_token(
     *,
     platform: str = "android",
     app_version: str = "",
+    muted: bool = False,
 ) -> bool:
     phone_n = _normalize_phone(phone)
     token_s = (token or "").strip()
@@ -152,6 +153,7 @@ def register_token(
                 item["platform"] = platform or item.get("platform") or "android"
                 item["app_version"] = app_version or item.get("app_version") or ""
                 item["updated_at"] = now
+                item["muted"] = bool(muted)
                 updated = True
                 break
         if not updated:
@@ -159,6 +161,7 @@ def register_token(
                 "token": token_s,
                 "platform": platform or "android",
                 "app_version": app_version or "",
+                "muted": bool(muted),
                 "updated_at": now,
             })
         bucket.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
@@ -240,6 +243,17 @@ def tokens_for_phones(phones: List[str]) -> List[str]:
                 seen.add(tok)
                 out.append(tok)
     return out
+
+
+def muted_tokens_for_phones(phones: List[str]) -> Dict[str, bool]:
+    """Return per-device mute state; existing registrations default to audible."""
+    data = _load_all_unlocked()
+    return {
+        str(item.get("token") or ""): item.get("muted") is True
+        for phone in phones
+        for item in data.get(_normalize_phone(phone), [])
+        if item.get("token")
+    }
 
 
 def tokens_for_phone(phone: str) -> List[str]:

@@ -61,7 +61,11 @@ def fcm_register():
     platform = (data.get("platform") or "android").strip()
     app_version = (data.get("app_version") or request.headers.get("X-Vinor-App-Version") or "").strip()
 
-    ok = register_token(phone, token, platform=platform, app_version=app_version)
+    # The mute flag affects presentation only; do not unregister or suppress messages.
+    muted = data.get("muted", False)
+    if not isinstance(muted, bool):
+        return jsonify({"ok": False, "error": "INVALID_MUTED"}), 400
+    ok = register_token(phone, token, platform=platform, app_version=app_version, muted=muted)
     from app.services.fcm_tokens import tokens_for_phone
     return jsonify({
         "ok": ok,

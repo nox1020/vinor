@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from flask import current_app
 
 from app.services.firebase_config import ensure_firebase_ready, get_service_account, get_firebase_status
-from app.services.fcm_tokens import tokens_for_phones, unregister_token
+from app.services.fcm_tokens import tokens_for_phones, muted_tokens_for_phones, unregister_token
 
 _FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 _token_cache: Dict[str, Any] = {"access_token": None, "expires_at": 0}
@@ -123,6 +123,7 @@ def send_fcm_to_token(
     title: str,
     body: str,
     url: str = "/express/partner/home?ai=1&thread=__postchi__",
+    muted: bool = False,
 ) -> Dict[str, Any]:
     if not token:
         return {"ok": False, "error": "NO_TOKEN"}
@@ -154,11 +155,10 @@ def send_fcm_to_token(
             "android": {
                 "priority": "high",
                 "notification": {
-                    "channel_id": "vinor_express_partner",
+                    "channel_id": "vinor_express_partner_silent" if muted else "vinor_express_partner",
                     "click_action": "OPEN_NOTIFICATIONS",
-                    "sound": "default",
-                    "default_vibrate_timings": True,
-                    "notification_priority": "PRIORITY_HIGH",
+                    "notification_priority": "PRIORITY_LOW" if muted else "PRIORITY_HIGH",
+                    **({} if muted else {"sound": "default", "default_vibrate_timings": True}),
                 },
             },
         }
@@ -237,6 +237,7 @@ def send_fcm_to_phones(
     url: str = "/express/partner/home?ai=1&thread=__postchi__",
 ) -> Dict[str, int]:
     tokens = tokens_for_phones(phones)
+    muted_by_token = muted_tokens_for_phones(phones)
     if not tokens:
         return {"sent": 0, "failed": 0, "skipped": len(phones), "targets": 0, "removed": 0}
     sent = 0
@@ -247,7 +248,9 @@ def send_fcm_to_phones(
     def _send_one(tok: str) -> Dict[str, Any]:
         with app.app_context():
             ensure_firebase_ready(app)
-            return send_fcm_to_token(tok, title=title, body=body, url=url)
+            return send_fcm_to_token(
+                tok, title=title, body=body, url=url, muted=muted_by_token.get(tok, False),
+            )
 
     workers = min(8, max(2, len(tokens)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
