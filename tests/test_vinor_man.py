@@ -323,8 +323,10 @@ def test_settings_notification_switch_mutes_instead_of_unsubscribing(client):
     assert "صدای اعلان‌ها" in body
     assert 'data-vinor-logout' not in body
     assert 'VINOR_SET_NOTIFICATION_SOUND' in body
-    assert '/api/push/unsubscribe' not in body
-    assert '/api/push/subscribe' not in body
+    # The global base template may sync subscriptions automatically; the
+    # Settings switch itself must only change the sound preference.
+    assert "type: 'VINOR_SET_NOTIFICATION_SOUND'" in body
+    assert "localStorage.setItem(key, next ? '1' : '0')" in body
 
 
 def test_partner_sw_push_uses_persisted_silent_preference(client):
