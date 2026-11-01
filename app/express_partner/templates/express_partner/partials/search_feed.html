@@ -172,14 +172,6 @@
     color: var(--vn-search-on);
   }
   #vinorSearchPage .vn-search-chip.is-clear .vn-search-chip__face { background: var(--vn-search-raised-2); border-color: transparent; }
-  #vinorSearchPage .vn-search-count {
-    margin: 0;
-    padding: 8px 16px 4px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--vn-search-muted);
-    text-align: right;
-  }
   #vinorSearchPage .vn-search-list { display: flex; flex-direction: column; }
   #vinorSearchPage .vn-search-list[hidden] { display: none; }
   #vinorSearchPage .vn-search-row {
@@ -284,6 +276,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Keep the former area line's footprint so listing cards never resize. */
+  #vinorSearchPage .vn-search-area--spacer { visibility: hidden; }
   #vinorSearchPage .vn-search-state {
     padding: 48px 24px 24px;
     text-align: center;
@@ -508,10 +502,6 @@
       </div>
     </div>
 
-    {% if search_ads and not search_error %}
-    <p id="vinorSearchCount" class="vn-search-count">{{ search_query.count|fa_digits }} آگهی</p>
-    {% endif %}
-
     <div id="vinorSearchSkeleton" class="vn-search-list" hidden aria-hidden="true">
       {% for _sk in [1, 2, 3, 4, 5, 6] %}
       <div class="vn-search-skel" aria-hidden="true">
@@ -559,7 +549,7 @@
          href="{{ ad.url }}"
          {% if ad.created_at %}data-created="{{ ad.created_at }}"{% endif %}
          {% if _ext %}target="_blank" rel="noopener noreferrer"{% else %}data-vinor-express-nav data-vinor-open-land-chat="1"{% if _src == 'vinor' %} data-land-code="{{ ad.token }}"{% else %} data-divar-token="{{ ad.token }}"{% endif %}{% endif %}
-         aria-label="{{ ad.title }}، {{ _price_show }}{% if _area %}، {{ _area }}{% endif %}{% if _cap %}، {{ _cap }}{% endif %}">
+         aria-label="{{ ad.title }}، {{ _price_show }}{% if _cap %}، {{ _cap }}{% endif %}">
         <div class="vn-search-meta">
           <h3 class="vn-search-name">{{ ad.title }}</h3>
           <div class="vn-search-grow"></div>
@@ -568,7 +558,7 @@
           <p class="vn-search-comm">پورسانت {{ ad.commission_amount|toman(false) }} تومان</p>
           {% endif %}
           {% if _area %}
-          <p class="vn-search-area">{{ _area }}</p>
+          <p class="vn-search-area vn-search-area--spacer" aria-hidden="true">&nbsp;</p>
           {% endif %}
           {% if _cap %}
           <p class="vn-search-loc">{{ _cap }}</p>

@@ -47,3 +47,19 @@ def test_listing_detail_footer_has_call_not_chat():
     tpl = Path("app/express_partner/templates/express_partner/listing_detail_native.html").read_text(encoding="utf-8")
     assert 'href="tel:{{ d.call_phone }}"' in tpl and ">تماس<" in tpl
     assert ">گفتگو<" not in tpl
+
+
+
+def test_home_feed_hides_total_and_area_without_resizing_cards():
+    markup = FEED.read_text(encoding="utf-8")
+    assert 'id="vinorSearchCount"' not in markup
+    assert 'class="vn-search-count"' not in markup
+    assert 'min-height: 128px;' in markup
+    assert 'width: 6.5rem;' in markup and 'height: 6.5rem;' in markup
+    assert 'vn-search-area--spacer' in markup
+    assert 'visibility: hidden;' in markup
+    assert 'aria-hidden="true">&nbsp;</p>' in markup
+    assert '<p class="vn-search-area">{{ _area }}</p>' not in markup
+    assert '{% if _area %}، {{ _area }}{% endif %}' not in markup
+    # The area filter stays usable even though the card no longer shows an area line.
+    assert 'data-open-sheet="area"' in markup
