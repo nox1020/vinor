@@ -510,6 +510,26 @@ def load_partner_withdrawals(app=None):
 def save_partner_withdrawals(items, app=None):
     return _save(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app), items)
 
+def save_financial_pair(commissions, withdrawals, app=None):
+    """Compensate a failed second financial JSON write under commission_store_lock.
+
+    A future single-database ledger should replace this compatibility transaction.
+    """
+    previous_commissions = load_express_commissions(app)
+    previous_withdrawals = load_partner_withdrawals(app)
+    save_express_commissions(commissions, app)
+    try:
+        save_partner_withdrawals(withdrawals, app)
+    except Exception:
+        try:
+            save_express_commissions(previous_commissions, app)
+            save_partner_withdrawals(previous_withdrawals, app)
+        except Exception:
+            import logging
+            logging.exception("FINANCIAL_STATE_ROLLBACK_FAILED - manual reconciliation required")
+        raise
+
+
 # تراکنش‌های پرداخت Vinor Plus (زرین‌پال)
 def load_zarinpal_plus_transactions(app=None):
     return _load(ensure_file('ZARINPAL_PLUS_TRANSACTIONS_FILE', 'zarinpal_plus_transactions.json', [], app))

@@ -7719,6 +7719,9 @@ def commissions_data():
             'sale_amount': _i(c.get('sale_amount')),
             'commission_pct': c.get('commission_pct'),
             'commission_amount': _i(c.get('commission_amount')),
+            'paid_amount': _i(c.get('partial_paid_total')),
+            'original_amount': _i(c.get('commission_amount')) + _i(c.get('partial_paid_total')),
+            'withdrawal_id': str(c.get('withdrawal_id') or ''),
             'status': (c.get('status') or 'pending').strip(),
         })
     return jsonify({
@@ -7733,6 +7736,23 @@ def commissions_data():
         'pending_withdrawal_total': comm_stats['in_withdrawal_amount'],
         'in_withdrawal_amount': comm_stats['in_withdrawal_amount'],
         'approved_commission': comm_stats['approved_amount'],
+        'in_withdrawal_count': comm_stats['in_withdrawal_count'],
+        'paid_withdrawal_amount': comm_stats['paid_withdrawal_amount'],
+        'transactions': [
+            {
+                'txn_type': row.get('txn_type') or 'commission',
+                'title': (row.get('_txn_detail') or {}).get('title') or row.get('_txn_label') or 'پورسانت',
+                'status': row.get('status') or '',
+                'status_label': (row.get('_txn_detail') or {}).get('status_label') or '',
+                'amount': (row.get('_txn_detail') or {}).get('amount', 0),
+                'amount_sign': (row.get('_txn_detail') or {}).get('amount_sign') or '+',
+                'created_at': row.get('created_at') or '',
+                'description': (row.get('_txn_detail') or {}).get('description') or '',
+                'withdrawal_id': row.get('withdrawal_id') or '',
+                'cancellable': bool(row.get('cancellable')),
+            }
+            for row in _partner_txn_items(me_phone, my_comms)
+        ],
         'items': items,
     })
 
@@ -8036,6 +8056,20 @@ def _withdrawals_request_locked():
     all_wd = load_partner_withdrawals() or []
     if not isinstance(all_wd, list):
         all_wd = []
+    client_request_id = str(data.get('client_request_id') or '').strip()
+    if len(client_request_id) > 128:
+        return jsonify({'success': False, 'error': 'invalid_request_id'}), 400
+    if client_request_id:
+        for prior in all_wd:
+            if (isinstance(prior, dict)
+                    and str(prior.get('client_request_id') or '') == client_request_id
+                    and str(prior.get('phone') or '') == me_phone):
+                return jsonify({'success': True, 'duplicate': True, 'request': {
+                    'id': prior.get('id'), 'amount': prior.get('amount'),
+                    'status': prior.get('status'),
+                    'withdrawable_balance': _partner_withdrawable_balance(me_phone),
+                    'requestable_balance': _partner_requestable_balance(me_phone),
+                }})
     _reconcile_partner_commissions(me_phone)
     comms = _commissions_for_phone(me_phone)
 
@@ -8052,6 +8086,8 @@ def _withdrawals_request_locked():
 
     partner_name = _partner_display_name(me_phone)
     rec['partner_name'] = partner_name
+    if client_request_id:
+        rec['client_request_id'] = client_request_id
     rec['created_at'] = datetime.utcnow().isoformat() + 'Z'
     rec['updated_at'] = rec['created_at']
     all_wd.append(rec)
@@ -8124,8 +8160,8 @@ def _withdrawals_cancel_locked(wid: str):
         None,
     )
     try:
-        save_partner_withdrawals(all_wd)
-        save_express_commissions(commissions)
+        from app.utils.storage import save_financial_pair
+        save_financial_pair(commissions, all_wd)
     except Exception:
         current_app.logger.exception('withdrawals_cancel save failed')
         return jsonify({'success': False, 'error': 'save_failed'}), 500

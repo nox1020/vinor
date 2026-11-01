@@ -6501,9 +6501,12 @@ def _financial_withdrawal_status_locked(wid: str):
             withdrawal_row['admin_note'] = admin_note
             withdrawals_dirty = True
 
-        if commissions_dirty:
+        if commissions_dirty and withdrawals_dirty:
+            from app.utils.storage import save_financial_pair
+            save_financial_pair(commissions, items)
+        elif commissions_dirty:
             save_express_commissions(commissions)
-        if withdrawals_dirty:
+        elif withdrawals_dirty:
             save_partner_withdrawals(items)
 
         if not note_only and old_status != new_status:
