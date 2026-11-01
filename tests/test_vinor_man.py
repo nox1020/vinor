@@ -313,3 +313,25 @@ def test_web_inline_otp_has_safe_retry_and_autofill_controls(client):
     assert 'id="resendBtn"' in otp
     assert "vinorFillOtpFromApp" in otp
     assert 'autocomplete="one-time-code"' in otp
+
+def test_settings_notification_switch_mutes_instead_of_unsubscribing(client):
+    _login(client)
+    response = client.get("/express/partner/settings")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'id="vinorSettingsNotifications"' in body
+    assert "صدای اعلان‌ها" in body
+    assert 'data-vinor-logout' not in body
+    assert 'VINOR_SET_NOTIFICATION_SOUND' in body
+    assert '/api/push/unsubscribe' not in body
+    assert '/api/push/subscribe' not in body
+
+
+def test_partner_sw_push_uses_persisted_silent_preference(client):
+    sw = client.get("/static/express-partner-sw.js")
+    assert sw.status_code == 200
+    script = sw.get_data(as_text=True)
+    assert "VINOR_SET_NOTIFICATION_SOUND" in script
+    assert "SOUND_PREF_CACHE" in script
+    assert "options.silent = !(await partnerNotificationSoundEnabled())" in script
+    assert "await self.registration.showNotification(title, options)" in script
