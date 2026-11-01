@@ -10,9 +10,11 @@ const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
 const ICONS_CACHE = `express-partner-icons-${VERSION}`;
 const IMAGE_CACHE = `express-partner-images-${VERSION}`;
+const SOUND_PREF_CACHE = 'express-partner-notification-sound-v1';
+const SOUND_PREF_URL = '/express/partner/__notification_sound__';
 
 /** کش کردن پاسخ navigate برای HTML باعث می‌شود پس از خروج، PWA همان صفحهٔ لاگین‌شدهٔ قبلی را نشان دهد. */
-const KEEP_CACHE_NAMES = new Set([PRECACHE, RUNTIME, API_CACHE, ICONS_CACHE, IMAGE_CACHE]);
+const KEEP_CACHE_NAMES = new Set([PRECACHE, RUNTIME, API_CACHE, ICONS_CACHE, IMAGE_CACHE, SOUND_PREF_CACHE]);
 
 // تابع برای محدود کردن اندازه cache
 async function trimCache(name, maxEntries) {
@@ -622,7 +624,14 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Push notifications برای Express Partner
+// Notification sound preference remains available when the web page is closed.
+async function partnerNotificationSoundEnabled() {
+  try {
+    const store = await caches.open(SOUND_PREF_CACHE);
+    const value = await store.match(SOUND_PREF_URL);
+    return !value || (await value.text()) !== '0';
+  } catch (_) { return true; }
+}
 self.addEventListener('push', (event) => {
   if (event.data) {
     try {
@@ -637,15 +646,24 @@ self.addEventListener('push', (event) => {
         dir: 'rtl',
         lang: 'fa'
       };
-      event.waitUntil(self.registration.showNotification(title, options));
+      event.waitUntil((async () => {
+        options.silent = !(await partnerNotificationSoundEnabled());
+        if (options.silent) options.vibrate = [];
+        await self.registration.showNotification(title, options);
+      })());
     } catch (_) {
-      event.waitUntil(self.registration.showNotification('پنل همکاران وینور', {
-        body: 'پیام جدید',
-        icon: '/static/icons/icon-192.png',
-        data: '/express/partner/home?ai=1&thread=__postchi__',
-        dir: 'rtl',
-        lang: 'fa'
-      }));
+      event.waitUntil((async () => {
+        const silent = !(await partnerNotificationSoundEnabled());
+        await self.registration.showNotification('پنل همکاران وینور', {
+          body: 'پیام جدید',
+          icon: '/static/icons/icon-192.png',
+          data: '/express/partner/home?ai=1&thread=__postchi__',
+          dir: 'rtl',
+          lang: 'fa',
+          silent: silent,
+          vibrate: silent ? [] : undefined
+        });
+      })());
     }
   }
 });
@@ -684,6 +702,17 @@ self.addEventListener('notificationclose', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type) {
     switch (event.data.type) {
+      case 'VINOR_SET_NOTIFICATION_SOUND':
+        event.waitUntil((async () => {
+          try {
+            const store = await caches.open(SOUND_PREF_CACHE);
+            await store.put(SOUND_PREF_URL, new Response(event.data.enabled === false ? '0' : '1'));
+            if (event.ports && event.ports[0]) event.ports[0].postMessage({ok: true});
+          } catch (_) {
+            if (event.ports && event.ports[0]) event.ports[0].postMessage({ok: false});
+          }
+        })());
+        break;
       case 'VINOR_WARMUP':
         // Warmup کردن routes
         if (event.data.urls && Array.isArray(event.data.urls)) {
@@ -729,6 +758,7 @@ self.addEventListener('message', (event) => {
             const includePrecache = !!(event.data && event.data.includePrecache);
             await Promise.all(keys.filter((k) => {
               if (!k.startsWith('express-partner-')) return false;
+              if (k === SOUND_PREF_CACHE) return false; // Not a logout-sensitive cache.
               if (!includePrecache && k.startsWith('express-partner-precache-')) return false;
               return true;
             }).map((k) => caches.delete(k)));
