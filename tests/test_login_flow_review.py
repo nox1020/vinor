@@ -104,3 +104,25 @@ def test_web_otp_input_autofill_attrs():
     html = (TPL / "login_step2.html").read_text(encoding="utf-8")
     assert 'autocomplete="one-time-code"' in html and 'inputmode="numeric"' in html
     assert "لطفاً برای دریافت کد کمی صبر کنید" not in html
+
+
+def test_native_otp_keeps_server_session_for_following_profile_requests(client):
+    """The JSON OTP path used by the APK must produce a durable vinor session."""
+    _request(client, "35791")
+    verify = client.post(
+        "/express/partner/api/verify",
+        json={"phone": PHONE, "code": "35791"},
+    )
+    assert verify.status_code == 200, verify.get_json()
+    assert verify.get_json()["success"]
+    with client.session_transaction() as sess:
+        assert sess.get("user_phone") == PHONE
+        assert not sess.get("otp_code")
+        assert not sess.get("otp_phone")
+    profile = client.get("/express/partner/profile/data")
+    assert profile.status_code == 200
+    assert profile.get_json()["me_phone"] == PHONE
+    # Loading the regular login URL must not restart phone entry.
+    login = client.get("/express/partner/login")
+    assert login.status_code in (302, 303)
+    assert not login.headers["Location"].startswith("/express/partner/login")
