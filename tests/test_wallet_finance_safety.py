@@ -85,3 +85,19 @@ def test_loading_legacy_bank_accounts_removes_full_pan(tmp_path):
         result = storage.load_partner_bank_accounts()
         assert "pan" not in result[0]
         assert "pan" not in storage._load(path)[0]
+
+
+
+def test_interrupted_wallet_save_is_recovered_from_redo_journal(tmp_path):
+    app = Flask("wallet-recovery-test", instance_path=str(tmp_path))
+    with app.app_context():
+        storage.save_express_commissions([{"id": 1, "commission_amount": 30}])
+        storage.save_partner_withdrawals([{"id": "old", "amount": 10}])
+        journal = storage._financial_journal_path()
+        storage._save(journal, {
+            "commissions": [{"id": 1, "commission_amount": 20}],
+            "withdrawals": [{"id": "new", "amount": 20}],
+        })
+        assert storage.load_express_commissions()[0]["commission_amount"] == 20
+        assert storage.load_partner_withdrawals()[0]["id"] == "new"
+        assert not __import__("os").path.exists(journal)

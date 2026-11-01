@@ -459,10 +459,13 @@ def save_partner_missions(items, app=None):
 
 _COMMISSIONS_CACHE = {"path": None, "mtime": None, "size": None, "data": None}
 
-def load_express_commissions(app=None):    return _load(ensure_file('EXPRESS_COMMISSIONS_FILE','express_commissions.json',[],app))
+def load_express_commissions(app=None):
+    _recover_financial_pair(app)
+    return _load(ensure_file('EXPRESS_COMMISSIONS_FILE','express_commissions.json',[],app))
 
 def load_express_commissions_cached(app=None):
     """پورسانت‌ها با کش mtime — برای ناوبری سریع‌تر بین تب‌ها."""
+    _recover_financial_pair(app)
     app = _resolve_app(app)
     path = ensure_file('EXPRESS_COMMISSIONS_FILE', 'express_commissions.json', [], app)
     try:
@@ -510,31 +513,63 @@ def save_partner_bank_accounts(items, app=None):
 
 # درخواست‌های برداشت پورسانت همکار
 def load_partner_withdrawals(app=None):
+    _recover_financial_pair(app)
     return _load(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app))
 
 
 def save_partner_withdrawals(items, app=None):
     return _save(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app), items)
 
-def save_financial_pair(commissions, withdrawals, app=None):
-    """Compensate a failed second financial JSON write under commission_store_lock.
+def _financial_journal_path(app=None):
+    return os.path.join(data_dir(app), '.financial_pair_pending.json')
 
-    A future single-database ledger should replace this compatibility transaction.
+
+def _recover_financial_pair(app=None):
+    """Recover an interrupted two-file wallet transition before exposing balances."""
+    journal = _financial_journal_path(app)
+    if not os.path.exists(journal):
+        return
+    from app.express_partner.deal_wallet import commission_store_lock
+    with commission_store_lock(app):
+        if not os.path.exists(journal):
+            return
+        payload = _load(journal)
+        if not isinstance(payload, dict) or not isinstance(payload.get('commissions'), list) or not isinstance(payload.get('withdrawals'), list):
+            raise RuntimeError('FINANCIAL_JOURNAL_CORRUPT - manual reconciliation required')
+        comm_path = ensure_file('EXPRESS_COMMISSIONS_FILE', 'express_commissions.json', [], app)
+        wd_path = ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app)
+        _save(comm_path, payload['commissions'])
+        _save(wd_path, payload['withdrawals'])
+        _COMMISSIONS_CACHE.update({'path': None, 'mtime': None, 'size': None, 'data': None})
+        os.unlink(journal)
+
+
+def save_financial_pair(commissions, withdrawals, app=None):
+    """Durable financial pair: journal target first and recover after process death.
+
+    Call from inside commission_store_lock. A post-write failure rolls both files
+    back where possible; a crash leaves a redo journal for automatic recovery.
     """
-    # Read old snapshots from disk, not the mutable in-process commissions cache.
-    previous_commissions = _load(ensure_file('EXPRESS_COMMISSIONS_FILE', 'express_commissions.json', [], app))
-    previous_withdrawals = _load(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app))
-    save_express_commissions(commissions, app)
+    _recover_financial_pair(app)
+    comm_path = ensure_file('EXPRESS_COMMISSIONS_FILE', 'express_commissions.json', [], app)
+    wd_path = ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app)
+    previous_commissions = _load(comm_path)
+    previous_withdrawals = _load(wd_path)
+    journal = _financial_journal_path(app)
+    _save(journal, {'commissions': commissions, 'withdrawals': withdrawals})
     try:
+        save_express_commissions(commissions, app)
         save_partner_withdrawals(withdrawals, app)
     except Exception:
         try:
             save_express_commissions(previous_commissions, app)
             save_partner_withdrawals(previous_withdrawals, app)
+            os.unlink(journal)
         except Exception:
-            import logging
-            logging.exception("FINANCIAL_STATE_ROLLBACK_FAILED - manual reconciliation required")
+            _log.exception('FINANCIAL_ROLLBACK_INCOMPLETE - journal will recover on next read')
         raise
+    else:
+        os.unlink(journal)
 
 
 # تراکنش‌های پرداخت Vinor Plus (زرین‌پال)
