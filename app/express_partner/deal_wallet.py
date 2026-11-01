@@ -18,7 +18,7 @@ WALLET_INSUFFICIENT = "wallet_insufficient"
 _DETAIL: contextvars.ContextVar = contextvars.ContextVar("deal_wallet_detail", default=None)
 _LOCK_DEPTH = 0
 _LOCK_HANDLE = None
-_LOCK_GUARD = threading.Lock()
+_LOCK_GUARD = threading.RLock()
 
 
 def set_wallet_detail(detail: Optional[Dict[str, Any]]) -> None:
@@ -52,34 +52,31 @@ def commit_guard(stage: str) -> None:
 
 @contextmanager
 def commission_store_lock(app=None):
-    """قفل فایل پورسانت تا دو تأیید هم‌زمان دو بار پول جابه‌جا نکنند."""
+    """Serialize financial mutations across threads *and* worker processes.
+
+    The in-process RLock stays held during the entire critical section.
+    The advisory flock coordinates distinct Gunicorn workers.
+    """
     global _LOCK_DEPTH, _LOCK_HANDLE
     import fcntl
 
     with _LOCK_GUARD:
         _LOCK_DEPTH += 1
-        if _LOCK_DEPTH == 1:
-            from app.utils.storage import ensure_file
-
-            path = ensure_file(
-                "EXPRESS_COMMISSIONS_FILE",
-                "express_commissions.json",
-                [],
-                app,
-            ) + ".lock"
-            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            handle = open(path, "a+", encoding="utf-8")
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-            except Exception:
-                handle.close()
-                _LOCK_DEPTH -= 1
-                raise
-            _LOCK_HANDLE = handle
-    try:
-        yield
-    finally:
-        with _LOCK_GUARD:
+        try:
+            if _LOCK_DEPTH == 1:
+                from app.utils.storage import ensure_file
+                path = ensure_file("EXPRESS_COMMISSIONS_FILE",
+                                   "express_commissions.json", [], app) + ".lock"
+                os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+                handle = open(path, "a+", encoding="utf-8")
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                except Exception:
+                    handle.close()
+                    raise
+                _LOCK_HANDLE = handle
+            yield
+        finally:
             _LOCK_DEPTH -= 1
             if _LOCK_DEPTH == 0 and _LOCK_HANDLE is not None:
                 try:
@@ -87,7 +84,6 @@ def commission_store_lock(app=None):
                 finally:
                     _LOCK_HANDLE.close()
                     _LOCK_HANDLE = None
-
 
 def _amount(value: Any) -> int:
     try:

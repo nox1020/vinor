@@ -6368,6 +6368,11 @@ def _financial_withdrawals_redirect(filter_hint: str = '') -> str:
 @admin_bp.post('/financial/withdrawals/<wid>/status')
 @login_required
 def financial_withdrawal_status(wid: str):
+    from app.express_partner.deal_wallet import commission_store_lock
+    with commission_store_lock():
+        return _financial_withdrawal_status_locked(wid)
+
+def _financial_withdrawal_status_locked(wid: str):
     try:
         from app.hardening.permissions import PERM_FINANCE, has_permission
         if not has_permission(PERM_FINANCE):
@@ -6476,6 +6481,12 @@ def financial_withdrawal_status(wid: str):
                         now_iso,
                         items,
                     )
+                if already + allocated < wd_amount:
+                    flash(
+                        'ثبت پرداخت متوقف شد: کل مبلغ برداشت با پورسانت‌های تأییدشده تطبیق ندارد.',
+                        'error',
+                    )
+                    return redirect(_financial_withdrawals_redirect(filter_hint))
                 if allocated > 0:
                     commissions_dirty = True
                     withdrawal_row['commission_allocated_amount'] = already + allocated

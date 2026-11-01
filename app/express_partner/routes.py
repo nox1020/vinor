@@ -8017,6 +8017,11 @@ def bank_accounts_set_default():
 @express_partner_bp.post('/withdrawals/request', endpoint='withdrawals_request')
 @require_partner_access(json_response=True)
 def withdrawals_request():
+    from app.express_partner.deal_wallet import commission_store_lock
+    with commission_store_lock():
+        return _withdrawals_request_locked()
+
+def _withdrawals_request_locked():
     """ثبت درخواست برداشت پورسانت توسط همکار."""
     me_phone = (session.get("user_phone") or "").strip()
     data = request.get_json(silent=True) or {}
@@ -8094,6 +8099,11 @@ def withdrawals_request():
 @express_partner_bp.post('/withdrawals/<wid>/cancel', endpoint='withdrawals_cancel')
 @require_partner_access(json_response=True)
 def withdrawals_cancel(wid: str):
+    from app.express_partner.deal_wallet import commission_store_lock
+    with commission_store_lock():
+        return _withdrawals_cancel_locked(wid)
+
+def _withdrawals_cancel_locked(wid: str):
     """لغو درخواست برداشت در وضعیت «در انتظار بررسی» توسط همکار."""
     me_phone = (session.get("user_phone") or "").strip()
     all_wd = load_partner_withdrawals() or []
