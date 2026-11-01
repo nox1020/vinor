@@ -129,13 +129,13 @@
       </a>
       <label class="ps-action ps-notification-toggle" for="vinorSettingsNotifications">
         <i class="fas fa-bell" aria-hidden="true"></i>
-        <span class="ps-action__grow">اعلان‌ها</span>
+        <span class="ps-action__grow">صدای اعلان‌ها</span>
         <input id="vinorSettingsNotifications" type="checkbox" role="switch"
-               aria-label="فعال‌سازی اعلان‌ها" disabled>
+               aria-label="اعلان با صدا" disabled>
         <span class="ps-toggle-track" aria-hidden="true"></span>
       </label>
       <p id="vinorSettingsNotificationStatus" class="ps-push-status" role="status" aria-live="polite">
-        در حال بررسی وضعیت اعلان‌ها…
+        در حال خواندن تنظیمات صدا…
       </p>
     </div>
   </div>
@@ -151,107 +151,54 @@
   var toggle = document.getElementById('vinorSettingsNotifications');
   var status = document.getElementById('vinorSettingsNotificationStatus');
   if (!toggle || !status) return;
-  var busy = false;
-  var scope = '/express/partner/';
-  var worker = {{ url_for('express_partner.service_worker')|tojson }};
-  var dismissedKey = 'vinor_express_push_prompt_dismissed';
-  var enabledKey = 'vinor_express_notifications_auto_enabled';
-
-  function label(text) { status.textContent = text; }
-  function base64Bytes(input) {
-    var b64 = (input + '='.repeat((4 - input.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
-    var binary = atob(b64);
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes;
+  var key = 'vinor_partner_notification_sound_enabled';
+  var sound = localStorage.getItem(key) !== '0';
+  toggle.checked = sound;
+  toggle.disabled = false;
+  function label() {
+    status.textContent = sound
+      ? 'اعلان‌ها با صدا و لرزش معمول دریافت می‌شوند.'
+      : 'اعلان‌ها همچنان دریافت می‌شوند، اما بی‌صدا و بدون لرزش هستند.';
   }
-  async function registration(create) {
-    var reg = await navigator.serviceWorker.getRegistration(scope);
-    if (!reg && create) reg = await navigator.serviceWorker.register(worker, {scope: scope});
-    if (reg && create && !reg.active) reg = await navigator.serviceWorker.ready;
-    return reg;
-  }
-  async function send(path, payload) {
-    var response = await fetch(path, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify(payload)
+  label();
+  async function syncWorker(enabled) {
+    if (!('serviceWorker' in navigator)) return;
+    var reg = await navigator.serviceWorker.getRegistration('/express/partner/');
+    if (!reg) {
+      reg = await navigator.serviceWorker.register(
+        {{ url_for('express_partner.service_worker')|tojson }},
+        {scope: '/express/partner/'}
+      );
+    }
+    var worker = reg.active || (await navigator.serviceWorker.ready).active;
+    if (!worker) throw new Error('سرویس اعلان آماده نیست.');
+    await new Promise(function(resolve, reject) {
+      var channel = new MessageChannel();
+      var timeout = setTimeout(function () { reject(new Error('ذخیره تنظیمات اعلان ناموفق بود.')); }, 5000);
+      channel.port1.onmessage = function (event) {
+        clearTimeout(timeout);
+        if (event.data && event.data.ok) resolve();
+        else reject(new Error('ذخیره تنظیمات اعلان ناموفق بود.'));
+        channel.port1.close();
+      };
+      worker.postMessage({type: 'VINOR_SET_NOTIFICATION_SOUND', enabled: enabled}, [channel.port2]);
     });
-    var data = await response.json();
-    if (!response.ok || !data.ok) throw new Error('اتصال به سرور اعلان‌ها برقرار نشد.');
   }
-  async function refresh() {
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-      toggle.disabled = true; toggle.checked = false;
-      label('مرورگر فعلی از اعلان‌های وب پشتیبانی نمی‌کند.');
-      return;
-    }
-    try {
-      var reg = await registration(false);
-      var subscription = reg ? await reg.pushManager.getSubscription() : null;
-      toggle.checked = Notification.permission === 'granted' && !!subscription;
-      toggle.disabled = false;
-      label(Notification.permission === 'denied'
-        ? 'اجازه اعلان در تنظیمات مرورگر مسدود شده است.'
-        : toggle.checked ? 'اعلان‌های این مرورگر فعال است.' : 'اعلان‌های این مرورگر غیرفعال است.');
-    } catch (_) {
-      toggle.disabled = false;
-      label('بررسی اعلان‌ها ناموفق بود. دوباره تلاش کنید.');
-    }
-  }
-
-  toggle.addEventListener('change', async function () {
-    if (busy) return;
-    busy = true;
+  toggle.addEventListener('change', async function() {
+    var next = toggle.checked;
     toggle.disabled = true;
-    var enable = toggle.checked;
     try {
-      if (enable) {
-        // Request permission directly from the user's click, before awaits.
-        var permission = Notification.permission;
-        if (permission === 'default') permission = await Notification.requestPermission();
-        if (permission !== 'granted') throw new Error('ابتدا اجازه اعلان را در تنظیمات مرورگر فعال کنید.');
-        var keyResponse = await fetch('/api/push/config', {credentials: 'same-origin'});
-        if (!keyResponse.ok) throw new Error('تنظیمات اعلان در دسترس نیست.');
-        var key = (await keyResponse.json()).publicKey;
-        if (!key) throw new Error('کلید اعلان روی سرور تنظیم نشده است.');
-        var reg = await registration(true);
-        if (!reg) throw new Error('سرویس اعلان مرورگر آماده نیست.');
-        var sub = await reg.pushManager.getSubscription();
-        var bytes = base64Bytes(key);
-        if (sub && sub.options && sub.options.applicationServerKey) {
-          var current = new Uint8Array(sub.options.applicationServerKey);
-          if (current.length !== bytes.length || current.some(function (v,i) {return v !== bytes[i];})) {
-            await send('/api/push/unsubscribe', {endpoint: sub.endpoint});
-            await sub.unsubscribe();
-            sub = null;
-          }
-        }
-        if (!sub) sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: bytes});
-        try { await send('/api/push/subscribe', sub.toJSON()); }
-        catch (e) { await sub.unsubscribe(); throw e; }
-        localStorage.setItem(enabledKey, '1');
-        localStorage.removeItem(dismissedKey);
-      } else {
-        var existing = await registration(false);
-        var sub = existing ? await existing.pushManager.getSubscription() : null;
-        if (sub) {
-          await send('/api/push/unsubscribe', {endpoint: sub.endpoint});
-          await sub.unsubscribe();
-        }
-        localStorage.setItem(enabledKey, '0');
-        localStorage.setItem(dismissedKey, '1');
-      }
+      await syncWorker(next);
+      sound = next;
+      localStorage.setItem(key, next ? '1' : '0');
+      label();
     } catch (e) {
-      label((e && e.message) || 'تغییر وضعیت اعلان‌ها ناموفق بود.');
-    } finally {
-      busy = false;
-      await refresh();
-      toggle.disabled = false;
-    }
+      toggle.checked = sound;
+      status.textContent = (e && e.message) || 'ذخیره تنظیمات اعلان ناموفق بود.';
+    } finally { toggle.disabled = false; }
   });
-  refresh();
+  // Restore persisted choice when the SW was updated or replaced.
+  syncWorker(sound).catch(function () {});
 })();
 </script>
 {% endblock %}
