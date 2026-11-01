@@ -492,7 +492,13 @@ def save_express_referrals(items, app=None):
 
 # کارت‌های بانکی همکار اکسپرس (فقط متادیتا؛ شمارهٔ کامل ذخیره نمی‌شود)
 def load_partner_bank_accounts(app=None):
-    return _load(ensure_file('EXPRESS_PARTNER_BANK_ACCOUNTS_FILE', 'express_partner_bank_accounts.json', [], app))
+    path = ensure_file('EXPRESS_PARTNER_BANK_ACCOUNTS_FILE', 'express_partner_bank_accounts.json', [], app)
+    rows = _load(path)
+    # One-time opportunistic scrub for legacy records, preserving masked fields.
+    if isinstance(rows, list) and any(isinstance(row, dict) and 'pan' in row for row in rows):
+        rows = [{k: v for k, v in row.items() if k != 'pan'} if isinstance(row, dict) else row for row in rows]
+        _save(path, rows)
+    return rows
 
 
 def save_partner_bank_accounts(items, app=None):
@@ -515,8 +521,9 @@ def save_financial_pair(commissions, withdrawals, app=None):
 
     A future single-database ledger should replace this compatibility transaction.
     """
-    previous_commissions = load_express_commissions(app)
-    previous_withdrawals = load_partner_withdrawals(app)
+    # Read old snapshots from disk, not the mutable in-process commissions cache.
+    previous_commissions = _load(ensure_file('EXPRESS_COMMISSIONS_FILE', 'express_commissions.json', [], app))
+    previous_withdrawals = _load(ensure_file('EXPRESS_PARTNER_WITHDRAWALS_FILE', 'express_partner_withdrawals.json', [], app))
     save_express_commissions(commissions, app)
     try:
         save_partner_withdrawals(withdrawals, app)

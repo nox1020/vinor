@@ -6379,7 +6379,8 @@ def _financial_withdrawal_status_locked(wid: str):
             flash('دسترسی کافی برای این عملیات ندارید.', 'error')
             return redirect(url_for('admin.dashboard'))
     except Exception:
-        pass
+        current_app.logger.exception('finance permission check failed')
+        abort(403)
     new_status = (request.form.get('status') or '').strip().lower()
     admin_note = (request.form.get('admin_note') or '').strip()
     filter_hint = (request.form.get('filter') or 'active').strip()
