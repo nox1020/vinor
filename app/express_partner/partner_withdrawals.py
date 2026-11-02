@@ -2,6 +2,7 @@
 """درخواست برداشت پورسانت همکار اکسپرس."""
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -31,9 +32,25 @@ MIN_WITHDRAWAL_AMOUNT = 10_000_000
 COMMISSION_TYPE_MANUAL_ADJUSTMENT = "manual_adjustment"
 
 
+_AMOUNT_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def parse_amount_strict(v: Any) -> Optional[int]:
+    """مبلغ ورودی کاربر: ارقام فارسی/عربی و جداکننده مجاز؛ منفی/اعشار/متن → None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v if v >= 0 else None
+    s = str(v if v is not None else "").translate(_AMOUNT_DIGITS)
+    s = re.sub(r"[,\s،٬_]", "", s)
+    if not s.isdigit() or len(s) > 15:
+        return None
+    return int(s)
+
+
 def _amount_int(v: Any) -> int:
     try:
-        return max(0, int(str(v).replace(",", "").strip() or "0"))
+        return max(0, int(str(v).translate(_AMOUNT_DIGITS).replace(",", "").replace("،", "").strip() or "0"))
     except Exception:
         return 0
 
@@ -1094,7 +1111,10 @@ def validate_new_request(
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     ph = normalize_partner_phone(partner_phone)
     acc_id = (bank_account_id or "").strip()
-    amount = _amount_int(amount_raw)
+    parsed = parse_amount_strict(amount_raw)
+    if parsed is None:
+        return None, "invalid_amount"
+    amount = parsed
 
     if amount < MIN_WITHDRAWAL_AMOUNT:
         return None, "min_amount"

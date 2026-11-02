@@ -39,9 +39,10 @@ def wallet_insufficient_message(required: int, balance: int) -> str:
     need = max(0, int(required or 0))
     have = max(0, int(balance or 0))
     shortfall = max(0, need - have)
+    # شارژ آنلاین کیف پول وجود ندارد؛ پیام نباید کاربر را به «شارژ» بفرستد.
     return (
-        f"برای تأیید نهایی، ابتدا کیف پول خود را به مبلغ پورسانت ({toman_fa(need)}) شارژ کنید. "
-        f"کمبود: {toman_fa(shortfall)}."
+        f"موجودی کیف پول برای پرداخت پورسانت ({toman_fa(need)}) کافی نیست؛ کمبود: {toman_fa(shortfall)}. "
+        "شارژ آنلاین کیف پول فعال نیست؛ برای افزایش موجودی با پشتیبانی وینور تماس بگیرید."
     )
 
 

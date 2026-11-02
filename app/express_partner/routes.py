@@ -555,15 +555,27 @@ def _reconcile_partner_commissions(phone: str) -> None:
     ph = (phone or '').strip()
     if not ph:
         return
-    wd = _partner_withdrawals_raw()
-    all_comms = _express_commissions_cached() or []
-    dirty = reconcile_paid_withdrawals(all_comms, wd, ph)
-    if dirty:
-        try:
-            save_express_commissions(all_comms)
-            save_partner_withdrawals(wd)
-        except Exception:
-            current_app.logger.exception('reconcile_paid_withdrawals failed')
+    # پیش‌بررسی روی کپی (کش مشترک پروسس دست نمی‌خورد)؛ فقط اگر واقعاً لازم بود، زیر قفل مالی
+    # با دادهٔ تازه دوباره اجرا و هر دو فایل با هم ذخیره می‌شوند.
+    from copy import deepcopy
+
+    if not reconcile_paid_withdrawals(
+        deepcopy(_express_commissions_cached() or []), deepcopy(_partner_withdrawals_raw()), ph,
+    ):
+        return
+    from app.express_partner.deal_wallet import commission_store_lock
+    from app.utils.storage import load_express_commissions, save_financial_pair
+
+    try:
+        with commission_store_lock():
+            all_comms = load_express_commissions() or []
+            wd = _partner_withdrawals_raw()
+            if isinstance(all_comms, list) and reconcile_paid_withdrawals(all_comms, wd, ph):
+                save_financial_pair(all_comms, wd)
+        for key in [k for k in vars(g) if k.startswith('_express_my_comms_') or k == '_express_commissions_cached']:
+            g.pop(key, None)
+    except Exception:
+        current_app.logger.exception('reconcile_paid_withdrawals failed')
 
 
 def _partner_commission_stats(phone: str, commissions: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -8038,8 +8050,30 @@ def bank_accounts_set_default():
 @require_partner_access(json_response=True)
 def withdrawals_request():
     from app.express_partner.deal_wallet import commission_store_lock
+    g._wallet_after_lock = []
     with commission_store_lock():
-        return _withdrawals_request_locked()
+        resp = _withdrawals_request_locked()
+    _run_wallet_after_lock()
+    return resp
+
+
+def _run_wallet_after_lock():
+    """پیامک‌ها بعد از آزاد شدن قفل مالی؛ کندی سرویس پیامک بقیهٔ عملیات کیف پول را نگه نمی‌دارد."""
+    jobs = getattr(g, '_wallet_after_lock', None) or []
+    g._wallet_after_lock = []
+    for job in jobs:
+        try:
+            job()
+        except Exception:
+            current_app.logger.exception('wallet post-lock notification failed')
+
+
+def _after_wallet_lock(job):
+    pending = getattr(g, '_wallet_after_lock', None)
+    if pending is None:
+        job()
+    else:
+        pending.append(job)
 
 def _withdrawals_request_locked():
     """ثبت درخواست برداشت پورسانت توسط همکار."""
@@ -8097,27 +8131,33 @@ def _withdrawals_request_locked():
         current_app.logger.exception('save_partner_withdrawals failed')
         return jsonify({'success': False, 'error': 'save_failed'}), 500
 
-    try:
-        _send_withdrawal_admin_sms(
-            partner_phone=me_phone,
-            partner_name=partner_name,
-            amount=int(rec.get('amount') or 0),
-            bank_summary=str(rec.get('bank_summary') or ''),
-        )
-    except Exception:
-        current_app.logger.exception('withdrawal admin SMS failed')
+    _sms_amount = int(rec.get('amount') or 0)
+    _sms_bank = str(rec.get('bank_summary') or '')
+    _sms_ref = str(rec.get('id') or '')
 
-    try:
-        from .commission_sms import notify_partner_commission_txn
-        notify_partner_commission_txn(
-            partner_phone=me_phone,
-            event='withdrawal_requested',
-            amount=int(rec.get('amount') or 0),
-            bank_summary=str(rec.get('bank_summary') or ''),
-            reference_id=str(rec.get('id') or ''),
-        )
-    except Exception:
-        current_app.logger.exception('withdrawal_requested partner SMS failed')
+    def _notify_request():
+        try:
+            _send_withdrawal_admin_sms(
+                partner_phone=me_phone,
+                partner_name=partner_name,
+                amount=_sms_amount,
+                bank_summary=_sms_bank,
+            )
+        except Exception:
+            current_app.logger.exception('withdrawal admin SMS failed')
+        try:
+            from .commission_sms import notify_partner_commission_txn
+            notify_partner_commission_txn(
+                partner_phone=me_phone,
+                event='withdrawal_requested',
+                amount=_sms_amount,
+                bank_summary=_sms_bank,
+                reference_id=_sms_ref,
+            )
+        except Exception:
+            current_app.logger.exception('withdrawal_requested partner SMS failed')
+
+    _after_wallet_lock(_notify_request)
 
     return jsonify({
         'success': True,
@@ -8136,8 +8176,11 @@ def _withdrawals_request_locked():
 @require_partner_access(json_response=True)
 def withdrawals_cancel(wid: str):
     from app.express_partner.deal_wallet import commission_store_lock
+    g._wallet_after_lock = []
     with commission_store_lock():
-        return _withdrawals_cancel_locked(wid)
+        resp = _withdrawals_cancel_locked(wid)
+    _run_wallet_after_lock()
+    return resp
 
 def _withdrawals_cancel_locked(wid: str):
     """لغو درخواست برداشت در وضعیت «در انتظار بررسی» توسط همکار."""
@@ -8145,7 +8188,11 @@ def _withdrawals_cancel_locked(wid: str):
     all_wd = load_partner_withdrawals() or []
     if not isinstance(all_wd, list):
         all_wd = []
-    commissions = _express_commissions_cached() or []
+    from app.utils.storage import load_express_commissions as _load_comms_fresh
+
+    commissions = _load_comms_fresh() or []  # تازه از دیسک، نه کش؛ وگرنه تغییر هم‌زمان بازنویسی می‌شود
+    if not isinstance(commissions, list):
+        commissions = []
     now_iso = datetime.utcnow().isoformat() + 'Z'
     ok, err = cancel_partner_withdrawal(all_wd, me_phone, wid, commissions, now_iso)
     if not ok:
@@ -8166,17 +8213,20 @@ def _withdrawals_cancel_locked(wid: str):
         current_app.logger.exception('withdrawals_cancel save failed')
         return jsonify({'success': False, 'error': 'save_failed'}), 500
     if cancelled_row:
-        try:
+        _c_amount = int(cancelled_row.get('amount') or 0)
+        _c_bank = str(cancelled_row.get('bank_summary') or '')
+
+        def _notify_cancel():
             from .commission_sms import notify_partner_commission_txn
             notify_partner_commission_txn(
                 partner_phone=me_phone,
                 event='withdrawal_cancelled',
-                amount=int(cancelled_row.get('amount') or 0),
-                bank_summary=str(cancelled_row.get('bank_summary') or ''),
+                amount=_c_amount,
+                bank_summary=_c_bank,
                 reference_id=str(wid),
             )
-        except Exception:
-            current_app.logger.exception('withdrawal_cancelled partner SMS failed')
+
+        _after_wallet_lock(_notify_cancel)
     return jsonify({
         'success': True,
         'withdrawable_balance': _partner_withdrawable_balance(me_phone),
@@ -11093,7 +11143,7 @@ def special_visit_action(vid: str, action: str):
         'no_open_deal': 'معاملهٔ در جریانی برای این کار پیدا نشد.',
         'failed': 'ثبت معامله روی فایل ممکن نشد.',
         'no_land': 'این پرونده به فایلی وصل نیست.',
-        'wallet_insufficient': 'برای تأیید نهایی، ابتدا کیف پول خود را به مبلغ پورسانت شارژ کنید.',
+        'wallet_insufficient': 'موجودی کیف پول برای پرداخت پورسانت کافی نیست. شارژ آنلاین فعال نیست؛ با پشتیبانی وینور تماس بگیرید.',
         'already_decided': 'برای این پرونده قبلاً تصمیم ثبت شده است.',
         'invalid_decision': 'ثبت تصمیم ممکن نشد.',
     }

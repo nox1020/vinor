@@ -504,6 +504,7 @@
 
     function withdrawErrorMessage(code) {
       if (code === 'min_amount') return 'حداقل مبلغ برداشت ' + formatToman(minWithdraw) + ' است.';
+      if (code === 'invalid_amount') return 'مبلغ نامعتبر است؛ فقط عدد مثبت وارد کنید.';
       if (code === 'missing_bank') return 'حساب بانکی را انتخاب کنید.';
       if (code === 'invalid_bank') return 'حساب بانکی نامعتبر است.';
       if (code === 'insufficient_balance') return 'مبلغ بیشتر از موجودی قابل برداشت است.';

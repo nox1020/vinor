@@ -1396,78 +1396,90 @@ def _exec_withdrawal_status(
         status_label,
     )
 
-    items = load_partner_withdrawals() or []
-    if not isinstance(items, list):
-        items = []
-    row = next(
-        (w for w in items if isinstance(w, dict) and str(w.get("id") or "") == wid),
-        None,
-    )
-    if not row:
-        return {"ok": False, "error": "برداشت یافت نشد."}
+    # کل خواندن→تغییر→ذخیره زیر همان قفل مالی که درخواست/لغو برداشت و پرداخت معامله دارند؛
+    # دو فایل با هم (ژورنال‌دار) ذخیره می‌شوند تا هیچ تغییر هم‌زمانی گم نشود.
+    from app.express_partner.deal_wallet import commission_store_lock
+    from app.utils.storage import save_financial_pair
 
-    old = str(row.get("status") or "pending").strip().lower()
-    if old == new_status:
-        return {"ok": True, "message": f"برداشت از قبل «{status_label(new_status)}» است.", "already": True}
-    if not admin_can_transition(old, new_status):
-        return {"ok": False, "error": f"تغییر از {old} به {new_status} مجاز نیست."}
-
-    partner_phone = str(row.get("phone") or row.get("partner_phone") or "").strip()
-    commissions = load_express_commissions() or []
-    if not isinstance(commissions, list):
-        commissions = []
-    commissions_dirty = False
-    now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    row["status"] = new_status
-    row["updated_at"] = now_iso
-    if note:
-        row["admin_note"] = note
-
-    if new_status == "approved" and old not in ("approved", "processing", "paid"):
-        linked = link_withdrawal_to_commissions(
-            commissions,
-            partner_phone,
-            int(row.get("amount") or 0),
-            wid,
-            items,
+    with commission_store_lock():
+        items = load_partner_withdrawals() or []
+        if not isinstance(items, list):
+            items = []
+        row = next(
+            (w for w in items if isinstance(w, dict) and str(w.get("id") or "") == wid),
+            None,
         )
-        if linked > 0:
-            commissions_dirty = True
+        if not row:
+            return {"ok": False, "error": "برداشت یافت نشد."}
 
-    if new_status == "rejected" and old != "rejected":
-        release_withdrawal_commissions(commissions, wid)
-        commissions_dirty = True
+        old = str(row.get("status") or "pending").strip().lower()
+        if old == new_status:
+            return {"ok": True, "message": f"برداشت از قبل «{status_label(new_status)}» است.", "already": True}
+        if not admin_can_transition(old, new_status):
+            return {"ok": False, "error": f"تغییر از {old} به {new_status} مجاز نیست."}
 
-    if new_status == "paid" and old != "paid":
-        wd_amount = int(row.get("amount") or 0)
-        already = int(row.get("commission_allocated_amount") or 0)
-        need = max(0, wd_amount - already)
-        if need > 0:
-            if old not in ("approved", "processing"):
-                link_withdrawal_to_commissions(
-                    commissions,
-                    partner_phone,
-                    wd_amount,
-                    wid,
-                    items,
-                )
-                commissions_dirty = True
-            allocated = apply_paid_withdrawal_to_commissions(
+        partner_phone = str(row.get("phone") or row.get("partner_phone") or "").strip()
+        commissions = load_express_commissions() or []
+        if not isinstance(commissions, list):
+            commissions = []
+        commissions_dirty = False
+        now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        row["status"] = new_status
+        row["updated_at"] = now_iso
+        if note:
+            row["admin_note"] = note
+
+        if new_status == "approved" and old not in ("approved", "processing", "paid"):
+            linked = link_withdrawal_to_commissions(
                 commissions,
                 partner_phone,
-                need,
+                int(row.get("amount") or 0),
                 wid,
-                now_iso,
                 items,
             )
-            if allocated > 0:
+            if linked > 0:
                 commissions_dirty = True
-                row["commission_allocated_amount"] = already + allocated
 
-    if commissions_dirty:
-        save_express_commissions(commissions)
-    save_partner_withdrawals(items)
+        if new_status == "rejected" and old != "rejected":
+            release_withdrawal_commissions(commissions, wid)
+            commissions_dirty = True
+
+        if new_status == "paid" and old != "paid":
+            wd_amount = int(row.get("amount") or 0)
+            already = int(row.get("commission_allocated_amount") or 0)
+            need = max(0, wd_amount - already)
+            if need > 0:
+                if old not in ("approved", "processing"):
+                    link_withdrawal_to_commissions(
+                        commissions,
+                        partner_phone,
+                        wd_amount,
+                        wid,
+                        items,
+                    )
+                    commissions_dirty = True
+                allocated = apply_paid_withdrawal_to_commissions(
+                    commissions,
+                    partner_phone,
+                    need,
+                    wid,
+                    now_iso,
+                    items,
+                )
+                if allocated > 0:
+                    commissions_dirty = True
+                    row["commission_allocated_amount"] = already + allocated
+                if already + allocated < wd_amount:
+                    # پورسانت تأییدشدهٔ کافی برای پوشش این برداشت نیست؛ «پرداخت‌شده» ثبت نمی‌شود
+                    # (وگرنه موجودی بیش از واقع می‌ماند). چیزی ذخیره نشده است.
+                    return {
+                        "ok": False,
+                        "error": "پورسانت تأییدشدهٔ کافی برای این برداشت پیدا نشد؛ ابتدا موجودی همکار را بررسی کنید.",
+                        "allocation_short": wd_amount - already - allocated,
+                    }
+
+        save_financial_pair(commissions, items)
 
     try:
         from app.express_partner.commission_sms import notify_partner_commission_txn

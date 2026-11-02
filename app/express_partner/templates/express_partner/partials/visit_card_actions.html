@@ -105,7 +105,7 @@
 
   {% if received and item.can_approve_deal and not item.can_final_confirm and item.final_confirm_message %}
   <p class="sv-hint">{{ item.final_confirm_message }}</p>
-  <a class="rq-btn rq-btn--deal" href="{{ item.wallet_charge_path or url_for('express_partner.commissions') }}">شارژ کیف پول</a>
+  <a class="rq-btn rq-btn--deal" href="{{ item.wallet_charge_path or url_for('express_partner.commissions') }}">مشاهدهٔ کیف پول</a>
   {% endif %}
 
   {% if field_ok and (item.can_confirm_deal or item.can_reject_deal or item.can_close_deal) %}
