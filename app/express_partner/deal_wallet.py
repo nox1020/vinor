@@ -186,19 +186,23 @@ def _stage_payout(
     if status != "pending":
         return "invalid_transition", {}
 
-    from .commission_escrow import find_hold, settle_hold
+    from .commission_escrow import find_hold, held_total, settle_hold
 
     balance = int(withdrawable_balance(commissions, withdrawals, owner_phone)) if owner_phone else 0
     hold = find_hold(commissions, str(deal.get("land_code") or ""), owner_phone)
-    if balance < amount:
-        shortfall = amount - balance
-        message = wallet_insufficient_message(amount, balance)
+    held_here = _amount((hold or {}).get("commission_amount"))
+    other_holds = max(0, held_total(commissions, owner_phone) - held_here)
+    # This sale may use its own hold. It must not spend a hold kept for another listing.
+    spendable = max(0, balance - other_holds)
+    if spendable < amount:
+        shortfall = amount - spendable
+        message = wallet_insufficient_message(amount, spendable)
         detail = {
             "idempotent": False,
             "transferred": False,
             "error": WALLET_INSUFFICIENT,
             "required_amount": amount,
-            "balance": balance,
+            "balance": spendable,
             "shortfall": shortfall,
             "message": message,
         }
