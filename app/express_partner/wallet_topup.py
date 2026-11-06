@@ -143,14 +143,24 @@ def complete_wallet_topup(authority: str, status_param: str) -> Dict[str, Any]:
             sandbox=bool(cfg.get("sandbox")),
         )
         if not verified.get("ok"):
+            # A dropped response can be retried. A rejected gateway or a mismatched
+            # amount must not become spendable.
+            if verified.get("code") is None and verified.get("error") != "amount_mismatch":
+                return {"ok": False, "reason": "verify_failed"}
             row["status"] = "rejected"
             row["updated_at"] = iso_z(utcnow())
             save_express_commissions(rows)
             return {"ok": False, "reason": "verify_failed"}
         ref = str(verified.get("ref_id") or "").strip()
+        if not ref:
+            return {"ok": False, "reason": "missing_ref"}
         prior = find_topup_by_ref(rows, ref)
         if prior is not None and prior is not row:
-            return {"ok": True, "idempotent": True, "amount": _amount(prior.get("commission_amount"))}
+            row["status"] = "rejected"
+            row["updated_at"] = iso_z(utcnow())
+            row["reject_reason"] = "duplicate_ref"
+            save_express_commissions(rows)
+            return {"ok": False, "reason": "duplicate_ref"}
         stamp = iso_z(utcnow())
         row["status"] = "approved"
         row["approved_at"] = stamp

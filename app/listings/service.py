@@ -838,7 +838,16 @@ def publish_listing(
             return None, err, False
         if changed and target is not None:
             _clear_archive(target)
-            written = save_listings(items, app)
+            try:
+                written = save_listings(items, app)
+            except Exception:
+                try:
+                    from app.express_partner.commission_escrow import release_publish_hold
+
+                    release_publish_hold(code_key(target) or want, reason="publish_failed")
+                except Exception:
+                    pass
+                raise
             saved = target
             saved_code = code_key(target)
             for land in written:
@@ -1036,6 +1045,12 @@ def archive_listing(
         stored_reason = str(target.get("archived_reason") or clean_reason)
     if is_archived(target):
         _sync_archived_followups(code_key(target), stored_reason, stamp)
+        try:
+            from app.express_partner.commission_escrow import release_publish_hold
+
+            release_publish_hold(code_key(target), reason="archived")
+        except Exception:
+            pass
     return target, None, changed
 
 

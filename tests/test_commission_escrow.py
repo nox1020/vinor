@@ -232,6 +232,119 @@ def test_topup_callback_is_idempotent(monkeypatch):
     assert rows[0]["ref_id"] == "REF1"
 
 
+def test_sale_cannot_spend_another_listings_hold(app):
+    from app.express_partner.commission_escrow import STATUS_HELD, ensure_hold
+    from app.express_partner.deal_wallet import finalize_deal_payout
+    from app.utils.storage import load_express_commissions, save_express_commissions, save_express_partners
+
+    commissions = []
+    _fund(commissions, OWNER, 100_000, 1)
+    assert ensure_hold(commissions, [], phone=OWNER, land_code="9", amount=30_000)[0] is None
+    assert ensure_hold(commissions, [], phone=OWNER, land_code="8", amount=60_000)[0] is None
+    commissions.append({
+        "id": 9,
+        "commission_type": "deal",
+        "partner_phone": MARKETER,
+        "land_code": "9",
+        "commission_amount": 50_000,
+        "status": "pending",
+    })
+    with app.app_context():
+        save_express_partners([
+            {"phone": OWNER, "status": "approved", "total_income": 0},
+            {"phone": MARKETER, "status": "approved", "total_income": 0},
+        ])
+        save_express_commissions(commissions)
+        err, detail = finalize_deal_payout(deal_id=9, owner_phone=OWNER)
+    assert err == "wallet_insufficient"
+    assert detail["shortfall"] == 10_000
+    with app.app_context():
+        rows = load_express_commissions()
+    assert all(
+        row.get("status") == STATUS_HELD
+        for row in rows
+        if row.get("commission_type") == "escrow_hold"
+    )
+    assert next(row for row in rows if row.get("id") == 9)["status"] == "pending"
+
+
+def test_archive_releases_the_hold(app, monkeypatch):
+    from app.express_partner.commission_escrow import STATUS_RELEASED, ensure_hold
+    from app.listings.service import archive_listing
+    from app.utils.storage import load_express_commissions, save_ads, save_express_commissions
+
+    monkeypatch.setattr(
+        "app.express_partner.commission_escrow.listing_has_open_deal",
+        lambda _code: False,
+    )
+    commissions = []
+    _fund(commissions, OWNER, 100_000, 1)
+    ensure_hold(commissions, [], phone=OWNER, land_code="9", amount=20_000)
+    with app.app_context():
+        save_express_commissions(commissions)
+        save_ads([{
+            "code": "9",
+            "owner": OWNER,
+            "title": "فایل",
+            "public": True,
+            "is_express": True,
+            "source": "my_property_published",
+            "extras": {"published_for_sale": True},
+        }])
+        _land, err, changed = archive_listing("9", phone=OWNER, reason="manual")
+        assert err is None and changed is True
+        rows = load_express_commissions()
+    hold = next(row for row in rows if row.get("commission_type") == "escrow_hold")
+    assert hold["status"] == STATUS_RELEASED
+
+
+def test_topup_without_ref_or_duplicate_ref_does_not_credit(monkeypatch):
+    from app.express_partner.wallet_topup import complete_wallet_topup
+
+    rows = [
+        {
+            "id": 4,
+            "commission_type": "manual_adjustment",
+            "partner_phone": OWNER,
+            "commission_amount": 10_000,
+            "status": "pending",
+            "source": "wallet_zarinpal",
+            "authority": "AUTH-A",
+            "ref_id": "",
+        },
+        {
+            "id": 5,
+            "commission_type": "manual_adjustment",
+            "partner_phone": OWNER,
+            "commission_amount": 10_000,
+            "status": "approved",
+            "source": "wallet_zarinpal",
+            "authority": "AUTH-OLD",
+            "ref_id": "REF-USED",
+        },
+    ]
+    monkeypatch.setattr("app.utils.storage.load_express_commissions", lambda: rows)
+    monkeypatch.setattr("app.utils.storage.save_express_commissions", lambda items: rows.__setitem__(slice(None), items))
+    monkeypatch.setattr("app.express_partner.wallet_topup.get_zarinpal_settings", lambda: {"sandbox": True})
+    monkeypatch.setattr("app.express_partner.wallet_topup.effective_merchant_id", lambda _cfg=None: "merchant")
+    monkeypatch.setattr(
+        "app.express_partner.wallet_topup.payment_verify",
+        lambda **_k: {"ok": True, "ref_id": "", "code": 100},
+    )
+    missing = complete_wallet_topup("AUTH-A", "OK")
+    assert missing["ok"] is False
+    assert rows[0]["status"] == "pending"
+
+    monkeypatch.setattr(
+        "app.express_partner.wallet_topup.payment_verify",
+        lambda **_k: {"ok": True, "ref_id": "REF-USED", "code": 100},
+    )
+    dup = complete_wallet_topup("AUTH-A", "OK")
+    assert dup["ok"] is False
+    assert dup["reason"] == "duplicate_ref"
+    assert rows[0]["status"] == "rejected"
+
+
 def test_missing_hold_report_does_not_unpublish():
     from app.express_partner.commission_escrow import listings_missing_hold
     from app.listings.service import is_published_for_sale
