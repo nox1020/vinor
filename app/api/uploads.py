@@ -11,7 +11,7 @@ import uuid
 from app.utils import imgtype as imghdr
 from datetime import datetime
 from typing import Tuple
-from flask import Blueprint, current_app, request, jsonify, send_from_directory
+from flask import Blueprint, current_app, request, jsonify, send_from_directory, session
 from werkzeug.utils import secure_filename
 from app.utils.storage import legacy_dir
 
@@ -57,8 +57,17 @@ def _validate_file(fieldname: str = "file") -> Tuple[bytes, str]:
     return raw, ext
 
 
+def _upload_session_ok() -> bool:
+    """A partner/guest OTP session or an admin session. Anonymous visitors cannot upload."""
+    if session.get("logged_in"):
+        return True
+    return bool(str(session.get("user_phone") or session.get("user_id") or "").strip())
+
+
 @uploads_bp.post("/api/uploads/images")
 def upload_image():
+    if not _upload_session_ok():
+        return jsonify({"success": False, "ok": False, "error": "unauthorized"}), 401
     try:
         raw, ext = _validate_file("file")
 
