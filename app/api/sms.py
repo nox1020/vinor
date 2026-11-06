@@ -5,12 +5,38 @@ SMS API endpoints for communication with sms.ir
 """
 
 from datetime import datetime
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, session
 from app.services.sms import send_sms_template
 from app.services.sms_config import get_sms_api_key
 from app.utils.storage import load_sms_history, save_sms_history
 
 sms_api_bp = Blueprint('sms_api', __name__, url_prefix='/api/sms')
+
+
+def sms_api_admin_response():
+    """Block every caller except an admin OTP session.
+
+    Admin login sets ``logged_in`` and ``admin_phone``. Partner and guest
+    sessions only have ``user_phone`` / ``user_id``. Nothing in the web UI,
+    partner flows, schedulers, or the Android app calls these HTTP routes;
+    they use ``app.services.sms`` directly. OTP stays on ``/auth/*``.
+    """
+    if session.get("logged_in") and str(session.get("admin_phone") or "").strip():
+        return None
+    identified = bool(
+        session.get("user_phone")
+        or session.get("user_id")
+        or session.get("logged_in")
+        or session.get("username")
+    )
+    if identified:
+        return jsonify({"success": False, "error": "forbidden"}), 403
+    return jsonify({"success": False, "error": "unauthorized"}), 401
+
+
+@sms_api_bp.before_request
+def _sms_api_admin_only():
+    return sms_api_admin_response()
 
 def _normalize_phone_for_sms(mobile: str) -> str:
     """Normalize phone number to 09xxxxxxxxx format"""
