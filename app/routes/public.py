@@ -482,9 +482,8 @@ def _otp_diag_authorized() -> bool:
     from app.utils.secrets import get_webhook_secret
 
     secret = (get_webhook_secret() or "").strip()
-    presented = (
-        request.headers.get("X-Vinor-Otp-Diag") or request.args.get("token") or ""
-    ).strip()
+    # Header only. A ?token= query value is written to access logs and Referer.
+    presented = (request.headers.get("X-Vinor-Otp-Diag") or "").strip()
     if not secret or not presented:
         return False
     try:
