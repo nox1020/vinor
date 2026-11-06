@@ -77,6 +77,7 @@ jobs:
             tests/test_consultant_main_locks.py
             tests/test_search_page.py
             tests/test_public_listings_all_regions.py
+            tests/test_public_listing_redaction.py
             tests/test_home_app_parity.py
             tests/test_service_area_copy.py
             tests/test_chat_history_page.py
@@ -85,6 +86,7 @@ jobs:
             tests/test_vinor_man.py
             tests/test_owner_home_unpublish.py
             tests/test_sale_publish_window.py
+            tests/test_share_tokens.py
             tests/test_deal_decision_listing.py
             tests/test_inbox_visit_actions.py
             tests/test_inbox_offer_cards.py
@@ -98,10 +100,13 @@ jobs:
             tests/test_invest_data_diag.py
             tests/test_otp_sms.py
             tests/test_healthz_diag_header.py
+            tests/test_sms_api_auth.py
             tests/test_login_flow_review.py
             tests/test_login_no_loop.py
             tests/test_fcm_notification_sound.py
+            tests/test_notification_debug_removed.py
             tests/test_visit_request_form.py
+            tests/test_upload_auth.py
             tests/test_visit_delivery_owner.py
             tests/test_roles_phase5.py
             tests/test_visit_result_phase2.py

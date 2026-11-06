@@ -5447,9 +5447,6 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
             continue
         code = str(land.get('code') or '').strip()
         item = dict(land)
-        item['_assignment_status'] = 'public'
-        item['_in_transaction'] = False
-        item['_is_public'] = True
         try:
             from .new_land_sms import attach_express_land_commission
 
@@ -5458,16 +5455,25 @@ def _home_public_carousel_lands(limit: int = 50) -> List[Dict[str, Any]]:
             item.setdefault('_commission_pct', 0)
             item.setdefault('_commission_amount', 0)
         try:
-            item['_detail_url'] = url_for('express_partner.land_detail', code=code)
+            detail_url = url_for('express_partner.land_detail', code=code)
         except Exception:
-            item['_detail_url'] = f'/express/partner/lands/{code}'
+            detail_url = f'/express/partner/lands/{code}'
+        from app.utils.public_listings import public_listing_view
+
+        card = public_listing_view(item)
+        card['_assignment_status'] = 'public'
+        card['_in_transaction'] = False
+        card['_is_public'] = True
+        card['_commission_pct'] = item.get('_commission_pct') or 0
+        card['_commission_amount'] = item.get('_commission_amount') or 0
+        card['_detail_url'] = detail_url
         if sanitize_land_media is not None:
             try:
-                out.append(sanitize_land_media(item))
+                out.append(sanitize_land_media(card))
             except Exception:
-                out.append(item)
+                out.append(card)
         else:
-            out.append(item)
+            out.append(card)
         if len(out) >= max(1, int(limit or 50)):
             break
     return out
@@ -12219,54 +12225,6 @@ def mark_all_notifications_read():
         "success": True,
         "marked_count": count,
         "unread_count": remaining_unread
-    })
-
-
-# -----------------------------------------------------------------------------
-# Debug endpoint برای بررسی اعلان‌ها
-# -----------------------------------------------------------------------------
-@express_partner_bp.route('/api/notifications/debug', methods=['GET'])
-@require_partner_access(json_response=True, allow_pending=True)
-def notifications_debug():
-    """Debug endpoint برای بررسی مشکل اعلان‌ها"""
-    from app.services.notifications import _load_all, _normalize_user_id, get_user_notifications, merge_duplicate_keys
-    
-    me_phone_raw = (session.get("user_phone") or "").strip()
-    me_phone_normalized = _normalize_user_id(me_phone_raw) if me_phone_raw else ""
-    
-    # اجرای merge خودکار کلیدهای تکراری
-    merge_result = merge_duplicate_keys()
-    
-    # بارگذاری همه داده‌ها (بعد از merge)
-    all_data = _load_all()
-    all_keys = list(all_data.keys())
-    
-    # بررسی اعلان‌های کاربر
-    user_notifications = get_user_notifications(me_phone_normalized, limit=50)
-    
-    # بررسی تطابق کلیدها
-    matching_keys = []
-    for key in all_keys:
-        if _normalize_user_id(key) == me_phone_normalized:
-            matching_keys.append({
-                "original_key": key,
-                "normalized": _normalize_user_id(key),
-                "notifications_count": len(all_data.get(key, []))
-            })
-    
-    return jsonify({
-        "success": True,
-        "merge_result": merge_result,
-        "debug_info": {
-            "session_phone_raw": me_phone_raw,
-            "session_phone_normalized": me_phone_normalized,
-            "all_keys_in_storage": all_keys,
-            "matching_keys": matching_keys,
-            "user_notifications_count": len(user_notifications),
-            "user_notifications": user_notifications[:5],  # فقط 5 تا اول
-            "direct_key_exists": me_phone_normalized in all_data,
-            "direct_key_notifications": len(all_data.get(me_phone_normalized, [])) if me_phone_normalized in all_data else 0
-        }
     })
 
 
