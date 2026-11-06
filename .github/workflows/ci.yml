@@ -97,6 +97,7 @@ jobs:
             tests/test_invest_backup.py
             tests/test_invest_data_diag.py
             tests/test_otp_sms.py
+            tests/test_sms_api_auth.py
             tests/test_login_flow_review.py
             tests/test_login_no_loop.py
             tests/test_fcm_notification_sound.py

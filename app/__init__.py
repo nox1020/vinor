@@ -393,6 +393,10 @@ def create_app() -> Flask:
     try:
         from flask_cors import CORS  # type: ignore
         CORS(app, resources={
+            # /api/sms is admin-session only. Same-origin admin pages do not
+            # need CORS; every other origin is refused. More slashes sort
+            # ahead of /api/* in Flask-CORS.
+            r"/api/sms/.*": {"origins": []},
             r"/api/*": {"origins": "*"},
             # اپ وب کوکی نشست را می‌فرستد؛ مبدأ درخواست برمی‌گردد، نه ستاره.
             r"/invest/api/*": {"origins": "*", "supports_credentials": True},
@@ -588,6 +592,18 @@ def create_app() -> Flask:
     from .utils.session_guard import INVALID_SESSION_ENV, install_session_guard, invalid_session_response
     install_session_guard(app)
 
+    # SMS HTTP API: reject non-admins before CSRF so anonymous POSTs are 401,
+    # not a CSRF 400. Admin POSTs still pass through CSRFProtect below.
+    @app.before_request
+    def _sms_api_admin_before_csrf():
+        path = request.path or ""
+        if path != "/api/sms" and not path.startswith("/api/sms/"):
+            return None
+        if sms_api_bp is None:
+            return None
+        from .api.sms import sms_api_admin_response
+        return sms_api_admin_response()
+
     # ---------- CSRF ----------
     if CSRFProtect is not None:
         csrf = CSRFProtect()
@@ -625,12 +641,8 @@ def create_app() -> Flask:
                 except Exception:
                     pass
 
-        # SMS API از CSRF مستثنا است
-        if sms_api_bp is not None:
-            try:
-                csrf.exempt(sms_api_bp)
-            except Exception:
-                pass
+        # /api/sms is an admin cookie API. It is not CSRF-exempt: a stolen
+        # session still needs the CSRF token to POST a send.
 
         # Push API از CSRF مستثنا است (برای /api/push/subscribe و ...)
         if push_api_bp is not None:
