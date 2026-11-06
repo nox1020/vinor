@@ -71,8 +71,8 @@ jobs:
       - name: Run gated tests
         run: |
           mkdir -p /tmp/vinor-ci
-          # Gated subset. The previously known-failing files are fixed and
-          # appended below; add more files here as they are verified.
+          # Every tests/test_*.py that passes on main. New test modules
+          # belong in this list in the same pull request that adds them.
           files=(
             tests/test_consultant_main_locks.py
             tests/test_search_page.py
@@ -113,6 +113,62 @@ jobs:
             tests/test_zarinpal_plus.py
             tests/test_listing_first_week.py
             tests/test_imgtype_compat.py
+            tests/test_adaptive_layer.py
+            tests/test_agent_goal.py
+            tests/test_agents_layer.py
+            tests/test_ai_console.py
+            tests/test_ai_response_style.py
+            tests/test_android_assetlinks.py
+            tests/test_apk_update.py
+            tests/test_autonomy_phases.py
+            tests/test_business_intelligence.py
+            tests/test_chat_card_inject.py
+            tests/test_chat_first_cards.py
+            tests/test_chat_ops_flow.py
+            tests/test_closing_phase4.py
+            tests/test_commercial_phase3.py
+            tests/test_context_rag_bridge.py
+            tests/test_conversation_engine.py
+            tests/test_crm_phase1.py
+            tests/test_customer_memory_agent.py
+            tests/test_customer_success_agent.py
+            tests/test_decision_engine.py
+            tests/test_evaluation_platform.py
+            tests/test_foundation_phase0.py
+            tests/test_funnel_reach.py
+            tests/test_hardening_phase7.py
+            tests/test_inline_login_sheet.py
+            tests/test_integration_phase6.py
+            tests/test_invest_asset_purge.py
+            tests/test_invest_biz.py
+            tests/test_invest_premigration.py
+            tests/test_invest_projects.py
+            tests/test_invest_settings_annual_pct.py
+            tests/test_lawyer_system.py
+            tests/test_listing_archive.py
+            tests/test_listings_store.py
+            tests/test_manage_publish.py
+            tests/test_memory_layer.py
+            tests/test_negotiation_agent.py
+            tests/test_optimization_engine.py
+            tests/test_parallel_collaboration.py
+            tests/test_partner_txn_feed.py
+            tests/test_planning_layer.py
+            tests/test_property_analysis_agent.py
+            tests/test_rag_di_retriever.py
+            tests/test_rag_incremental_index.py
+            tests/test_rag_vector_store.py
+            tests/test_recommendation_agent.py
+            tests/test_supervisor_layer.py
+            tests/test_vinor_assistant.py
+            tests/test_vinor_control.py
+            tests/test_vinor_i18n.py
+            tests/test_vinor_opens_chat.py
+            tests/test_visit_followups.py
+            tests/test_visit_schedule_payload.py
+            tests/test_wallet_admin_status_lock.py
+            tests/test_wallet_fixes.py
+            tests/test_workflow_engine.py
           )
           python -m pytest -q "${files[@]}"
 
