@@ -2244,8 +2244,8 @@ def _response_for_open_visit(
 
     if st == DONE_PENDING_STATUS:
         speak = (
-            "اعلام «بازدید انجام شد» قبلاً ثبت شده و منتظر تأیید ادمین است. "
-            "لازم نیست دوباره بنویسی؛ بعد از تأیید می‌تونی معامله ثبت کنی."
+            "اعلام «بازدید انجام شد» قبلاً ثبت شده و منتظر تأیید مالک فایل است. "
+            "لازم نیست دوباره بنویسی. فروش را مالک فایل پیش می‌برد."
         )
         return {
             "ok": True,
@@ -4096,7 +4096,7 @@ def _tool_propose_simple_tx(
         # اعلام انجام قبلاً ثبت شده — پیام شفاف، نه خطای گیج‌کننده
         if action_type == "confirm_complete_visit" and mode == "visit_done_pending":
             speak = (
-                "اعلام «بازدید انجام شد» قبلاً ثبت شده و منتظر تأیید ادمین است. "
+                "اعلام «بازدید انجام شد» قبلاً ثبت شده و منتظر تأیید مالک فایل است. "
                 "لازم نیست دوباره بنویسی."
             )
             return {
@@ -4135,7 +4135,7 @@ def _tool_propose_simple_tx(
                     "وگرنه وضعیت را بگو."
                 ),
                 "visit_done": "اول «بازدید انجام شد» را ثبت و تکمیل کن؛ بعد معامله.",
-                "visit_done_pending": "انجام بازدید منتظر تأیید ادمین است؛ هنوز معامله نزن.",
+                "visit_done_pending": "انجام بازدید منتظر تأیید مالک فایل است. فروش را مالک پیش می‌برد.",
                 "visit_pending": "اول درخواست بازدید باید نهایی شود؛ هنوز معامله نزن.",
                 "hidden": (
                     "الان ثبت معامله برای این فایل ممکن نیست "
@@ -5001,9 +5001,9 @@ def _confirm_settlement(*, phone: str, token: str, pending: dict[str, Any]) -> d
 
 
 def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
-    from app.express_partner.partner_roles import partner_can_record_visit_attendance
-    from app.express_partner.visit_requests import request_visit_done_confirmation
-    from app.utils.storage import load_express_partners, load_express_visit_requests, save_express_visit_requests
+    from app.express_partner.partner_roles import partner_can_record_own_visit
+    from app.express_partner.visit_requests import locked_mutate_visit_requests, request_visit_done_confirmation
+    from app.utils.storage import load_express_partners
 
     partners = load_express_partners() or []
     profile = next(
@@ -5014,18 +5014,30 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
         ),
         None,
     )
-    if not partner_can_record_visit_attendance(profile):
-        return {"ok": False, "error": "ثبت انجام بازدید فقط برای ویزیتور و پلاس فعال است."}
+    if not partner_can_record_own_visit(profile):
+        return {"ok": False, "error": "ثبت انجام بازدید فقط برای همکار تأییدشده است."}
 
-    visits = load_express_visit_requests() or []
-    if not isinstance(visits, list):
-        visits = []
-    rec, err = request_visit_done_confirmation(visits, phone, code)
+    held: dict[str, Any] = {}
+
+    def _mutate(rows):
+        rec, err = request_visit_done_confirmation(rows, phone, code)
+        held["rec"] = rec
+        held["err"] = err
+        return bool(rec) and not err
+
+    locked_mutate_visit_requests(_mutate)
+    rec, err = held.get("rec"), held.get("err")
     if err == "not_approved":
         return {"ok": False, "error": "اول باید درخواست بازدید ثبت شده باشد."}
     if not rec:
         return {"ok": False, "error": "ثبت انجام بازدید ممکن نشد."}
-    save_express_visit_requests(visits)
+    if err is None and str(rec.get("status") or "") == "done_pending":
+        try:
+            from app.express_partner.special_visit_inbox import notify_listing_owner_visit_done
+
+            notify_listing_owner_visit_done(rec)
+        except Exception:
+            pass
     st = str(rec.get("status") or "").strip()
     result_tools = False
     try:
@@ -5041,9 +5053,9 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
             if err == "already_completed":
                 msg = "بازدید قبلاً انجام‌شده ثبت شده."
         elif err == "already_pending":
-            msg = "قبلاً ثبت شده و منتظر تأیید ادمین است."
+            msg = "قبلاً ثبت شده و منتظر تأیید مالک فایل است."
         else:
-            msg = "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است."
+            msg = "بازدید انجام شد ثبت شد و منتظر تأیید مالک فایل است."
         out: dict[str, Any] = {
             "ok": True,
             "message": msg,
@@ -5056,25 +5068,11 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
         return out
 
     if st == "completed" or err == "already_completed":
-        msg = (
-            "بازدید انجام شد ثبت و تأیید شد. "
-            "قدم بعدی: از همین چت بگو «ثبت معامله»."
-        )
-        if err == "already_completed":
-            msg = (
-                "بازدید قبلاً انجام‌شده ثبت شده. "
-                "قدم بعدی: از همین چت معامله را ثبت کن."
-            )
+        msg = "بازدید قبلاً تأیید شده است. فروش را مالک فایل پیش می‌برد."
         return {"ok": True, "message": msg, "land_code": code, "tx_mode": "deal"}
-    msg = (
-        "بازدید انجام شد ثبت شد و منتظر تأیید ادمین است. "
-        "قدم بعدی: بعد از تأیید، از همین چت بگو «ثبت معامله»."
-    )
+    msg = "بازدید انجام شد ثبت شد و منتظر تأیید مالک فایل است."
     if err == "already_pending":
-        msg = (
-            "قبلاً ثبت شده و منتظر تأیید ادمین است. "
-            "قدم بعدی: صبر کن تا تأیید شود؛ بعد از همین چت معامله را ثبت کن."
-        )
+        msg = "قبلاً ثبت شده و هنوز منتظر تأیید مالک فایل است."
     return {"ok": True, "message": msg, "land_code": code}
 
 

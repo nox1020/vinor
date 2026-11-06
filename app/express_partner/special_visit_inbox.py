@@ -445,6 +445,65 @@ def notify_special_owner_new_visit(rec: Dict[str, Any] | None) -> None:
             pass
 
 
+def notify_listing_owner_visit_done(rec: Dict[str, Any] | None) -> None:
+    """بازاریاب «بازدید انجام شد» زده. مالک فایل پیامک و اعلان می‌گیرد."""
+    if not isinstance(rec, dict):
+        return
+    code = str(rec.get("land_code") or "").strip()
+    from .visit_requests import owner_phone_for_listing
+
+    owner = _canon_phone(owner_phone_for_listing(code)) or _canon_phone(str(rec.get("owner_phone") or ""))
+    requester = _canon_phone(str(rec.get("partner_phone") or ""))
+    if not owner or owner == requester:
+        return
+    title = str(rec.get("land_title") or code).strip() or code
+    marketer = str(rec.get("partner_name") or "").strip() or "بازاریاب"
+    try:
+        from flask import url_for
+
+        from app.services.notifications import add_notification
+
+        try:
+            action_url = url_for("express_partner.requests", tab="visits")
+        except Exception:
+            action_url = "/express/partner/requests?tab=visits"
+        add_notification(
+            user_id=owner,
+            title="تأیید بازدید",
+            body=f"{marketer} بازدید «{title}» را انجام‌شده اعلام کرد. تأیید یا رد با شماست.",
+            ntype="visit",
+            ad_id=code,
+            action_url=action_url,
+            source="visit_inbox",
+        )
+    except Exception:
+        try:
+            from flask import current_app
+
+            current_app.logger.exception("visit done owner notification failed code=%s", code)
+        except Exception:
+            pass
+    try:
+        from .visit_sms import notify_partner_land_tx_sms
+
+        notify_partner_land_tx_sms(
+            partner_phone=owner,
+            event="visit_done_pending",
+            land_code=code,
+            land_title=title,
+            visit_date=str(rec.get("visit_date") or ""),
+            visit_time=str(rec.get("visit_time") or ""),
+            reference_id=str(rec.get("id") or ""),
+        )
+    except Exception:
+        try:
+            from flask import current_app
+
+            current_app.logger.exception("visit done owner SMS failed code=%s", code)
+        except Exception:
+            pass
+
+
 def visits_for_special_owner(
     phone: str,
     visit_rows: List[Dict[str, Any]] | None = None,
@@ -620,6 +679,26 @@ def visits_for_special_owner(
             (s for s in wf_steps if isinstance(s, dict) and s.get("state") == "current"),
             None,
         )
+        can_confirm_done = False
+        can_deny_done = False
+        if not owned_listing:
+            can_complete = False
+            can_no_show = False
+            can_confirm_deal = False
+            can_reject_deal = False
+            can_close_deal = False
+            can_start_deal = False
+            can_register_result = False
+        elif st == DONE_PENDING_STATUS:
+            can_confirm_done = True
+            can_deny_done = True
+            can_complete = False
+            can_no_show = False
+            can_reject_done = False
+            can_register_result = False
+        else:
+            can_register_result = False
+
         if can_confirm_deal and not current_step:
             current_hint = "بازدید انجام شده. «تأیید فروش» فایل را در حال معامله می‌کند."
             stage_label = "تأیید فروش"
@@ -633,12 +712,15 @@ def visits_for_special_owner(
                 or progress_summary.get("current_label")
                 or labels.get(st, st)
             )
-        if st == APPROVED_STATUS and (can_complete or can_no_show):
+        if st == DONE_PENDING_STATUS and can_confirm_done:
+            stage_label = "منتظر تأیید شما"
+            current_hint = "بازاریاب بازدید را اعلام کرده. «تأیید بازدید» پرونده را کامل می‌کند."
+        elif st == APPROVED_STATUS and (can_complete or can_no_show):
             stage_label = "منتظر بازدید"
-            current_hint = "بعد از بازدید، «بازدید انجام شد» یا «عدم حضور» را ثبت کنید."
+            current_hint = "اگر خودت بازدید را دیدی «بازدید انجام شد» را بزن. در غیر این صورت بازاریاب اعلام می‌کند و تو تأیید می‌کنی."
         elif st == COMPLETED_STATUS and not can_confirm_deal and not can_close_deal:
             if not outcome:
-                current_hint = "بازدید انجام شد. نتیجه را ثبت کنید: علاقه‌مند، پیگیری دوباره، یا بی‌علاقه."
+                current_hint = "بازاریاب نتیجهٔ بازدید را ثبت می‌کند. بعد از آن فروش با شماست."
             else:
                 current_hint = visit_outcome_hint(outcome) or current_hint
         elif st == APPROVED_STATUS and not current_hint:
@@ -652,7 +734,7 @@ def visits_for_special_owner(
         needs_action = bool(
             can_approve or can_complete or can_no_show or can_approve_deal
             or can_confirm_deal or can_reject_deal or can_close_deal
-            or can_register_result
+            or can_register_result or can_confirm_done or can_deny_done
         )
         status_label = labels.get(st, st)
         if deal_dec == "approved":
@@ -768,6 +850,8 @@ def visits_for_special_owner(
             "can_approve": can_approve,
             "can_reject": can_reject,
             "can_complete": can_complete,
+            "can_confirm_done": can_confirm_done,
+            "can_deny_done": can_deny_done,
             "can_reject_done": can_reject_done,
             "can_no_show": can_no_show,
             "can_register_result": can_register_result,
@@ -827,6 +911,8 @@ _PLUS_INBOX_ACTIONS = (
     "can_reject",
     "can_reject_done",
     "can_complete",
+    "can_confirm_done",
+    "can_deny_done",
     "can_no_show",
     "can_start_deal",
     "can_approve_deal",
@@ -863,11 +949,35 @@ def visits_for_listing_owner(
     return visible
 
 
-def special_can_manage_visit(owner_phone: str, visit_row: Dict[str, Any] | None) -> bool:
+def listing_owner_owns_visit(owner_phone: str, visit_row: Dict[str, Any] | None) -> bool:
+    """فقط مالک همین آگهی. میزبان تقویم پلاس، بدون مالکیت فایل، مدیریت نمی‌کند."""
     if not isinstance(visit_row, dict):
         return False
+    me = _canon_phone(owner_phone)
+    if not me:
+        return False
+    requester = _canon_phone(str(visit_row.get("partner_phone") or ""))
+    if requester and requester == me:
+        return False
+    from .special_listings import _code_key
+    from .visit_requests import owner_phone_for_listing, resolve_listing_for_visit_code
+
     codes = owned_land_codes(owner_phone)
-    return _visit_row_for_plus_owner(visit_row, owner_phone, codes)
+    code = _code_key({"code": visit_row.get("land_code")})
+    if code and code in codes:
+        return True
+    if code and resolve_listing_for_visit_code(code) is not None:
+        resolved = _canon_phone(owner_phone_for_listing(code))
+        if resolved:
+            return resolved == me
+        stamped = _canon_phone(str(visit_row.get("owner_phone") or ""))
+        return bool(stamped) and stamped == me
+    stamped = _canon_phone(str(visit_row.get("owner_phone") or ""))
+    return bool(stamped) and stamped == me
+
+
+def special_can_manage_visit(owner_phone: str, visit_row: Dict[str, Any] | None) -> bool:
+    return listing_owner_owns_visit(owner_phone, visit_row)
 
 
 LISTING_DEAL_ERROR_FA = {
@@ -1002,7 +1112,7 @@ def apply_special_visit_action(
     if act == "complete":
         from .visit_requests import record_visit_attendance
 
-        return record_visit_attendance(requests, rid, outcome="done")
+        return record_visit_attendance(requests, rid, outcome="done", by_owner=True)
     if act == "reject_done":
         if current != DONE_PENDING_STATUS:
             return None, "invalid_transition"

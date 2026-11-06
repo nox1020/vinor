@@ -3652,7 +3652,7 @@ def _build_partner_sales_pipeline(
     include_offers_in_cards: bool = False,
 ) -> Dict[str, Any]:
     """آیتم‌ها و شمارش تب‌های پیگیری — مشترک بین /requests و badge خانه."""
-    from .partner_roles import partner_can_manage_deal, partner_can_record_visit_attendance
+    from .partner_roles import partner_is_approved
     from .visit_requests import (
         DIRECTION_INCOMING,
         DIRECTION_OUTGOING,
@@ -3710,8 +3710,8 @@ def _build_partner_sales_pipeline(
         support_phone = '09121471301'
 
     items: List[Dict[str, Any]] = []
-    allow_attendance = partner_can_record_visit_attendance(profile)
-    allow_deal = partner_can_manage_deal(profile)
+    allow_attendance = partner_is_approved(profile)
+    allow_result = allow_attendance
     for r in mine:
         code = str(r.get('land_code') or '').strip()
         gs = land_status.get(code, 'active')
@@ -3727,7 +3727,8 @@ def _build_partner_sales_pipeline(
             support_phone=support_phone,
             assignment_status=gs,
             allow_attendance=allow_attendance,
-            allow_deal=allow_deal,
+            allow_deal=False,
+            allow_result=allow_result,
             allow_revisit=is_approved,
             me_phone=ph,
         ))
@@ -3751,7 +3752,7 @@ def _build_partner_sales_pipeline(
     try:
         from .special_visit_inbox import visits_for_listing_owner
 
-        inbox_items = visits_for_listing_owner(ph, rows, manage=is_special) or []
+        inbox_items = visits_for_listing_owner(ph, rows, manage=True) or []
     except Exception:
         current_app.logger.exception('sales pipeline inbox load failed')
         inbox_items = []
@@ -6996,7 +6997,7 @@ def requests_no_show_visit(vid: str):
 def requests_visit_result(vid: str):
     """ثبت نتیجه بازدید: علاقه‌مند / پیگیری دوباره / بی‌علاقه."""
     me_phone = (session.get('user_phone') or '').strip()
-    from .partner_roles import partner_can_manage_deal
+    from .partner_roles import partner_can_record_own_visit
     from .visit_requests import (
         _phones_match,
         locked_mutate_visit_requests,
@@ -7006,10 +7007,10 @@ def requests_visit_result(vid: str):
     )
 
     profile = getattr(g, 'express_partner_profile', None)
-    if not partner_can_manage_deal(profile):
+    if not partner_can_record_own_visit(profile):
         return _requests_action_json(
             False,
-            error='ثبت نتیجه بازدید فقط برای ویزیتور و پلاس فعال است.',
+            error='ثبت نتیجه بازدید فقط برای همکار تأییدشده است.',
         )
     body = request.get_json(silent=True) if request.is_json else None
     if not isinstance(body, dict):
@@ -7082,105 +7083,24 @@ def requests_close_deal(vid: str):
 
 
 def _partner_deal_decision_action(vid: str, *, decision: str):
-    me_phone = (session.get('user_phone') or '').strip()
-    from .partner_roles import partner_can_manage_deal
-    from .special_visit_inbox import commit_deal_after_listing, listing_deal_error_fa
-    from .visit_requests import _phones_match, locked_mutate_visit_requests
-
-    profile = getattr(g, 'express_partner_profile', None)
-    if not partner_can_manage_deal(profile):
-        return _requests_action_json(
-            False,
-            error='تأیید و بستن معامله فقط برای ویزیتور و پلاس فعال است.',
-        )
-    held: dict = {}
-
-    def _mutate(rows):
-        rec = next(
-            (r for r in rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
-            None,
-        )
-        if not rec:
-            held['missing'] = 'not_found'
-            return False
-        if not _phones_match(rec.get('partner_phone'), me_phone):
-            held['missing'] = 'forbidden'
-            return False
-        from .visit_requests import _canonical_visit_phone, owner_phone_for_listing
-
-        listing_owner = _canonical_visit_phone(
-            owner_phone_for_listing(str(rec.get('land_code') or ''))
-        ) or _canonical_visit_phone(rec.get('owner_phone'))
-        # Permission and the wallet debit both belong to the listing owner.
-        # The requester stays actor_phone and is not the payer.
-        managed_owner = listing_owner or me_phone
-        updated, err = commit_deal_after_listing(
-            rows,
-            rec,
-            decision=decision,
-            actor_phone=me_phone,
-            owner_phone=managed_owner,
-        )
-        held['updated'] = updated
-        held['err'] = err
-        return bool(updated) and not err
-
-    try:
-        locked_mutate_visit_requests(_mutate)
-    except Exception:
-        current_app.logger.exception('deal decision save failed id=%s', vid)
-        return _requests_action_json(False, error='ذخیره نشد.')
-    if held.get('missing') == 'not_found':
-        return _requests_action_json(False, error='درخواست پیدا نشد.')
-    if held.get('missing') == 'forbidden':
-        return _requests_action_json(False, error='دسترسی ندارید.')
-    updated, err = held.get('updated'), held.get('err')
-    wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
-    if err or not updated:
-        message = listing_deal_error_fa(err or 'failed')
-        extra = {}
-        if err == 'wallet_insufficient':
-            from .deal_wallet import wallet_detail
-
-            detail = wallet_detail()
-            extra = {
-                'code': 'wallet_insufficient',
-                'required_amount': int(detail.get('required_amount') or 0),
-                'balance': int(detail.get('balance') or 0),
-                'shortfall': int(detail.get('shortfall') or 0),
-            }
-        if wants_html:
-            flash(message, 'warning')
-            return redirect(_sales_pipeline_url('deals'))
-        return _requests_action_json(False, error=message, **extra)
-    try:
-        from .special_visit_inbox import inject_visit_deal_chat
-
-        inject_visit_deal_chat(updated, decision=decision)
-    except Exception:
-        current_app.logger.exception('deal decision chat failed id=%s', vid)
-    msg = {
-        'approved': 'معامله تأیید شد.',
-        'rejected': 'معامله رد شد.',
-        'closed': 'پرونده بسته شد.',
-    }.get(decision, 'ثبت شد.')
-    wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
-    if wants_html:
-        flash(msg, 'success')
-        return redirect(_sales_pipeline_url('deals'))
-    return _requests_action_json(True, message=msg, visit_id=updated.get('id'), status=updated.get('status'))
+    """تأیید، رد و بستن فروش فقط از صندوق مالک فایل است."""
+    del vid, decision
+    return _requests_action_json(
+        False,
+        error='تأیید و بستن معامله فقط برای مالک فایل است.',
+    )
 
 
 def _partner_visit_attendance_action(vid: str, *, outcome: str):
     me_phone = (session.get('user_phone') or '').strip()
-    from .partner_roles import partner_can_record_visit_attendance
+    from .partner_roles import partner_can_record_own_visit
     from .visit_requests import _phones_match, locked_mutate_visit_requests, record_visit_attendance
 
     profile = getattr(g, 'express_partner_profile', None)
-    if not partner_can_record_visit_attendance(profile):
+    if not partner_can_record_own_visit(profile):
         return _requests_action_json(
             False,
-            error='ثبت نتیجه بازدید فقط برای ویزیتور و پلاس فعال است.',
+            error='ثبت حضور فقط برای همکار تأییدشده و روی کارت خودش است.',
         )
 
     held: dict = {}
@@ -7224,7 +7144,14 @@ def _partner_visit_attendance_action(vid: str, *, outcome: str):
     if outcome == 'no_show':
         msg = 'عدم حضور ثبت شد.'
     else:
-        msg = 'بازدید انجام شد. حالا نتیجه را ثبت کنید.'
+        msg = 'بازدید انجام شد ثبت شد و منتظر تأیید مالک فایل است.'
+        try:
+            from .special_visit_inbox import notify_listing_owner_visit_done
+
+            if str((updated or {}).get('status') or '') == 'done_pending':
+                notify_listing_owner_visit_done(updated)
+        except Exception:
+            current_app.logger.exception('visit done owner notify failed id=%s', vid)
     wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if wants_html:
         flash(msg, 'success')
@@ -7264,13 +7191,13 @@ def _inject_visit_registered_into_chat(
             )
             body = (
                 f'{body} برای هماهنگی با {call_phone} تماس بگیر. '
-                'اگر بازدید انجام شده، کارت زیر را تأیید کن.'
+                'اگر بازدید انجام شده، کارت زیر را تأیید کن. تأیید نهایی با مالک فایل است.'
             )
         else:
             body = (
                 f'بازدید{file_bit}{date_bit} ثبت شد. '
                 f'برای هماهنگی همین حالا با {call_phone} تماس بگیر. '
-                'اگر بازدید انجام شده، کارت زیر را تأیید کن.'
+                'اگر بازدید انجام شده، کارت زیر را تأیید کن. تأیید نهایی با مالک فایل است.'
             )
 
         actions: List[Dict[str, Any]] = []
@@ -9855,7 +9782,7 @@ def create_visit_request(code: str):
             success=True,
             message=(
                 'این بازدید از قبل ثبت شده. برای هماهنگی با 09121471301 تماس بگیر؛ '
-                'بعد از بازدید از چت خانه بگو «بازدید انجام شد».'
+                'بعد از بازدید «بازدید انجام شد» را ثبت کن. تأیید با مالک فایل است.'
             ),
             category='success',
             new_status='active',
@@ -9949,12 +9876,12 @@ def create_visit_request(code: str):
         )
     msg = (
         'بازدید ثبت شد. برای هماهنگی با 09121471301 تماس بگیر؛ '
-        'بعد از بازدید از چت خانه بگو «بازدید انجام شد» — لازم نیست به صفحه دیگری بروی.'
+        'بعد از بازدید «بازدید انجام شد» را ثبت کن. تأیید با مالک فایل است.'
     )
     if not sms_result.get('ok') and not sms_result.get('skipped'):
         msg = (
             'بازدید ثبت شد (پیامک ادمین ناموفق بود). برای هماهنگی با 09121471301 تماس بگیر؛ '
-            'بعد از بازدید از چت خانه بگو «بازدید انجام شد».'
+            'بعد از بازدید «بازدید انجام شد» را ثبت کن. تأیید با مالک فایل است.'
         )
 
     try:
@@ -9999,12 +9926,12 @@ def complete_visit_request(code: str):
             message='برای ثبت انجام بازدید باید حساب همکاری شما تأیید شده باشد.',
             category='error',
         )
-    from .partner_roles import partner_can_record_visit_attendance
-    if not partner_can_record_visit_attendance(partner_profile):
+    from .partner_roles import partner_can_record_own_visit
+    if not partner_can_record_own_visit(partner_profile):
         return _mark_in_transaction_finish(
             code,
             success=False,
-            message='ثبت انجام بازدید فقط برای ویزیتور و پلاس فعال است.',
+            message='ثبت انجام بازدید فقط برای همکار تأییدشده است.',
             category='error',
         )
 
@@ -10017,10 +9944,27 @@ def complete_visit_request(code: str):
             category='error',
         )
 
-    visit_requests = load_express_visit_requests() or []
-    if not isinstance(visit_requests, list):
-        visit_requests = []
-    rec, err = request_visit_done_confirmation(visit_requests, me_phone, str(code))
+    from .visit_requests import locked_mutate_visit_requests
+
+    held_visit: dict = {}
+
+    def _mark_done(rows):
+        rec, err = request_visit_done_confirmation(rows, me_phone, str(code))
+        held_visit['rec'] = rec
+        held_visit['err'] = err
+        return bool(rec) and not err
+
+    try:
+        locked_mutate_visit_requests(_mark_done)
+    except Exception:
+        current_app.logger.exception('complete visit save failed code=%s', code)
+        return _mark_in_transaction_finish(
+            code,
+            success=False,
+            message='در ثبت انجام بازدید خطایی رخ داد.',
+            category='error',
+        )
+    rec, err = held_visit.get('rec'), held_visit.get('err')
     if err == 'not_approved':
         return _mark_in_transaction_finish(
             code,
@@ -10035,8 +9979,6 @@ def complete_visit_request(code: str):
             message='در ثبت انجام بازدید خطایی رخ داد.',
             category='error',
         )
-    save_express_visit_requests(visit_requests)
-
     auto_done = str(rec.get('status') or '').strip() == COMPLETED_STATUS
     if err is None and not auto_done:
         lands_all = load_ads_cached() or []
@@ -10066,6 +10008,11 @@ def complete_visit_request(code: str):
             )
         except Exception:
             current_app.logger.exception('visit_done_pending partner SMS failed phone=%s code=%s', me_phone, code)
+        try:
+            from .special_visit_inbox import notify_listing_owner_visit_done
+            notify_listing_owner_visit_done(rec)
+        except Exception:
+            current_app.logger.exception('visit done owner notify failed phone=%s code=%s', me_phone, code)
     elif err is None and auto_done:
         lands_all = load_ads_cached() or []
         land = next((l for l in lands_all if str(l.get('code')) == str(code)), None)
@@ -10090,9 +10037,9 @@ def complete_visit_request(code: str):
         global_assignment_status=ctx.get('global_status') or 'active',
     )
     if auto_done or err == 'already_completed':
-        msg = 'بازدید انجام شد ثبت و تأیید شد. می‌توانی معامله را از چت ثبت کنی.'
+        msg = 'بازدید قبلاً تأیید شده است. فروش را مالک فایل پیش می‌برد.'
         if err == 'already_completed':
-            msg = 'بازدید قبلاً انجام‌شده ثبت شده. می‌توانی معامله را از چت ثبت کنی.'
+            msg = 'بازدید قبلاً تأیید شده است. فروش را مالک فایل پیش می‌برد.'
         return _mark_in_transaction_finish(
             code,
             success=True,
@@ -10103,9 +10050,9 @@ def complete_visit_request(code: str):
             visit_date=tx_state.get('visit_date') or None,
             can_revisit=tx_state.get('can_revisit'),
         )
-    msg = 'بازدید انجام شد ثبت شد و منتظر تأیید ادمین است.'
+    msg = 'بازدید انجام شد ثبت شد و منتظر تأیید مالک فایل است.'
     if err == 'already_pending':
-        msg = 'بازدید انجام شد قبلاً ثبت شده و منتظر تأیید ادمین است.'
+        msg = 'بازدید انجام شد قبلاً ثبت شده و هنوز منتظر تأیید مالک فایل است.'
     return _mark_in_transaction_finish(
         code,
         success=True,
@@ -11149,9 +11096,9 @@ def special_offer_action(oid: str, action: str):
 
 
 @express_partner_bp.post('/inbox-visits/<vid>/<action>', endpoint='special_visit_action')
-@require_special_partner()
+@require_partner_access()
 def special_visit_action(vid: str, action: str):
-    """تأیید / رد / تأیید انجام بازدید توسط همکار ویژه."""
+    """اقدام مالک فایل روی بازدید آگهی خودش. مالک‌بودن داخل special_can_manage_visit چک می‌شود."""
     me_phone = (session.get('user_phone') or '').strip()
     from .special_visit_inbox import apply_special_visit_action
     from .visit_requests import locked_mutate_visit_requests
@@ -11317,9 +11264,27 @@ def special_visit_action(vid: str, action: str):
     elif act_l == 'reject':
         flash('بازدید رد شد.', 'info')
     elif act_l == 'complete':
-        flash('بازدید انجام شد. حالا نتیجه را ثبت کنید.', 'success')
+        if prev_status == 'done_pending':
+            flash('بازدید تأیید شد.', 'success')
+        else:
+            flash('بازدید انجام شد ثبت شد.', 'success')
     elif act_l == 'no_show':
-        flash('عدم حضور ثبت شد.', 'info')
+        if prev_status == 'done_pending':
+            flash('بازدید انجام‌نشده ثبت شد.', 'info')
+            try:
+                from .visit_sms import notify_partner_land_tx_sms
+                notify_partner_land_tx_sms(
+                    partner_phone=str((rec or {}).get('partner_phone') or ''),
+                    event='visit_done_rejected',
+                    land_code=str((rec or {}).get('land_code') or ''),
+                    land_title=str((rec or {}).get('land_title') or ''),
+                    visit_date=str((rec or {}).get('visit_date') or ''),
+                    reference_id=str((rec or {}).get('id') or ''),
+                )
+            except Exception:
+                current_app.logger.exception('visit deny marketer SMS failed id=%s', vid)
+        else:
+            flash('عدم حضور ثبت شد.', 'info')
     elif act_l == 'reject_done':
         flash('انجام بازدید رد شد. همکار می‌تواند دوباره اعلام کند.', 'info')
     elif act_l == 'start_deal':

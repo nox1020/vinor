@@ -131,27 +131,12 @@ def test_partner_route_returns_listing_error_and_confirm_still_saves(app, client
     body = closed.get_json()
     assert closed.status_code == 400
     assert body["ok"] is False
-    assert "ممکن نشد" in body["error"]
-    with app.app_context():
-        stored = load_express_visit_requests()
-    assert not (stored[0].get("deal_decision") or "")
-
-    def listing(rec, *, owner_phone, action):
-        assert action == "start_deal"
-        assert not rec.get("deal_decision")
-        return rec, None
-
-    monkeypatch.setattr(
-        "app.express_partner.special_visit_inbox._apply_special_deal_action",
-        listing,
-    )
+    assert "مالک فایل" in body["error"]
     confirmed = client.post(
         f"/express/partner/requests/{VISIT_ID}/deal-confirm",
         json={},
     )
-    ok = confirmed.get_json()
-    assert confirmed.status_code == 200
-    assert ok["ok"] is True
+    assert confirmed.status_code == 400
     with app.app_context():
         stored = load_express_visit_requests()
-    assert stored[0].get("deal_decision") == "approved"
+    assert not (stored[0].get("deal_decision") or "")

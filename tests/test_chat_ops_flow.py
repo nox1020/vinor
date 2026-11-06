@@ -567,7 +567,7 @@ class ChatOpsOpenVisitEarlyGateTests(unittest.TestCase):
         self.assertTrue(out.get("ok"))
         self.assertEqual(mr.get("status"), "visit_done_awaiting_admin")
         speak = str(mr.get("speak_exactly") or "")
-        self.assertIn("منتظر تأیید ادمین", speak)
+        self.assertIn("مالک فایل", speak)
         self.assertNotIn("بنویس «بازدید انجام شد»", speak)
 
 

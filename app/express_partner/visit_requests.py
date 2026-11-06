@@ -1085,6 +1085,7 @@ def partner_request_feed_item(
     assignment_status: str = "",
     allow_attendance: bool = False,
     allow_deal: bool = False,
+    allow_result: bool = False,
     allow_revisit: bool = True,
     plus_own: bool = False,
     me_phone: str = "",
@@ -1121,7 +1122,7 @@ def partner_request_feed_item(
     support = (support_phone or "").strip()
     can_cancel = st in (PENDING_STATUS, APPROVED_STATUS)
     can_delete = st in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS)
-    can_mark_attendance = bool(allow_attendance) and st in (APPROVED_STATUS, DONE_PENDING_STATUS)
+    can_mark_attendance = bool(allow_attendance) and st == APPROVED_STATUS
     can_complete = can_mark_attendance
     can_no_show = can_mark_attendance
     outcome = visit_outcome(row)
@@ -1139,7 +1140,7 @@ def partner_request_feed_item(
             "can_reject_deal": False,
             "can_close_deal": False,
         }
-    can_register_result = bool(allow_deal) and waiting_result
+    can_register_result = bool(allow_result) and waiting_result
     gs_ok = assign_st not in ("sold", "in_transaction")
     show_revisit = bool(allow_revisit) and (
         bool(can_revisit)
@@ -2692,52 +2693,39 @@ def request_visit_done_confirmation(
     requests: List[Dict[str, Any]], phone: str, land_code: str
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
-    اعلام «بازدید انجام شد».
-    با auto-approve پیش‌فرض: مستقیم completed (بدون صف ادمین).
+    اعلام «بازدید انجام شد» توسط بازاریاب.
+
+    وضعیت done_pending می‌ماند تا مالک فایل تأیید کند. تأیید خودکار بعد از چند روز
+    اینجا اضافه نمی‌شود.
     """
     done = partner_visit_completed(requests, phone, land_code)
     if done:
         return done, "already_completed"
 
     pending = partner_visit_done_pending(requests, phone, land_code)
-    now_iso = datetime.utcnow().isoformat() + "Z"
-    auto = visit_requests_auto_approve_enabled()
-
     if pending:
-        if auto:
-            pending["status"] = COMPLETED_STATUS
-            pending["updated_at"] = now_iso
-            pending["completed_at"] = now_iso
-            pending["auto_completed"] = True
-            if not pending.get("visit_done_requested_at"):
-                pending["visit_done_requested_at"] = now_iso
-            return pending, None
         return pending, "already_pending"
 
     rec = partner_visit_approved_for_deal(requests, phone, land_code)
     if not rec:
         return None, "not_approved"
 
+    now_iso = datetime.utcnow().isoformat() + "Z"
     rec["updated_at"] = now_iso
     rec["visit_done_requested_at"] = now_iso
-    if auto:
-        rec["status"] = COMPLETED_STATUS
-        rec["completed_at"] = now_iso
-        rec["auto_completed"] = True
-        if not rec.get("approved_at"):
-            rec["approved_at"] = now_iso
-    else:
-        rec["status"] = DONE_PENDING_STATUS
-        if not rec.get("approved_at"):
-            rec["approved_at"] = now_iso
+    rec["status"] = DONE_PENDING_STATUS
+    if not rec.get("approved_at"):
+        rec["approved_at"] = now_iso
     return rec, None
 
 
 def mark_visit_done_by_id(
     requests: List[Dict[str, Any]],
     visit_id: str,
+    *,
+    by_owner: bool = False,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """اعلام/ثبت «بازدید انجام شد» روی همان رکورد (پلاس یا ویزیتور)."""
+    """بازاریاب done_pending می‌سازد. مالک همان رکورد را completed می‌کند."""
     rec = _find_visit_request(requests, str(visit_id or "").strip())
     if not rec:
         return None, "not_found"
@@ -2745,24 +2733,25 @@ def mark_visit_done_by_id(
     if st == COMPLETED_STATUS:
         return rec, "already_completed"
     now_iso = datetime.utcnow().isoformat() + "Z"
-    auto = visit_requests_auto_approve_enabled()
     if st == APPROVED_STATUS:
         rec["updated_at"] = now_iso
         rec["visit_done_requested_at"] = now_iso
-        if auto:
+        if by_owner:
             rec["status"] = COMPLETED_STATUS
             rec["completed_at"] = now_iso
-            rec["auto_completed"] = True
+            rec["completed_by_owner"] = True
         else:
             rec["status"] = DONE_PENDING_STATUS
         if not rec.get("approved_at"):
             rec["approved_at"] = now_iso
         return rec, None
     if st == DONE_PENDING_STATUS:
+        if not by_owner:
+            return rec, "already_pending"
         rec["status"] = COMPLETED_STATUS
         rec["completed_at"] = now_iso
         rec["updated_at"] = now_iso
-        rec["auto_completed"] = True
+        rec["completed_by_owner"] = True
         if not rec.get("visit_done_requested_at"):
             rec["visit_done_requested_at"] = now_iso
         return rec, None
@@ -2774,11 +2763,12 @@ def record_visit_attendance(
     visit_id: str,
     *,
     outcome: str,
+    by_owner: bool = False,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """نتیجه حضور: done | no_show — بدون وابستگی به فلگ نتیجهٔ بازدید."""
     oc = (outcome or "").strip().lower()
     if oc in ("done", "complete", "completed"):
-        return mark_visit_done_by_id(requests, visit_id)
+        return mark_visit_done_by_id(requests, visit_id, by_owner=by_owner)
     if oc not in ("no_show", "noshow"):
         return None, "invalid_outcome"
     rec = _find_visit_request(requests, str(visit_id or "").strip())
@@ -3161,9 +3151,9 @@ def admin_row_dict(
     }
     hints = {
         PENDING_STATUS: "تأیید = بازاریاب می‌تواند بازدید را هماهنگ کند.",
-        APPROVED_STATUS: "منتظر اعلام «بازدید انجام شد» از چت بازاریاب.",
-        DONE_PENDING_STATUS: "بازاریاب اعلام کرده — تأیید = معامله آزاد می‌شود.",
-        COMPLETED_STATUS: "بازدید انجام شده؛ معامله از چت ممکن است.",
+        APPROVED_STATUS: "منتظر اعلام «بازدید انجام شد» از بازاریاب. مالک فایل آن را تأیید می‌کند.",
+        DONE_PENDING_STATUS: "بازاریاب اعلام کرده. تأیید مالک، بازدید را نهایی می‌کند.",
+        COMPLETED_STATUS: "بازدید تأیید شده. فروش را مالک فایل پیش می‌برد.",
         CANCELLED_STATUS: "این درخواست بسته شده است.",
         NO_SHOW_STATUS: "مشتری حاضر نشد؛ بازدید مجدد از چت ممکن است.",
     }
