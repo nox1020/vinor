@@ -12228,54 +12228,6 @@ def mark_all_notifications_read():
     })
 
 
-# -----------------------------------------------------------------------------
-# Debug endpoint برای بررسی اعلان‌ها
-# -----------------------------------------------------------------------------
-@express_partner_bp.route('/api/notifications/debug', methods=['GET'])
-@require_partner_access(json_response=True, allow_pending=True)
-def notifications_debug():
-    """Debug endpoint برای بررسی مشکل اعلان‌ها"""
-    from app.services.notifications import _load_all, _normalize_user_id, get_user_notifications, merge_duplicate_keys
-    
-    me_phone_raw = (session.get("user_phone") or "").strip()
-    me_phone_normalized = _normalize_user_id(me_phone_raw) if me_phone_raw else ""
-    
-    # اجرای merge خودکار کلیدهای تکراری
-    merge_result = merge_duplicate_keys()
-    
-    # بارگذاری همه داده‌ها (بعد از merge)
-    all_data = _load_all()
-    all_keys = list(all_data.keys())
-    
-    # بررسی اعلان‌های کاربر
-    user_notifications = get_user_notifications(me_phone_normalized, limit=50)
-    
-    # بررسی تطابق کلیدها
-    matching_keys = []
-    for key in all_keys:
-        if _normalize_user_id(key) == me_phone_normalized:
-            matching_keys.append({
-                "original_key": key,
-                "normalized": _normalize_user_id(key),
-                "notifications_count": len(all_data.get(key, []))
-            })
-    
-    return jsonify({
-        "success": True,
-        "merge_result": merge_result,
-        "debug_info": {
-            "session_phone_raw": me_phone_raw,
-            "session_phone_normalized": me_phone_normalized,
-            "all_keys_in_storage": all_keys,
-            "matching_keys": matching_keys,
-            "user_notifications_count": len(user_notifications),
-            "user_notifications": user_notifications[:5],  # فقط 5 تا اول
-            "direct_key_exists": me_phone_normalized in all_data,
-            "direct_key_notifications": len(all_data.get(me_phone_normalized, [])) if me_phone_normalized in all_data else 0
-        }
-    })
-
-
 @express_partner_bp.route('/api/check-status', methods=['GET'], endpoint='check_status')
 def check_status():
     """بررسی وضعیت تایید همکار - برای pull-to-refresh"""
