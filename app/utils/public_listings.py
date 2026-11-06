@@ -102,9 +102,11 @@ def is_partner_assignment_land(land: Any) -> bool:
     return True
 
 
-# Fields a visitor or the Android chat card may see. Owner phones, contact
-# numbers, and internal extras never leave this list.
+# Fields a visitor or the Android chat card may see.
+# Listing.kt and the home-card builders read the publish flags. Phones,
+# contact numbers, names, and national ids never leave this list.
 PUBLIC_LISTING_FIELDS = (
+    "id",
     "code",
     "title",
     "price_total",
@@ -129,6 +131,29 @@ PUBLIC_LISTING_FIELDS = (
     "street_width",
     "created_at",
     "updated_at",
+    "image_url",
+    "public",
+    "source",
+    "is_express",
+    "ad_type",
+    "badge_label",
+    "owner_home",
+    "published_for_sale",
+    "listed_by_owner",
+    "listed_by_special",
+    "previous_code",
+    "status",
+    "express_status",
+)
+
+# Flags Listing.kt copies out of extras. Nothing else in extras is public.
+PUBLIC_EXTRAS_FIELDS = (
+    "previous_code",
+    "published_for_sale",
+    "listed_by_owner",
+    "owner_home",
+    "public",
+    "listed_by_special",
 )
 
 
@@ -145,19 +170,47 @@ def public_image_urls(land: Any) -> list[str]:
     return urls
 
 
+def _public_value(value: Any) -> bool:
+    """False and 0 are real flags. Only missing and blank strings are dropped."""
+    return value is not None and value != ""
+
+
+def public_extras(land: Any) -> dict[str, Any]:
+    """Safe publish flags from extras. Phones, notes, and names are dropped."""
+    if not isinstance(land, dict):
+        return {}
+    extras = land.get("extras")
+    if not isinstance(extras, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key in PUBLIC_EXTRAS_FIELDS:
+        if key not in extras:
+            continue
+        value = extras.get(key)
+        if not _public_value(value):
+            continue
+        out[key] = value
+    return out
+
+
 def public_listing_view(land: Any, *, cover: tuple[str, str, str] | None = None) -> dict[str, Any]:
-    """Allow-listed listing card. Drops owner_phone, vinor_contact, and extras."""
+    """Allow-listed listing card. Drops owner phones, contact numbers, and private extras."""
     if not isinstance(land, dict):
         return {}
     out: dict[str, Any] = {}
     for key in PUBLIC_LISTING_FIELDS:
+        if key not in land:
+            continue
         value = land.get(key)
-        if value in (None, ""):
+        if not _public_value(value):
             continue
         out[key] = value
     images = public_image_urls(land)
     if images:
         out["images"] = images
+    extras = public_extras(land)
+    if extras:
+        out["extras"] = extras
     if cover:
         thumb, full, raw = cover
         if thumb:
