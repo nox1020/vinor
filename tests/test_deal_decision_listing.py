@@ -89,8 +89,9 @@ def test_failed_close_leaves_decision_unset_then_confirm_works(monkeypatch):
         action="close_deal",
     )
     assert rec is None
-    assert err == "no_assignment"
+    assert err == "invalid_decision"
     assert not rows[0].get("deal_decision")
+    assert calls == []
 
     rec, err = apply_special_visit_action(
         rows,
@@ -101,7 +102,7 @@ def test_failed_close_leaves_decision_unset_then_confirm_works(monkeypatch):
     assert err is None
     assert rec is not None
     assert rows[0].get("deal_decision") == "approved"
-    assert calls == [("approve_deal", ""), ("start_deal", "")]
+    assert calls == [("start_deal", "")]
 
 
 def test_partner_route_returns_listing_error_and_confirm_still_saves(app, client, monkeypatch):
@@ -130,27 +131,12 @@ def test_partner_route_returns_listing_error_and_confirm_still_saves(app, client
     body = closed.get_json()
     assert closed.status_code == 400
     assert body["ok"] is False
-    assert "اجازه" in body["error"]
-    with app.app_context():
-        stored = load_express_visit_requests()
-    assert not (stored[0].get("deal_decision") or "")
-
-    def listing(rec, *, owner_phone, action):
-        assert action == "start_deal"
-        assert not rec.get("deal_decision")
-        return rec, None
-
-    monkeypatch.setattr(
-        "app.express_partner.special_visit_inbox._apply_special_deal_action",
-        listing,
-    )
+    assert "مالک فایل" in body["error"]
     confirmed = client.post(
         f"/express/partner/requests/{VISIT_ID}/deal-confirm",
         json={},
     )
-    ok = confirmed.get_json()
-    assert confirmed.status_code == 200
-    assert ok["ok"] is True
+    assert confirmed.status_code == 400
     with app.app_context():
         stored = load_express_visit_requests()
-    assert stored[0].get("deal_decision") == "approved"
+    assert not (stored[0].get("deal_decision") or "")

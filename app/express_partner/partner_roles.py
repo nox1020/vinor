@@ -54,9 +54,14 @@ def partner_coop_level(profile: Optional[Dict[str, Any]]) -> str:
     return COOP_LEVEL_MARKETER
 
 
+def partner_can_record_own_visit(profile: Optional[Dict[str, Any]]) -> bool:
+    """هر همکار تأییدشده حضور و نتیجهٔ بازدید کارت خودش را ثبت می‌کند."""
+    return partner_is_approved(profile)
+
+
 def partner_can_record_visit_attendance(profile: Optional[Dict[str, Any]]) -> bool:
-    """ثبت «بازدید انجام شد» و «عدم حضور» فقط سطح ۱ و ۲."""
-    return partner_coop_level(profile) in (COOP_LEVEL_PLUS, COOP_LEVEL_VISITOR)
+    """سازگاری با فراخوان‌های قدیمی. درِ جدید partner_can_record_own_visit است."""
+    return partner_can_record_own_visit(profile)
 
 
 def partner_can_manage_deal(profile: Optional[Dict[str, Any]]) -> bool:

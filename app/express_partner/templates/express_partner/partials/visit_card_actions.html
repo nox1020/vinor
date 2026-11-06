@@ -1,7 +1,6 @@
-{# دکمه‌های جزئیات کارت پیگیری — card_kind: sent | received
-   سطح ۱ پلاس و ۲ ویزیتور: حضور، نتیجه، معامله
-   سطح ۳ بازاریاب: تماس، لغو، بازدید دوم — حضور و معامله با میزبان است
-   سطح ۴ عادی: مشاهده / لغو درخواست خود
+{# دکمه‌های کارت پیگیری.
+   بازاریاب (کارت خودش): بازدید انجام شد، عدم حضور، نتیجه.
+   مالک فایل (کارت دریافتی): تأیید انجام، و فروش.
 #}
 {% set level = coop_level|default('regular') %}
 {% set field_ok = level in ('plus', 'visitor') %}
@@ -51,7 +50,7 @@
     {% endif %}
   {% endif %}
 
-  {% if field_ok and (item.can_complete or item.can_no_show) %}
+  {% if item.can_complete or item.can_no_show %}
     {% if item.can_complete %}
     <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='complete') }}{% else %}{{ url_for('express_partner.requests_complete_visit', vid=vid) }}{% endif %}" data-vinor-direct-action class="contents">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -66,6 +65,19 @@
     {% endif %}
   {% endif %}
 
+  {% if received and item.can_confirm_done %}
+  <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='complete') }}" data-vinor-direct-action class="contents">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="rq-btn rq-btn--ok">تأیید بازدید</button>
+  </form>
+  {% endif %}
+  {% if received and item.can_deny_done %}
+  <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='no_show') }}" data-vinor-direct-action class="contents">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('این بازدید انجام‌نشده ثبت شود؟')">بازدید انجام نشده</button>
+  </form>
+  {% endif %}
+
   {% if received and item.can_reject_done %}
   <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='reject_done') }}" data-vinor-direct-action class="contents">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -73,7 +85,7 @@
   </form>
   {% endif %}
 
-  {% if field_ok and item.can_register_result %}
+  {% if not received and item.can_register_result %}
   <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='result') }}{% else %}{{ url_for('express_partner.requests_visit_result', vid=vid) }}{% endif %}" data-vinor-direct-action class="sv-result">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <p class="sv-result__label">نتیجه بازدید را ثبت کنید</p>
@@ -97,55 +109,36 @@
   </form>
   {% elif item.visit_outcome_hint %}
   <p class="sv-hint{% if item.visit_outcome == 'interested' %} sv-hint--ok{% endif %}">{{ item.visit_outcome_hint }}</p>
-  {% elif not field_ok and level == 'marketer' and item.status in ('approved', 'done_pending', 'completed') %}
-  <p class="sv-hint">بعد از بازدید، ویزیتور یا پلاس حضور و نتیجه را ثبت می‌کند.</p>
+  {% elif level == 'marketer' and item.status == 'done_pending' %}
+  <p class="sv-hint">بازدید انجام شد ثبت شده و منتظر تأیید مالک فایل است.</p>
+  {% elif level == 'marketer' and item.status == 'approved' %}
+  <p class="sv-hint">بعد از بازدید «بازدید انجام شد» را ثبت کن. تأیید با مالک فایل است.</p>
   {% elif level == 'regular' %}
   <p class="sv-hint">در سطح عادی فقط مشاهده و لغو درخواست خودتان ممکن است.</p>
   {% endif %}
 
-  {% if received and item.can_approve_deal and not item.can_final_confirm and item.final_confirm_message %}
+  {% if received and item.can_close_deal and not item.can_final_confirm and item.final_confirm_message %}
   <p class="sv-hint">{{ item.final_confirm_message }}</p>
   <a class="rq-btn rq-btn--deal" href="{{ item.wallet_charge_path or url_for('express_partner.commissions') }}">مشاهدهٔ کیف پول</a>
   {% endif %}
 
-  {% if field_ok and (item.can_confirm_deal or item.can_reject_deal or item.can_close_deal) %}
+  {% if received and (item.can_confirm_deal or item.can_reject_deal or item.can_close_deal) %}
     {% if item.can_confirm_deal %}
-    <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='confirm_deal') }}{% else %}{{ url_for('express_partner.requests_confirm_deal', vid=vid) }}{% endif %}" data-vinor-direct-action class="contents">
+    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='confirm_deal') }}" data-vinor-direct-action class="contents">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--ok">{% if item.visit_outcome == 'interested' %}قرارداد نهایی{% else %}تأیید معامله{% endif %}</button>
-    </form>
-    {% endif %}
-    {% if item.can_reject_deal %}
-    <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='decline_deal') }}{% else %}{{ url_for('express_partner.requests_reject_deal', vid=vid) }}{% endif %}" data-vinor-direct-action class="contents">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('معامله رد شود؟')">رد معامله</button>
-    </form>
-    {% endif %}
-    {% if item.can_close_deal %}
-    <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='close_deal') }}{% else %}{{ url_for('express_partner.requests_close_deal', vid=vid) }}{% endif %}" data-vinor-direct-action class="contents">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن پرونده</button>
-    </form>
-    {% endif %}
-  {% endif %}
-  {% if field_ok and received and item.can_start_deal %}
-  <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='start_deal') }}" data-vinor-direct-action class="contents">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('فروش نهایی برای این همکار ثبت شود؟ فایل در حال معامله می‌شود.')">ثبت معامله</button>
-  </form>
-  {% endif %}
-
-  {% if field_ok and received and (item.can_approve_deal or item.can_reject_deal) and not item.can_confirm_deal and not item.can_close_deal %}
-    {% if item.can_approve_deal %}
-    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='approve_deal') }}" data-vinor-direct-action class="contents">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--ok" onclick="return confirm('فروش تأیید و فایل بسته شود؟ پورسانت به کیف پول همکار اضافه می‌شود.')">تأیید فروش</button>
+      <button type="submit" class="rq-btn rq-btn--ok" onclick="return confirm('فروش نهایی برای این همکار ثبت شود؟ فایل در حال معامله می‌شود.')">تأیید فروش</button>
     </form>
     {% endif %}
     {% if item.can_reject_deal %}
     <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='reject_deal') }}" data-vinor-direct-action class="contents">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('معامله رد شود؟ فایل دوباره فعال می‌شود.')">رد فروش</button>
+      <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('این معامله رد شود؟')">رد</button>
+    </form>
+    {% endif %}
+    {% if item.can_close_deal %}
+    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='close_deal') }}" data-vinor-direct-action class="contents">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن پرونده</button>
     </form>
     {% endif %}
   {% endif %}

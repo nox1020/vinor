@@ -186,10 +186,24 @@ def test_sufficient_wallet_pays_once_and_confirms(app, client):
     )
     assert card["required_commission"] == COMMISSION
     assert card["owner_wallet_balance"] == FUNDED
-    assert card["can_final_confirm"] is True
-    assert card["can_approve_deal"] is True
+    assert card["can_confirm_deal"] is True
+    assert card["can_close_deal"] is False
+    assert card["can_approve_deal"] is False
 
-    saved = client.post("/express/partner/inbox-visits/dealw/approve_deal", data={})
+    opened = client.post("/express/partner/inbox-visits/dealw/confirm_deal", data={})
+    assert opened.status_code == 302
+    with app.app_context():
+        from app.utils.storage import load_express_visit_requests
+        opened_visit = load_express_visit_requests()[0]
+    assert opened_visit.get("deal_decision") == "approved"
+    card = next(
+        row for row in client.get("/express/partner/api/requests/data").get_json()["cards"]
+        if row["id"] == "dealw"
+    )
+    assert card["can_close_deal"] is True
+    assert card["can_approve_deal"] is False
+
+    saved = client.post("/express/partner/inbox-visits/dealw/close_deal", data={})
     assert saved.status_code == 302
     page = client.get(saved.headers["Location"]).get_data(as_text=True)
     assert "پورسانت از کیف پول شما به کیف پول مشاور منتقل شد" in page
@@ -237,6 +251,15 @@ def test_insufficient_wallet_does_not_confirm(app, client):
         row for row in client.get("/express/partner/api/requests/data").get_json()["cards"]
         if row["id"] == "dealw"
     )
+    assert card["can_confirm_deal"] is True
+    assert card["can_close_deal"] is False
+    opened = client.post("/express/partner/inbox-visits/dealw/confirm_deal", data={})
+    assert opened.status_code == 302
+    card = next(
+        row for row in client.get("/express/partner/api/requests/data").get_json()["cards"]
+        if row["id"] == "dealw"
+    )
+    assert card["can_close_deal"] is True
     assert card["can_final_confirm"] is False
     assert card["required_commission"] == COMMISSION
     assert card["owner_wallet_balance"] == 100_000
@@ -251,7 +274,7 @@ def test_insufficient_wallet_does_not_confirm(app, client):
     assert "/express/partner/commissions" in page
 
     saved = client.post(
-        "/express/partner/inbox-visits/dealw/approve_deal",
+        "/express/partner/inbox-visits/dealw/close_deal",
         data={},
         headers={"Accept": "application/json"},
     )
@@ -273,14 +296,21 @@ def test_insufficient_wallet_does_not_confirm(app, client):
     with app.app_context():
         from app.utils.storage import load_express_visit_requests
         visit = load_express_visit_requests()[0]
-    assert not visit.get("deal_decision")
+    assert visit.get("deal_decision") == "approved"
 
 
 def test_retry_does_not_double_pay(app, client):
     _seed(app, funded=FUNDED)
     _login(client)
-    first = client.post("/express/partner/inbox-visits/dealw/approve_deal", data={})
-    second = client.post("/express/partner/inbox-visits/dealw/approve_deal", data={})
+    early = client.post("/express/partner/inbox-visits/dealw/approve_deal", data={})
+    assert early.status_code == 302
+    state = _balances(app)
+    assert _payouts(state["commissions"]) == []
+    assert state["owner"] == FUNDED
+    opened = client.post("/express/partner/inbox-visits/dealw/confirm_deal", data={})
+    assert opened.status_code == 302
+    first = client.post("/express/partner/inbox-visits/dealw/close_deal", data={})
+    second = client.post("/express/partner/inbox-visits/dealw/close_deal", data={})
     assert first.status_code == 302
     assert second.status_code == 302
     state = _balances(app)

@@ -238,10 +238,10 @@ def test_plus_inbox_forms_redirect_with_flash(app, client):
     html = client.get("/express/partner/requests").get_data(as_text=True)
     assert 'action="/express/partner/inbox-visits/pend/approve"' in html
     assert 'action="/express/partner/inbox-visits/pend/reject"' in html
-    assert 'action="/express/partner/inbox-visits/dealv/start_deal"' in html
+    assert 'action="/express/partner/inbox-visits/dealv/confirm_deal"' in html
     assert ">تأیید بازدید<" in html
     assert ">رد بازدید<" in html
-    assert ">ثبت معامله<" in html
+    assert ">تأیید فروش<" in html
 
     token = _csrf(client)
     approved = _post_form(client, "pend", "approve", token)
@@ -268,22 +268,20 @@ def test_plus_inbox_forms_redirect_with_flash(app, client):
     assert stored["rej"]["status"] == "cancelled"
 
     token = _csrf(client)
-    started = _post_form(client, "dealv", "start_deal", token)
+    started = _post_form(client, "dealv", "confirm_deal", token)
     assert "/tab=deals" in started.headers["Location"] or "tab=deals" in started.headers["Location"]
     body = _follow(client, started)
     assert "border-emerald" in body
-    assert "فروش نهایی ثبت شد" in body
+    assert "معامله تأیید شد" in body
 
     html = client.get("/express/partner/requests?tab=deals").get_data(as_text=True)
-    assert (
-        'action="/express/partner/inbox-visits/dealv/approve_deal"' in html
-        or 'action="/express/partner/inbox-visits/dealv/close_deal"' in html
-    )
+    assert 'action="/express/partner/inbox-visits/dealv/close_deal"' in html
+    assert 'action="/express/partner/inbox-visits/dealv/approve_deal"' not in html
     token = _csrf(client)
-    closed = _post_form(client, "dealv", "approve_deal", token)
+    closed = _post_form(client, "dealv", "close_deal", token)
     body = _follow(client, closed)
     assert "border-emerald" in body
-    assert "فروش نهایی تأیید شد" in body
+    assert "پرونده بسته شد" in body
 
     missing = _post_form(client, "missing", "approve", _csrf(client))
     body = _follow(client, missing)
