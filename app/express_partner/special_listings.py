@@ -825,8 +825,14 @@ def create_special_listing_from_express_form(
                     rec["code"] = submitted
                     _apply_listing_update(target, rec)
                     if not owner_home and rec.get("is_express"):
-                        from app.express_partner.commission_escrow import reserve_publish_hold
+                        from app.express_partner.commission_escrow import (
+                            find_hold,
+                            reserve_publish_hold,
+                        )
+                        from app.utils.storage import load_express_commissions
 
+                        previous = find_hold(load_express_commissions() or [], submitted, owner)
+                        previous_amount = int((previous or {}).get("commission_amount") or 0)
                         hold_err, _detail = reserve_publish_hold(
                             phone=owner,
                             land_code=submitted,
@@ -834,7 +840,18 @@ def create_special_listing_from_express_form(
                         )
                         if hold_err:
                             return None, hold_err
-                    save_ads(lands)
+                    else:
+                        previous_amount = None
+                    try:
+                        save_ads(lands)
+                    except Exception:
+                        if previous_amount is not None:
+                            reserve_publish_hold(
+                                phone=owner,
+                                land_code=submitted,
+                                amount=previous_amount,
+                            )
+                        raise
                     return target, None
             new_code = _next_numeric_code(lands)
             for file in pending_docs:
