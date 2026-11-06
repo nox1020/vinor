@@ -12,8 +12,9 @@
 
 <section data-tour="commissions-summary" class="vn-wallet-card">
   <div class="vn-wallet-hero">
-    <p class="vn-wallet-hero__label">موجودی قابل برداشت</p>
-    <p class="vn-wallet-hero__balance" data-comm-withdrawable>{{ (_withdrawable or 0)|toman }}</p>
+    <p class="vn-wallet-hero__label">قابل استفاده</p>
+    <p class="vn-wallet-hero__balance" data-comm-withdrawable>{{ (wallet_available if wallet_available is defined else _withdrawable or 0)|toman }}</p>
+    <p class="vn-wallet-hero__label">کل موجودی {{ (_withdrawable or 0)|toman }} · بلوکه‌شده برای پورسانت {{ (wallet_blocked if wallet_blocked is defined else 0)|toman }}</p>
   </div>
 
   <div class="vn-wallet-stats" role="group" aria-label="خلاصه مالی">
@@ -42,6 +43,7 @@
             class="vn-wallet-btn vn-wallet-btn--primary">
       درخواست برداشت
     </button>
+    <a href="{{ url_for('express_partner.wallet_charge') }}" class="vn-wallet-btn vn-wallet-btn--ghost">شارژ کیف پول</a>
     <a href="{{ url_for('express_partner.commissions_transactions') }}"
        data-vinor-express-nav
        data-tour="commission-item"

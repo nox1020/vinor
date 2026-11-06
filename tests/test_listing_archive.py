@@ -53,6 +53,18 @@ def _publish(phone=OWNER, title="آگهی بایگانی"):
         owner=phone,
     )
     code = str(created["code"])
+    from app.utils.storage import load_express_commissions, save_express_commissions
+    funded = list(load_express_commissions() or [])
+    funded.append({
+        "id": len(funded) + 1,
+        "commission_type": "manual_adjustment",
+        "partner_phone": phone,
+        "land_code": "manual",
+        "commission_amount": 50_000_000,
+        "status": "approved",
+        "source": "test_fund",
+    })
+    save_express_commissions(funded)
     published, err, changed = publish_listing(
         phone, payment_method="نقدی", commission_pct=2, land_code=code,
     )

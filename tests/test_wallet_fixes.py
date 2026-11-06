@@ -55,7 +55,8 @@ def test_insufficient_message_no_longer_promises_a_topup():
     from app.express_partner.deal_wallet import wallet_insufficient_message
 
     msg = wallet_insufficient_message(5_000_000, 1_000_000)
-    assert "پشتیبانی" in msg and "شارژ کنید" not in msg
+    assert "کمبود" in msg
+    assert "شارژ کیف پول" in msg
 
 
 def test_cancel_does_not_overwrite_a_fresh_commission(app, monkeypatch):

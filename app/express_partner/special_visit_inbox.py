@@ -1597,6 +1597,16 @@ def _reject_pending_deal(
         except Exception:
             pass
         try:
+            from app.listings.service import is_published_for_sale
+            from app.express_partner.commission_escrow import release_publish_hold
+            from .visit_requests import resolve_listing_for_visit_code
+
+            listing = resolve_listing_for_visit_code(land_code)
+            if listing is not None and not is_published_for_sale(listing):
+                release_publish_hold(land_code, reason="deal_rejected")
+        except Exception:
+            pass
+        try:
             from app.closing.deal_bridge import maybe_sync_deal_on_commission_status
             maybe_sync_deal_on_commission_status(
                 partner_phone=partner_phone,

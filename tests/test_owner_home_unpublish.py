@@ -177,7 +177,10 @@ def test_listing_detail_has_publish_form_without_stop():
     assert "توقف انتشار فروش" not in text
 
 
-def test_stop_regular_express_listing_and_publish_again():
+def test_stop_regular_express_listing_and_publish_again(tmp_path, monkeypatch):
+    monkeypatch.setenv("INSTANCE_PATH", str(tmp_path))
+    monkeypatch.setenv("SECRET_KEY", "unit-owner-home")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'vinor.db'}")
     # This is the shape produced by the public listing form, without owner_home.
     ad = {"code": "9", "owner": "09120000000", "is_express": True,
           "ad_type": "express", "status": "approved", "price_total": 1000000,
@@ -193,8 +196,21 @@ def test_stop_regular_express_listing_and_publish_again():
     assert ad["extras"]["express_commission_pct"] == 2
     assert resolve_listing_for_viewer([ad], "9", "09121111111")[0] is None
     assert apply_owner_unpublish([ad], "09120000000", "9")[2] is False
-    rec, err, changed = apply_owner_publish(
-        [ad], "09120000000", "9", payment_method="توافقی", commission_pct=2)
+    from app import create_app
+    from app.utils.storage import save_express_commissions
+    application = create_app()
+    with application.app_context():
+        save_express_commissions([{
+            "id": 1,
+            "commission_type": "manual_adjustment",
+            "partner_phone": "09120000000",
+            "land_code": "manual",
+            "commission_amount": 5_000_000,
+            "status": "approved",
+            "source": "test_fund",
+        }])
+        rec, err, changed = apply_owner_publish(
+            [ad], "09120000000", "9", payment_method="توافقی", commission_pct=2)
     assert err is None and changed is True
     assert detail_sale_flag(rec) is True
 

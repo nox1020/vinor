@@ -449,6 +449,17 @@ def _listing_spec_rows(land: Dict[str, Any], *, is_divar: bool) -> list[dict[str
     return rows[:18]
 
 
+def _listing_escrow_blocked(code: str) -> int:
+    try:
+        from app.utils.storage import load_express_commissions
+        from .commission_escrow import find_hold
+
+        row = find_hold(load_express_commissions() or [], code)
+        return int((row or {}).get("commission_amount") or 0)
+    except Exception:
+        return 0
+
+
 LAND_MISSING_MESSAGE = "آگهی پیدا نشد."
 LAND_UNAVAILABLE_MESSAGE = "این آگهی دیگر در دسترس نیست."
 
@@ -633,6 +644,7 @@ def native_listing_detail_payload(
         "published_for_sale": sale_flag,
         **_sale_clock(land, published),
         "can_publish": bool(is_mine and not published),
+        "escrow_blocked": _listing_escrow_blocked(code_out) if is_mine else 0,
         "owner_badge": (
             "منتشرشده" if is_mine and published else ("خصوصی" if is_mine else "")
         ),

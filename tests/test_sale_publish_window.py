@@ -206,12 +206,21 @@ def test_dated_listing_under_30_days_is_untouched_and_past_30_matches_manual_sto
 def test_republish_resets_the_30_day_clock(app):
     from app.listings.sale_publish_window import sweep_expired_sale_publishes
     from app.listings.service import get_listing, publish_listing
-    from app.utils.storage import save_ads
+    from app.utils.storage import save_ads, save_express_commissions
 
     now = datetime(2026, 10, 19, 6, 0, 0)
     stale = (now - timedelta(days=40)).strftime("%Y-%m-%dT%H:%M:%SZ")
     row = _published("8", created_at="2026-01-01 00:00:00", published_at=stale)
     with app.app_context():
+        save_express_commissions([{
+            "id": 1,
+            "commission_type": "manual_adjustment",
+            "partner_phone": OWNER,
+            "land_code": "manual",
+            "commission_amount": 5_000_000,
+            "status": "approved",
+            "source": "test_fund",
+        }])
         save_ads([row])
         assert sweep_expired_sale_publishes(now=now)["stopped"] == ["8"]
         published, err, changed = publish_listing(
