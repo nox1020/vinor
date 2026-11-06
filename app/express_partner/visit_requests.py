@@ -1433,7 +1433,7 @@ def partner_cancel_own_visit(
     rec = _find_visit_request(requests, rid)
     if not rec:
         return None, "not_found"
-    if str(rec.get("partner_phone") or "").strip() != ph:
+    if not _phones_match(rec.get("partner_phone"), ph):
         return None, "forbidden"
     st = (str(rec.get("status") or PENDING_STATUS)).strip()
     if st not in (PENDING_STATUS, APPROVED_STATUS):
@@ -1457,7 +1457,7 @@ def partner_delete_own_visit(
             continue
         if str(r.get("id") or "").strip() != rid:
             continue
-        if str(r.get("partner_phone") or "").strip() != ph:
+        if not _phones_match(r.get("partner_phone"), ph):
             return False, "forbidden"
         st = (str(r.get("status") or "")).strip()
         if st not in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS):
@@ -2226,13 +2226,13 @@ def create_visit_request(
     plus_user_phone: str = "",
     plus_user_name: str = "",
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    ph = (partner_phone or "").strip()
+    ph = _canonical_visit_phone(partner_phone) or (partner_phone or "").strip()
     code = (land_code or "").strip()
     first = (customer_first_name or "").strip()
     last = (customer_last_name or "").strip()
     cust_phone = (customer_phone or "").strip()
     note = (notes or "").strip()
-    plus_phone = (plus_user_phone or "").strip()
+    plus_phone = _canonical_visit_phone(plus_user_phone) or (plus_user_phone or "").strip()
     plus_name = (plus_user_name or "").strip()
     if code:
         listing_owner = owner_phone_for_listing(code)
@@ -2333,7 +2333,7 @@ def create_visit_request(
             rec["visit_presence_address"] = addr
     if auto:
         rec["approved_at"] = now_iso
-    owner_phone = owner_phone_for_listing(code, lands)
+    owner_phone = _canonical_visit_phone(owner_phone_for_listing(code, lands))
     if owner_phone:
         rec["owner_phone"] = owner_phone
     rec["revisit_count"] = 0
@@ -2371,6 +2371,22 @@ def create_visit_request(
     except Exception:
         pass
     return rec, None
+
+
+def locked_mutate_visit_requests(mutator) -> List[Dict[str, Any]]:
+    """Fresh read-modify-write under visit_store_lock.
+
+    ``mutator(rows)`` returns true when the list should be saved. The lock is
+    re-entrant (``RLock`` plus a depth counter), so a mutator may call
+    ``submit_visit_request`` without deadlocking.
+    """
+    from app.utils.storage import save_express_visit_requests
+
+    with visit_store_lock():
+        rows = load_visit_requests_fresh()
+        if mutator(rows):
+            save_express_visit_requests(rows)
+        return rows
 
 
 def submit_visit_request(**kwargs: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:

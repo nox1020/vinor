@@ -579,11 +579,16 @@ def visits_for_special_owner(
         )
 
         deal_flags = visit_deal_action_flags(row, allowed=True)
-        # تأیید نهایی همان start_deal را روی فایل می‌زند. بدون انتساب قابل شروع دکمه نمی‌آید.
-        can_confirm_deal = bool(deal_flags.get("can_confirm_deal")) and can_start_deal
-        can_reject_deal = bool(deal_flags.get("can_reject_deal")) or can_reject_deal
-        can_close_deal = bool(deal_flags.get("can_close_deal")) or can_approve_deal
         deal_dec = visit_deal_decision(row)
+        # visit_deal_action_flags: قبل از approved فقط تأیید/رد، بعد از آن فقط بستن.
+        # تأیید فروش = confirm_deal (شروع معامله). بستن پرونده = close_deal (پرداخت).
+        can_confirm_deal = bool(deal_flags.get("can_confirm_deal")) and (
+            can_start_deal or deal_pending
+        )
+        can_reject_deal = bool(deal_flags.get("can_reject_deal"))
+        can_close_deal = bool(deal_flags.get("can_close_deal")) and not can_confirm_deal
+        # Payout stays on close_deal. The start button is the same step as confirm.
+        can_approve_deal = False
         outcome = visit_outcome(row)
         waiting_result = st == COMPLETED_STATUS and not outcome and not deal_dec
         can_register_result = waiting_result
@@ -615,12 +620,12 @@ def visits_for_special_owner(
             (s for s in wf_steps if isinstance(s, dict) and s.get("state") == "current"),
             None,
         )
-        if can_start_deal and not current_step:
-            current_hint = "بازدید انجام شده. معامله را ثبت کنید یا منتظر ثبت همکار بمانید."
-            stage_label = "درخواست معامله"
-        elif can_approve_deal:
-            current_hint = str((current_step or {}).get("hint") or "همکار فروش نهایی را ثبت کرده — تأیید یعنی فایل بسته می‌شود.")
-            stage_label = "تأیید فروش نهایی"
+        if can_confirm_deal and not current_step:
+            current_hint = "بازدید انجام شده. «تأیید فروش» فایل را در حال معامله می‌کند."
+            stage_label = "تأیید فروش"
+        elif can_close_deal:
+            current_hint = "فروش تأیید شده. «بستن پرونده» پورسانت را از کیف پول مالک پرداخت می‌کند."
+            stage_label = "بستن پرونده"
         else:
             current_hint = str((current_step or {}).get("hint") or "")
             stage_label = str(
@@ -631,7 +636,7 @@ def visits_for_special_owner(
         if st == APPROVED_STATUS and (can_complete or can_no_show):
             stage_label = "منتظر بازدید"
             current_hint = "بعد از بازدید، «بازدید انجام شد» یا «عدم حضور» را ثبت کنید."
-        elif st == COMPLETED_STATUS and not can_start_deal and not can_approve_deal:
+        elif st == COMPLETED_STATUS and not can_confirm_deal and not can_close_deal:
             if not outcome:
                 current_hint = "بازدید انجام شد. نتیجه را ثبت کنید: علاقه‌مند، پیگیری دوباره، یا بی‌علاقه."
             else:
@@ -684,7 +689,7 @@ def visits_for_special_owner(
             withdrawals,
             owner_phone=str(phone or ""),
             required=deal_amount,
-            can_finalize=bool(can_approve_deal),
+            can_finalize=bool(can_close_deal),
         )
 
         is_own_request = _canon_phone(partner_phone) == _canon_phone(phone)
@@ -929,6 +934,9 @@ def commit_deal_after_listing(
         return rec, "already_decided"
     if current == DEAL_DECISION_APPROVED and dec == DEAL_DECISION_APPROVED:
         return rec, None
+    # بستن پرونده فقط بعد از تأیید فروش. قبل از آن پرداخت انجام نمی‌شود.
+    if dec == DEAL_DECISION_CLOSED and current != DEAL_DECISION_APPROVED:
+        return None, "invalid_decision"
 
     listing_act = {
         DEAL_DECISION_APPROVED: "start_deal",
@@ -943,6 +951,9 @@ def commit_deal_after_listing(
         listing_err = "failed"
     if listing_err == "not_found":
         listing_err = "no_open_deal"
+    # A pending commission is the result of step 1. Recording approved must still succeed.
+    if listing_err == "already_pending" and dec == DEAL_DECISION_APPROVED:
+        listing_err = None
     if listing_err:
         return None, listing_err
     updated, err = record_visit_deal_decision(
@@ -1001,7 +1012,22 @@ def apply_special_visit_action(
             requests, rid, APPROVED_STATUS, admin_note=notes or "انجام بازدید رد شد",
         )
     if act in ("start_deal", "approve_deal", "reject_deal"):
-        return _apply_special_deal_action(rec, owner_phone=owner_phone, action=act)
+        updated, err = _apply_special_deal_action(rec, owner_phone=owner_phone, action=act)
+        if err or updated is None:
+            return None, err or "failed"
+        if act == "reject_deal":
+            from .visit_requests import record_visit_deal_decision
+
+            stamped, derr = record_visit_deal_decision(
+                requests,
+                rid,
+                decision="rejected",
+                actor_phone=owner_phone,
+            )
+            if derr and derr not in ("already_decided",):
+                return None, derr
+            return stamped or updated, None
+        return updated, None
     if act in ("confirm_deal", "decline_deal", "close_deal"):
         mapping = {
             "confirm_deal": "approved",

@@ -6799,21 +6799,41 @@ def _requests_action_json(ok: bool, *, message: str = '', error: str = '', **ext
 def requests_remove(vid: str):
     """لغو درخواست باز یا حذف قطعی درخواست لغو/عدم‌حضور/انجام‌شده."""
     me_phone = (session.get('user_phone') or '').strip()
-    from .visit_requests import partner_cancel_own_visit, partner_delete_own_visit
-
-    visit_rows = load_express_visit_requests() or []
-    if not isinstance(visit_rows, list):
-        visit_rows = []
-
-    updated, err = partner_cancel_own_visit(
-        visit_rows, request_id=str(vid or ''), partner_phone=me_phone
+    from .visit_requests import (
+        locked_mutate_visit_requests,
+        partner_cancel_own_visit,
+        partner_delete_own_visit,
     )
-    if updated and not err:
-        try:
-            save_express_visit_requests(visit_rows)
-        except Exception:
-            current_app.logger.exception('requests_remove cancel save failed id=%s', vid)
-            return _requests_action_json(False, error='ذخیره نشد.')
+
+    held: dict = {}
+
+    def _mutate(rows):
+        updated, err = partner_cancel_own_visit(
+            rows, request_id=str(vid or ''), partner_phone=me_phone
+        )
+        held['updated'] = updated
+        held['err'] = err
+        if updated and not err:
+            held['action'] = 'cancelled'
+            return True
+        if err in (None, 'not_cancellable'):
+            ok, derr = partner_delete_own_visit(
+                rows, request_id=str(vid or ''), partner_phone=me_phone
+            )
+            held['err'] = derr or err
+            if ok:
+                held['action'] = 'deleted'
+                return True
+        return False
+
+    try:
+        locked_mutate_visit_requests(_mutate)
+    except Exception:
+        current_app.logger.exception('requests_remove save failed id=%s', vid)
+        return _requests_action_json(False, error='ذخیره نشد.')
+
+    if held.get('action') == 'cancelled':
+        updated = held.get('updated') or {}
         try:
             from .visit_sms import notify_partner_land_tx_sms
             notify_partner_land_tx_sms(
@@ -6827,19 +6847,9 @@ def requests_remove(vid: str):
         except Exception:
             pass
         return _requests_action_json(True, message='درخواست حذف شد.', action='cancelled')
-
-    if err in (None, 'not_cancellable'):
-        ok, derr = partner_delete_own_visit(
-            visit_rows, request_id=str(vid or ''), partner_phone=me_phone
-        )
-        if ok:
-            try:
-                save_express_visit_requests(visit_rows)
-            except Exception:
-                current_app.logger.exception('requests_remove delete save failed id=%s', vid)
-                return _requests_action_json(False, error='ذخیره نشد.')
-            return _requests_action_json(True, message='از لیست حذف شد.', action='deleted')
-        err = derr or err
+    if held.get('action') == 'deleted':
+        return _requests_action_json(True, message='از لیست حذف شد.', action='deleted')
+    err = held.get('err')
 
     msg = {
         'not_cancellable': 'این درخواست قابل حذف نیست.',
@@ -6880,7 +6890,9 @@ def requests_revisit(vid: str):
         if isinstance(r, dict) and str(r.get('id') or '').strip() == rid:
             prev = r
             break
-    if not prev or str(prev.get('partner_phone') or '').strip() != me_phone:
+    from .visit_requests import _phones_match as _visit_phones_match
+
+    if not prev or not _visit_phones_match(prev.get('partner_phone'), me_phone):
         return _requests_action_json(False, error='درخواست پیدا نشد.')
 
     land_code = str(prev.get('land_code') or '').strip()
@@ -6985,7 +6997,13 @@ def requests_visit_result(vid: str):
     """ثبت نتیجه بازدید: علاقه‌مند / پیگیری دوباره / بی‌علاقه."""
     me_phone = (session.get('user_phone') or '').strip()
     from .partner_roles import partner_can_manage_deal
-    from .visit_requests import record_visit_outcome, visit_outcome_hint, visit_outcome_label
+    from .visit_requests import (
+        _phones_match,
+        locked_mutate_visit_requests,
+        record_visit_outcome,
+        visit_outcome_hint,
+        visit_outcome_label,
+    )
 
     profile = getattr(g, 'express_partner_profile', None)
     if not partner_can_manage_deal(profile):
@@ -6993,36 +7011,42 @@ def requests_visit_result(vid: str):
             False,
             error='ثبت نتیجه بازدید فقط برای ویزیتور و پلاس فعال است.',
         )
-    visit_rows = load_express_visit_requests() or []
-    if not isinstance(visit_rows, list):
-        visit_rows = []
-    rec = next(
-        (r for r in visit_rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
-        None,
-    )
-    if not rec:
-        return _requests_action_json(False, error='درخواست پیدا نشد.')
-    if str(rec.get('partner_phone') or '').strip() != me_phone:
-        return _requests_action_json(False, error='دسترسی ندارید.')
     body = request.get_json(silent=True) if request.is_json else None
     if not isinstance(body, dict):
         body = {}
     outcome = str(request.form.get('outcome') or body.get('outcome') or '').strip()
     notes = str(request.form.get('notes') or body.get('notes') or '').strip()
-    updated, err = record_visit_outcome(
-        visit_rows, str(vid), outcome=outcome, notes=notes, actor_phone=me_phone
-    )
-    if err == 'invalid_status':
-        return _requests_action_json(False, error='اول «بازدید انجام شد» را ثبت کنید.')
-    if err == 'invalid_outcome':
-        return _requests_action_json(False, error='یکی از سه نتیجه را انتخاب کنید.')
-    if err or not updated:
-        return _requests_action_json(False, error='ثبت نتیجه ممکن نشد.')
+    held: dict = {}
+
+    def _mutate(rows):
+        rec = next(
+            (r for r in rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
+            None,
+        )
+        if not rec:
+            held['err'] = 'not_found'
+            return False
+        if not _phones_match(rec.get('partner_phone'), me_phone):
+            held['err'] = 'forbidden'
+            return False
+        updated, err = record_visit_outcome(
+            rows, str(vid), outcome=outcome, notes=notes, actor_phone=me_phone
+        )
+        held['updated'] = updated
+        held['err'] = err
+        return bool(updated) and not err
+
     try:
-        save_express_visit_requests(visit_rows)
+        locked_mutate_visit_requests(_mutate)
     except Exception:
         current_app.logger.exception('visit outcome save failed id=%s', vid)
         return _requests_action_json(False, error='ذخیره نشد.')
+    err = held.get('err')
+    updated = held.get('updated')
+    if err == 'not_found':
+        return _requests_action_json(False, error='درخواست پیدا نشد.')
+    if err == 'forbidden':
+        return _requests_action_json(False, error='دسترسی ندارید.')
     try:
         from .special_visit_inbox import inject_visit_outcome_chat
 
@@ -7061,6 +7085,7 @@ def _partner_deal_decision_action(vid: str, *, decision: str):
     me_phone = (session.get('user_phone') or '').strip()
     from .partner_roles import partner_can_manage_deal
     from .special_visit_inbox import commit_deal_after_listing, listing_deal_error_fa
+    from .visit_requests import _phones_match, locked_mutate_visit_requests
 
     profile = getattr(g, 'express_partner_profile', None)
     if not partner_can_manage_deal(profile):
@@ -7068,24 +7093,48 @@ def _partner_deal_decision_action(vid: str, *, decision: str):
             False,
             error='تأیید و بستن معامله فقط برای ویزیتور و پلاس فعال است.',
         )
-    visit_rows = load_express_visit_requests() or []
-    if not isinstance(visit_rows, list):
-        visit_rows = []
-    rec = next(
-        (r for r in visit_rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
-        None,
-    )
-    if not rec:
+    held: dict = {}
+
+    def _mutate(rows):
+        rec = next(
+            (r for r in rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
+            None,
+        )
+        if not rec:
+            held['missing'] = 'not_found'
+            return False
+        if not _phones_match(rec.get('partner_phone'), me_phone):
+            held['missing'] = 'forbidden'
+            return False
+        from .visit_requests import _canonical_visit_phone, owner_phone_for_listing
+
+        listing_owner = _canonical_visit_phone(
+            owner_phone_for_listing(str(rec.get('land_code') or ''))
+        ) or _canonical_visit_phone(rec.get('owner_phone'))
+        # Permission and the wallet debit both belong to the listing owner.
+        # The requester stays actor_phone and is not the payer.
+        managed_owner = listing_owner or me_phone
+        updated, err = commit_deal_after_listing(
+            rows,
+            rec,
+            decision=decision,
+            actor_phone=me_phone,
+            owner_phone=managed_owner,
+        )
+        held['updated'] = updated
+        held['err'] = err
+        return bool(updated) and not err
+
+    try:
+        locked_mutate_visit_requests(_mutate)
+    except Exception:
+        current_app.logger.exception('deal decision save failed id=%s', vid)
+        return _requests_action_json(False, error='ذخیره نشد.')
+    if held.get('missing') == 'not_found':
         return _requests_action_json(False, error='درخواست پیدا نشد.')
-    if str(rec.get('partner_phone') or '').strip() != me_phone:
+    if held.get('missing') == 'forbidden':
         return _requests_action_json(False, error='دسترسی ندارید.')
-    updated, err = commit_deal_after_listing(
-        visit_rows,
-        rec,
-        decision=decision,
-        actor_phone=me_phone,
-        owner_phone=me_phone,
-    )
+    updated, err = held.get('updated'), held.get('err')
     wants_html = (request.headers.get('X-Requested-With') or '') != 'XMLHttpRequest' and not request.is_json
     if err or not updated:
         message = listing_deal_error_fa(err or 'failed')
@@ -7104,11 +7153,6 @@ def _partner_deal_decision_action(vid: str, *, decision: str):
             flash(message, 'warning')
             return redirect(_sales_pipeline_url('deals'))
         return _requests_action_json(False, error=message, **extra)
-    try:
-        save_express_visit_requests(visit_rows)
-    except Exception:
-        current_app.logger.exception('deal decision save failed id=%s', vid)
-        return _requests_action_json(False, error='ذخیره نشد.')
     try:
         from .special_visit_inbox import inject_visit_deal_chat
 
@@ -7130,7 +7174,7 @@ def _partner_deal_decision_action(vid: str, *, decision: str):
 def _partner_visit_attendance_action(vid: str, *, outcome: str):
     me_phone = (session.get('user_phone') or '').strip()
     from .partner_roles import partner_can_record_visit_attendance
-    from .visit_requests import record_visit_attendance
+    from .visit_requests import _phones_match, locked_mutate_visit_requests, record_visit_attendance
 
     profile = getattr(g, 'express_partner_profile', None)
     if not partner_can_record_visit_attendance(profile):
@@ -7139,30 +7183,38 @@ def _partner_visit_attendance_action(vid: str, *, outcome: str):
             error='ثبت نتیجه بازدید فقط برای ویزیتور و پلاس فعال است.',
         )
 
-    visit_rows = load_express_visit_requests() or []
-    if not isinstance(visit_rows, list):
-        visit_rows = []
-    rec = next(
-        (r for r in visit_rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
-        None,
-    )
-    if not rec:
-        return _requests_action_json(False, error='درخواست پیدا نشد.')
-    if str(rec.get('partner_phone') or '').strip() != me_phone:
-        return _requests_action_json(False, error='دسترسی ندارید.')
-    updated, err = record_visit_attendance(visit_rows, str(vid), outcome=outcome)
-    if err == 'already_completed':
-        updated = updated or rec
-        err = None
-    if err == 'invalid_status':
-        return _requests_action_json(False, error='این بازدید الان قابل ثبت نتیجه نیست.')
-    if err or not updated:
-        return _requests_action_json(False, error='ثبت نتیجه ممکن نشد.')
+    held: dict = {}
+
+    def _mutate(rows):
+        rec = next(
+            (r for r in rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid or '')),
+            None,
+        )
+        if not rec:
+            held['err'] = 'not_found'
+            return False
+        if not _phones_match(rec.get('partner_phone'), me_phone):
+            held['err'] = 'forbidden'
+            return False
+        updated, err = record_visit_attendance(rows, str(vid), outcome=outcome)
+        if err == 'already_completed':
+            updated = updated or rec
+            err = None
+        held['updated'] = updated
+        held['err'] = err
+        return bool(updated) and not err
+
     try:
-        save_express_visit_requests(visit_rows)
+        locked_mutate_visit_requests(_mutate)
     except Exception:
         current_app.logger.exception('visit attendance save failed id=%s', vid)
         return _requests_action_json(False, error='ذخیره نشد.')
+    err = held.get('err')
+    updated = held.get('updated')
+    if err == 'not_found':
+        return _requests_action_json(False, error='درخواست پیدا نشد.')
+    if err == 'forbidden':
+        return _requests_action_json(False, error='دسترسی ندارید.')
     try:
         from .special_visit_inbox import inject_visit_attendance_chat
 
@@ -11102,26 +11154,55 @@ def special_visit_action(vid: str, action: str):
     """تأیید / رد / تأیید انجام بازدید توسط همکار ویژه."""
     me_phone = (session.get('user_phone') or '').strip()
     from .special_visit_inbox import apply_special_visit_action
+    from .visit_requests import locked_mutate_visit_requests
     from .visit_sms import notify_partner_land_tx_sms, visit_status_change_event
 
-    visit_requests = load_express_visit_requests() or []
-    if not isinstance(visit_requests, list):
-        visit_requests = []
+    outcome = (request.form.get('outcome') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+    held: dict = {}
 
-    prev = next(
-        (r for r in visit_requests if isinstance(r, dict) and str(r.get('id') or '') == str(vid)),
-        None,
-    )
-    prev_status = str((prev or {}).get('status') or '') if prev else ''
+    def _mutate(rows):
+        prev = next(
+            (r for r in rows if isinstance(r, dict) and str(r.get('id') or '') == str(vid)),
+            None,
+        )
+        held['prev_status'] = str((prev or {}).get('status') or '') if prev else ''
+        act_l = str(action or '').strip().lower()
+        # The old payout button must not skip «تأیید فروش».
+        if act_l == 'approve_deal':
+            from .visit_requests import DEAL_DECISION_APPROVED, visit_deal_decision
 
-    rec, err = apply_special_visit_action(
-        visit_requests,
-        owner_phone=me_phone,
-        visit_id=str(vid),
-        action=str(action or ''),
-        outcome=(request.form.get('outcome') or '').strip(),
-        notes=(request.form.get('notes') or '').strip(),
-    )
+            if visit_deal_decision(prev) != DEAL_DECISION_APPROVED:
+                held['rec'] = None
+                held['err'] = 'invalid_decision'
+                return False
+        rec, err = apply_special_visit_action(
+            rows,
+            owner_phone=me_phone,
+            visit_id=str(vid),
+            action=str(action or ''),
+            outcome=outcome,
+            notes=notes,
+        )
+        held['rec'] = rec
+        held['err'] = err
+        if err and err not in ('unchanged', 'note_updated', 'already_completed'):
+            return False
+        # start_deal / approve_deal change the listing, not the visit row.
+        if str(action or '').strip().lower() in ('start_deal', 'approve_deal'):
+            return False
+        return True
+
+    try:
+        locked_mutate_visit_requests(_mutate)
+    except Exception:
+        current_app.logger.exception('special visit action save failed id=%s', vid)
+        flash('ذخیره وضعیت ناموفق بود.', 'danger')
+        return redirect(_sales_pipeline_url('visits'))
+
+    rec = held.get('rec')
+    err = held.get('err')
+    prev_status = held.get('prev_status') or ''
     if err == 'not_found':
         flash('درخواست پیدا نشد.', 'warning')
         return redirect(_sales_pipeline_url('visits'))
@@ -11179,14 +11260,6 @@ def special_visit_action(vid: str, action: str):
         return redirect(_sales_pipeline_url('visits'))
 
     act_l = str(action or '').strip().lower()
-    deal_only = act_l in ('start_deal', 'approve_deal', 'reject_deal')
-    if not deal_only:
-        try:
-            save_express_visit_requests(visit_requests)
-        except Exception:
-            current_app.logger.exception('special visit action save failed id=%s', vid)
-            flash('ذخیره وضعیت ناموفق بود.', 'danger')
-            return redirect(_sales_pipeline_url('visits'))
 
     if rec and err not in ('unchanged',):
         new_status = str(rec.get('status') or '')
