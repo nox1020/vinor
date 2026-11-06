@@ -166,6 +166,7 @@ jobs:
             tests/test_vinor_opens_chat.py
             tests/test_visit_followups.py
             tests/test_followup_visit_consistency.py
+            tests/test_commission_escrow.py
             tests/test_visit_schedule_payload.py
             tests/test_wallet_admin_status_lock.py
             tests/test_wallet_fixes.py

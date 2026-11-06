@@ -45,6 +45,18 @@ def test_create_publish_unpublish_republish_and_edit(home):
     assert is_published_for_sale(created) is False
     assert code not in _codes(load_express_lands_cached())
 
+    from app.utils.storage import load_express_commissions, save_express_commissions
+    funded = list(load_express_commissions() or [])
+    funded.append({
+        "id": len(funded) + 1,
+        "commission_type": "manual_adjustment",
+        "partner_phone": "989120000000",
+        "land_code": "manual",
+        "commission_amount": 50_000_000,
+        "status": "approved",
+        "source": "test_fund",
+    })
+    save_express_commissions(funded)
     published, err, changed = publish_listing(
         "989120000000",
         payment_method="نقدی",

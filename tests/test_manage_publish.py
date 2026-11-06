@@ -81,13 +81,23 @@ def _public(code="9"):
 
 
 def _seed(app):
-    from app.utils.storage import save_ads, save_express_partners
+    from app.utils.storage import save_ads, save_express_commissions, save_express_partners
 
     with app.app_context():
         save_express_partners([
             {"phone": PARTNER, "status": "approved", "name": "الف"},
             {"phone": OTHER, "status": "approved", "name": "ب"},
+            {"phone": OWNER, "status": "approved", "name": "مالک"},
         ])
+        save_express_commissions([{
+            "id": 1,
+            "commission_type": "manual_adjustment",
+            "partner_phone": OWNER,
+            "land_code": "manual",
+            "commission_amount": 5_000_000,
+            "status": "approved",
+            "source": "test_fund",
+        }])
         save_ads([_private(), _public()])
 
 
@@ -267,7 +277,7 @@ def test_delete_removes_owner_rows_assignments_and_returns_page(client, app):
 
 
 def test_api_stops_regular_listing_and_owner_can_republish(client, app):
-    from app.utils.storage import load_ads, save_ads
+    from app.utils.storage import load_ads, save_ads, save_express_commissions
     from app.express_partner.my_property import property_cards
 
     ad = _public("9")
@@ -275,6 +285,15 @@ def test_api_stops_regular_listing_and_owner_can_republish(client, app):
     ad["payment_method"] = "نقدی"
     ad["price_total"] = 1_000_000
     with app.app_context():
+        save_express_commissions([{
+            "id": 1,
+            "commission_type": "manual_adjustment",
+            "partner_phone": OWNER,
+            "land_code": "manual",
+            "commission_amount": 5_000_000,
+            "status": "approved",
+            "source": "test_fund",
+        }])
         save_ads([ad])
         assert property_cards(OWNER)[0]["published_for_sale"] is True
     _login(client, OTHER)

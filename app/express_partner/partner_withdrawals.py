@@ -481,7 +481,10 @@ def available_for_new_withdrawal(
     withdrawals: List[Dict[str, Any]],
     phone: str,
 ) -> int:
-    return withdrawable_balance(commissions, withdrawals, phone)
+    from .commission_escrow import held_total
+
+    gross = withdrawable_balance(commissions, withdrawals, phone)
+    return max(0, gross - held_total(commissions, phone))
 
 
 def admin_can_transition(old_status: str, new_status: str) -> bool:

@@ -609,6 +609,7 @@ SPECIAL_LISTING_ERRORS: Dict[str, str] = {
     "save_failed": "ثبت آگهی ناموفق بود.",
     "not_found": "ابتدا ملک خود را در ملک من ثبت کنید.",
     "already_published": "این ملک قبلاً برای فروش منتشر شده است.",
+    "wallet_insufficient": "موجودی کیف پول برای بلوکه کردن پورسانت کافی نیست.",
 }
 
 PUBLISH_PAYMENT_METHODS = ("نقدی", "توافقی", "معاوضه")
@@ -823,6 +824,16 @@ def create_special_listing_from_express_form(
                     rec["express_documents"] = documents
                     rec["code"] = submitted
                     _apply_listing_update(target, rec)
+                    if not owner_home and rec.get("is_express"):
+                        from app.express_partner.commission_escrow import reserve_publish_hold
+
+                        hold_err, _detail = reserve_publish_hold(
+                            phone=owner,
+                            land_code=submitted,
+                            amount=int(express_commission_amount or 0),
+                        )
+                        if hold_err:
+                            return None, hold_err
                     save_ads(lands)
                     return target, None
             new_code = _next_numeric_code(lands)
@@ -832,6 +843,16 @@ def create_special_listing_from_express_form(
                     documents.append(doc_filename)
             rec["express_documents"] = documents
             rec["code"] = new_code
+            if not owner_home:
+                from app.express_partner.commission_escrow import reserve_publish_hold
+
+                hold_err, _detail = reserve_publish_hold(
+                    phone=owner,
+                    land_code=new_code,
+                    amount=int(express_commission_amount or 0),
+                )
+                if hold_err:
+                    return None, hold_err
             lands.append(rec)
             save_ads(lands)
     except Exception:
@@ -963,6 +984,15 @@ def apply_owner_publish(
         except (TypeError, ValueError):
             price = 0
         amount = int(round(price * (commission_pct / 100.0))) if price else 0
+        from app.express_partner.commission_escrow import reserve_publish_hold
+
+        hold_err, _hold_detail = reserve_publish_hold(
+            phone=phone,
+            land_code=str(target.get("code") or land_code),
+            amount=amount,
+        )
+        if hold_err:
+            return None, hold_err, False
         from app.listings.service import mark_published
 
         mark_published(
@@ -1163,6 +1193,12 @@ def unpublish_owner_home(
     if err:
         return None, err
     revoke_broadcast_assignments(want)
+    try:
+        from app.express_partner.commission_escrow import release_publish_hold
+
+        release_publish_hold(want, reason="unpublished")
+    except Exception:
+        current_app.logger.exception("escrow release failed code=%s", want)
     return target, None
 
 

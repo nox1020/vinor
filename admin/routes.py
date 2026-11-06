@@ -5412,6 +5412,25 @@ def express_commission_new():
     flash('پورسانت ثبت شد (در انتظار تایید).', 'success')
     return redirect(_express_commissions_redirect('pending'))
 
+@admin_bp.get('/express/commissions/escrow-missing', endpoint='express_escrow_missing')
+@login_required
+def express_escrow_missing():
+    """آگهی‌های منتشرشده بدون بلوکه. خودکار از انتشار خارج نمی‌شوند."""
+    from flask import render_template_string
+    from app.express_partner.commission_escrow import listings_missing_hold
+
+    rows = listings_missing_hold()
+    body = "".join(
+        f"<li>{row['land_code']} — {row['owner_phone']} — {row['required_amount']} تومان — {row['title']}</li>"
+        for row in rows
+    ) or "<li>موردی نیست.</li>"
+    return render_template_string(
+        "<h1>آگهی بدون بلوکه پورسانت</h1><p>این‌ها منتشر می‌مانند تا ویرایش یا انتشار بعدی بلوکه بخواهد.</p><ul>"
+        + body
+        + "</ul>"
+    )
+
+
 @admin_bp.post('/express/commissions/<int:cid>/approve')
 @login_required
 def express_commission_approve(cid: int):
@@ -5426,6 +5445,33 @@ def express_commission_approve(cid: int):
 
     filter_hint = (request.form.get('filter') or 'pending').strip()
     items = load_express_commissions() or []
+    pending_deal = None
+    for c in items:
+        try:
+            if int(c.get('id', 0) or 0) == int(cid) and c.get('status') == 'pending':
+                from app.express_partner.commissions_flow import commission_is_deal
+                if commission_is_deal(c):
+                    pending_deal = c
+                break
+        except Exception:
+            continue
+    if pending_deal is not None:
+        from app.listings.service import owner_phone
+        from app.express_partner.deal_wallet import finalize_deal_payout, wallet_detail
+        from app.express_partner.visit_requests import resolve_listing_for_visit_code
+
+        land_code = str(pending_deal.get('land_code') or '').strip()
+        listing = resolve_listing_for_visit_code(land_code) if land_code else None
+        owner = owner_phone(listing) if isinstance(listing, dict) else ''
+        err, detail = finalize_deal_payout(deal_id=cid, owner_phone=owner)
+        if err:
+            message = str((detail or {}).get('message') or wallet_detail().get('message') or '').strip()
+            if not message:
+                message = 'تأیید پورسانت ممکن نشد. اگر بلوکه یا موجودی مالک کافی نیست، تعدیل دستی جداگانه ثبت کنید.'
+            flash(message, 'error')
+            return redirect(_express_commissions_redirect(filter_hint))
+        flash('پورسانت فروش از بلوکه یا کیف پول مالک به مشاور منتقل شد.', 'success')
+        return redirect(_express_commissions_redirect('approved'))
     changed = False
     commission_record = None
     for c in items:

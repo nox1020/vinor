@@ -1,0 +1,21 @@
+{% extends "express_partner/base.html" %}
+{% block content %}
+<section class="vn-wallet-card" style="margin:16px">
+  <h1 style="font-size:1.1rem;margin:0 0 8px">شارژ کیف پول</h1>
+  <p>قابل استفاده: {{ (wallet_available or 0)|toman }}</p>
+  {% if shortfall %}
+  <p>کمبود اعلام‌شده برای بلوکهٔ پورسانت: {{ shortfall|toman }}</p>
+  {% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p>مبلغ (تومان)</p>
+    <input name="amount" inputmode="numeric" value="{{ shortfall or presets[0] }}" required>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0">
+      {% for preset in presets %}
+      <button type="submit" name="amount" value="{{ preset }}">{{ preset|toman }}</button>
+      {% endfor %}
+    </div>
+    <button type="submit">پرداخت</button>
+  </form>
+</section>
+{% endblock %}

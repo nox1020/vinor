@@ -39,10 +39,9 @@ def wallet_insufficient_message(required: int, balance: int) -> str:
     need = max(0, int(required or 0))
     have = max(0, int(balance or 0))
     shortfall = max(0, need - have)
-    # شارژ آنلاین کیف پول وجود ندارد؛ پیام نباید کاربر را به «شارژ» بفرستد.
     return (
         f"موجودی کیف پول برای پرداخت پورسانت ({toman_fa(need)}) کافی نیست؛ کمبود: {toman_fa(shortfall)}. "
-        "شارژ آنلاین کیف پول فعال نیست؛ برای افزایش موجودی با پشتیبانی وینور تماس بگیرید."
+        "از شارژ کیف پول همان مبلغ را واریز کنید."
     )
 
 
@@ -187,7 +186,10 @@ def _stage_payout(
     if status != "pending":
         return "invalid_transition", {}
 
+    from .commission_escrow import find_hold, settle_hold
+
     balance = int(withdrawable_balance(commissions, withdrawals, owner_phone)) if owner_phone else 0
+    hold = find_hold(commissions, str(deal.get("land_code") or ""), owner_phone)
     if balance < amount:
         shortfall = amount - balance
         message = wallet_insufficient_message(amount, balance)
@@ -222,6 +224,15 @@ def _stage_payout(
             "counterparty_phone": str(deal.get("partner_phone") or "").strip(),
             "admin_note": "انتقال پورسانت معامله به مشاور",
         })
+    settled = settle_hold(
+        commissions,
+        str(deal.get("land_code") or ""),
+        deal_id=deal.get("id"),
+        deal_amount=amount,
+    )
+    if hold is not None:
+        deal["escrow_consumed"] = settled["consumed"]
+        deal["escrow_remainder"] = settled["remainder"]
     deal["status"] = "approved"
     deal["approved_at"] = stamp
     deal["payout_settled"] = True

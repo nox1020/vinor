@@ -594,6 +594,14 @@ def _partner_withdrawable_balance(phone: str) -> int:
     return withdrawable_balance(_express_commissions_cached() or [], _partner_withdrawals_raw(), ph)
 
 
+def _partner_blocked_balance(phone: str) -> int:
+    ph = (phone or '').strip()
+    if not ph:
+        return 0
+    from .commission_escrow import held_total
+    return held_total(_express_commissions_cached() or [], ph)
+
+
 def _partner_requestable_balance(phone: str) -> int:
     ph = (phone or '').strip()
     if not ph:
@@ -5096,7 +5104,11 @@ def my_property_publish():
             land_code=fields.get('code') or '',
         )
     if err:
-        flash(SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.'), 'error')
+        msg = SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.')
+        if err == 'wallet_insufficient':
+            from .commission_escrow import last_hold_detail
+            msg = str(last_hold_detail().get('message') or msg)
+        flash(msg, 'error')
         if fields.get('code'):
             return redirect(url_for('express_partner.land_detail', code=fields['code']))
         return redirect(url_for('express_partner.my_property'))
@@ -5132,7 +5144,18 @@ def apk_my_property_publish():
         )
     if err:
         msg = SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.')
-        return _apk_json({'ok': False, 'error': msg, 'error_code': err}, 400)
+        extra = {}
+        if err == 'wallet_insufficient':
+            from .commission_escrow import last_hold_detail
+            detail = last_hold_detail()
+            msg = str(detail.get('message') or msg)
+            extra = {
+                'required_amount': int(detail.get('required_amount') or 0),
+                'balance': int(detail.get('balance') or 0),
+                'shortfall': int(detail.get('shortfall') or 0),
+                'charge_path': detail.get('charge_path') or '/express/partner/wallet/charge',
+            }
+        return _apk_json({'ok': False, 'error': msg, 'error_code': err, **extra}, 400)
     code = str((rec or {}).get('code') or fields.get('code') or '').strip()
     if stopped:
         message = 'انتشار فروش متوقف شد.'
@@ -7586,6 +7609,8 @@ def commissions_page():
 
     comm_stats = _partner_commission_stats(me_phone, my_comms)
     withdrawable_balance = comm_stats["withdrawable_balance"]
+    wallet_blocked = _partner_blocked_balance(me_phone)
+    wallet_available = max(0, int(withdrawable_balance) - int(wallet_blocked))
     pending_withdrawal_total = comm_stats["in_withdrawal_amount"]
     financial_snapshot = _commission_financial_snapshot(
         comm_stats,
@@ -7620,7 +7645,9 @@ def commissions_page():
         paid_count=comm_stats["received_count"],
         approved_commission=comm_stats["approved_amount"],
         withdrawable_balance=withdrawable_balance,
-        requestable_balance=withdrawable_balance,
+        requestable_balance=wallet_available,
+        wallet_blocked=wallet_blocked,
+        wallet_available=wallet_available,
         min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
         pending_withdrawal_total=pending_withdrawal_total,
         commission_financial_snapshot=financial_snapshot,
@@ -7689,6 +7716,64 @@ def commissions_transactions_page():
     return resp
 
 
+@express_partner_bp.route('/wallet/charge', methods=['GET', 'POST'], endpoint='wallet_charge')
+@require_partner_access(allow_pending=True)
+def wallet_charge():
+    """شارژ کیف پول. مبلغ، پیش‌فرض‌ها، و کمبود دقیق انتشار."""
+    from .wallet_topup import MIN_TOPUP, TOPUP_PRESETS, begin_wallet_topup
+
+    me_phone = (session.get('user_phone') or '').strip()
+    shortfall = 0
+    try:
+        shortfall = max(0, int(request.values.get('shortfall') or 0))
+    except (TypeError, ValueError):
+        shortfall = 0
+    if request.method == 'POST':
+        raw_amount = request.form.get('amount') or request.values.get('amount')
+        if raw_amount is None and request.is_json:
+            payload = request.get_json(silent=True) or {}
+            raw_amount = payload.get('amount')
+        try:
+            amount = int(str(raw_amount or '0').replace(',', '') or '0')
+        except (TypeError, ValueError):
+            amount = 0
+        ok, pay_url, err = begin_wallet_topup(phone=me_phone, amount=amount)
+        wants_json = request.is_json or 'application/json' in (request.headers.get('Accept') or '')
+        if not ok:
+            if wants_json:
+                return jsonify({'ok': False, 'error': err}), 400
+            flash(err, 'error')
+            return redirect(url_for('express_partner.wallet_charge', shortfall=shortfall or None))
+        if wants_json:
+            return jsonify({'ok': True, 'pay_url': pay_url})
+        return redirect(pay_url)
+    presets = list(TOPUP_PRESETS)
+    if shortfall and shortfall not in presets:
+        presets = [shortfall] + presets
+    return render_template(
+        'express_partner/wallet_charge.html',
+        presets=presets,
+        shortfall=shortfall,
+        min_topup=MIN_TOPUP,
+        wallet_available=_partner_requestable_balance(me_phone),
+        hide_header=True,
+    )
+
+
+@express_partner_bp.get('/wallet/zarinpal/callback', endpoint='wallet_zarinpal_callback')
+def wallet_zarinpal_callback():
+    from .wallet_topup import complete_wallet_topup
+
+    authority = (request.args.get('Authority') or request.args.get('authority') or '').strip()
+    status_param = (request.args.get('Status') or request.args.get('status') or '').strip()
+    result = complete_wallet_topup(authority, status_param)
+    if result.get('ok'):
+        flash('کیف پول شارژ شد.', 'success')
+    else:
+        flash('شارژ کیف پول انجام نشد.', 'error')
+    return redirect(url_for('express_partner.commissions'))
+
+
 @express_partner_bp.get('/commissions/data', endpoint='commissions_data')
 @require_partner_access(allow_pending=True, json_response=True)
 def commissions_data():
@@ -7728,7 +7813,10 @@ def commissions_data():
         'paid_commission': comm_stats['received_amount'],
         'sold_count': comm_stats['total_confirmed_count'],
         'withdrawable_balance': comm_stats['withdrawable_balance'],
-        'requestable_balance': comm_stats['withdrawable_balance'],
+        'requestable_balance': _partner_requestable_balance(me_phone),
+        'wallet_total': comm_stats['withdrawable_balance'],
+        'wallet_blocked': _partner_blocked_balance(me_phone),
+        'wallet_available': _partner_requestable_balance(me_phone),
         'min_withdrawal_amount': MIN_WITHDRAWAL_AMOUNT,
         'pending_withdrawal_total': comm_stats['in_withdrawal_amount'],
         'in_withdrawal_amount': comm_stats['in_withdrawal_amount'],
