@@ -100,3 +100,70 @@ def is_partner_assignment_land(land: Any) -> bool:
         if land.get("owner_home") or extras.get("owner_home"):
             return False
     return True
+
+
+# Fields a visitor or the Android chat card may see. Owner phones, contact
+# numbers, and internal extras never leave this list.
+PUBLIC_LISTING_FIELDS = (
+    "code",
+    "title",
+    "price_total",
+    "price",
+    "city",
+    "location",
+    "district",
+    "category",
+    "size",
+    "rooms",
+    "floor",
+    "year_built",
+    "description",
+    "features",
+    "docs_status",
+    "latitude",
+    "longitude",
+    "land_area",
+    "built_area",
+    "villa_built_area",
+    "area",
+    "street_width",
+    "created_at",
+    "updated_at",
+)
+
+
+def public_image_urls(land: Any) -> list[str]:
+    if not isinstance(land, dict):
+        return []
+    images = land.get("images")
+    if not isinstance(images, list):
+        return []
+    urls: list[str] = []
+    for image in images:
+        if isinstance(image, str) and image.strip():
+            urls.append(image.strip())
+    return urls
+
+
+def public_listing_view(land: Any, *, cover: tuple[str, str, str] | None = None) -> dict[str, Any]:
+    """Allow-listed listing card. Drops owner_phone, vinor_contact, and extras."""
+    if not isinstance(land, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key in PUBLIC_LISTING_FIELDS:
+        value = land.get(key)
+        if value in (None, ""):
+            continue
+        out[key] = value
+    images = public_image_urls(land)
+    if images:
+        out["images"] = images
+    if cover:
+        thumb, full, raw = cover
+        if thumb:
+            out["image_thumb"] = thumb
+        if full:
+            out["image_full"] = full
+        if raw:
+            out["image_raw"] = raw
+    return out

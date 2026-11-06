@@ -14,6 +14,7 @@ def _cover_image_urls(cover) -> tuple[str, str, str]:
     thumb = gallery_display_url(cover) if cover else ""
     return thumb, url, url
 from app.services.notifications import add_notification
+from app.utils.public_listings import public_listing_view
 from app.utils.share_tokens import encode_partner_ref
 from app.utils.apk_version import android_apk_version_payload
 from app.utils.short_urls import canonical_public_apk_download_url
@@ -95,11 +96,18 @@ def get_express_listings():
 
         # فیلتر فقط approved
         express_lands = [l for l in express_lands if l.get('express_status') == 'approved']
-        
+        public_lands = []
+        for land in express_lands:
+            if not isinstance(land, dict):
+                continue
+            images = land.get('images') or []
+            cover = _cover_image_urls(images[0] if images else None)
+            public_lands.append(public_listing_view(land, cover=cover))
+
         response = make_response(jsonify({
             'success': True,
-            'lands': express_lands,
-            'count': len(express_lands)
+            'lands': public_lands,
+            'count': len(public_lands)
         }))
         response.headers['Cache-Control'] = 'public, max-age=60, stale-while-revalidate=120'
         if etag:
@@ -323,18 +331,12 @@ def get_express_detail(code):
             return resp
 
         images = express_land.get('images') or []
-        thumb, full, raw = _cover_image_urls(images[0] if images else None)
-        express_land = dict(express_land)
-        express_land.update({
-            'image_thumb': thumb,
-            'image_full': full,
-            'image_raw': raw,
-        })
-        express_land.pop('images_v2', None)
+        cover = _cover_image_urls(images[0] if images else None)
+        public_land = public_listing_view(express_land, cover=cover)
 
         response = make_response(jsonify({
             'success': True,
-            'land': express_land
+            'land': public_land
         }))
         response.headers['Cache-Control'] = 'public, max-age=300, stale-while-revalidate=600'
         response.headers['Vary'] = 'Accept-Encoding'
