@@ -5412,23 +5412,28 @@ def express_commission_new():
     flash('پورسانت ثبت شد (در انتظار تایید).', 'success')
     return redirect(_express_commissions_redirect('pending'))
 
+_ESCROW_MISSING_TEMPLATE = """{% autoescape true %}
+<h1>آگهی بدون بلوکه پورسانت</h1>
+<p>این‌ها منتشر می‌مانند تا ویرایش یا انتشار بعدی بلوکه بخواهد.</p>
+<ul>
+{% for row in rows %}
+<li>{{ row.land_code }} — {{ row.owner_phone }} — {{ row.required_amount }} تومان — {{ row.title }}</li>
+{% else %}
+<li>موردی نیست.</li>
+{% endfor %}
+</ul>
+{% endautoescape %}
+"""
+
+
 @admin_bp.get('/express/commissions/escrow-missing', endpoint='express_escrow_missing')
 @login_required
 def express_escrow_missing():
-    """آگهی‌های منتشرشده بدون بلوکه. خودکار از انتشار خارج نمی‌شوند."""
+    """آگهی‌های منتشرشده بدون بلوکه. عنوان آگهی داده است، نه کد قالب."""
     from flask import render_template_string
     from app.express_partner.commission_escrow import listings_missing_hold
 
-    rows = listings_missing_hold()
-    body = "".join(
-        f"<li>{row['land_code']} — {row['owner_phone']} — {row['required_amount']} تومان — {row['title']}</li>"
-        for row in rows
-    ) or "<li>موردی نیست.</li>"
-    return render_template_string(
-        "<h1>آگهی بدون بلوکه پورسانت</h1><p>این‌ها منتشر می‌مانند تا ویرایش یا انتشار بعدی بلوکه بخواهد.</p><ul>"
-        + body
-        + "</ul>"
-    )
+    return render_template_string(_ESCROW_MISSING_TEMPLATE, rows=listings_missing_hold())
 
 
 @admin_bp.post('/express/commissions/<int:cid>/approve')

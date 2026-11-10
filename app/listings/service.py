@@ -1054,6 +1054,30 @@ def archive_listing(
     return target, None, changed
 
 
+def _declared_publish_commission(land: Dict[str, Any]) -> int:
+    from app.express_partner.commission_escrow import commission_amount_for
+
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    try:
+        stored = int(extras.get("express_commission_amount") or 0)
+    except (TypeError, ValueError):
+        stored = 0
+    if stored > 0:
+        return stored
+    return commission_amount_for(
+        land.get("price_total") or land.get("price"),
+        extras.get("express_commission_pct"),
+    )
+
+
+def _clear_archive_flags(target: Dict[str, Any]) -> None:
+    target["archived"] = False
+    target["archived_at"] = ""
+    target["archived_reason"] = ""
+    target.pop("is_archived", None)
+    target["archive_restored_at"] = _archive_now()
+
+
 def restore_listing(
     code: str,
     *,
@@ -1061,7 +1085,11 @@ def restore_listing(
     require_owner: bool = True,
     app=None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
-    """برگشت به فهرست فعال. انتشار را عوض نمی‌کند. تکرار روی آگهی فعال خطا نیست."""
+    """برگشت به فهرست فعال.
+
+    اگر آگهی با برداشتن بایگانی دوباره عمومی می‌شود، همان بلوکهٔ انتشار
+    باید برگردد. موجودی کم باشد، آگهی فعال اما منتشرنشده می‌ماند.
+    """
     with listings_lock(app):
         items = _read_json(listings_path(app))
         target, err = _listing_for_code(items, code, phone, require_owner=require_owner)
@@ -1069,12 +1097,42 @@ def restore_listing(
             return None, err or "not_found", False
         if not is_archived(target):
             return target, None, False
-        target["archived"] = False
-        target["archived_at"] = ""
-        target["archived_reason"] = ""
-        target.pop("is_archived", None)
-        target["archive_restored_at"] = _archive_now()
-        written = save_listings(items, app)
+        would_publish = is_published_for_sale(target)
+        amount = _declared_publish_commission(target) if would_publish else 0
+        fresh_hold = False
+        if would_publish and amount > 0:
+            from app.express_partner.commission_escrow import reserve_publish_hold
+
+            hold_err, detail = reserve_publish_hold(
+                phone=owner_phone(target) or phone,
+                land_code=code_key(target),
+                amount=amount,
+            )
+            if hold_err == "wallet_insufficient":
+                _clear_archive_flags(target)
+                mark_private(target)
+                written = save_listings(items, app)
+                saved_code = code_key(target)
+                for land in written:
+                    if isinstance(land, dict) and code_key(land) == saved_code:
+                        target = land
+                        break
+                return target, "wallet_insufficient", True
+            if hold_err:
+                return None, hold_err, False
+            fresh_hold = not bool(detail.get("idempotent"))
+        _clear_archive_flags(target)
+        try:
+            written = save_listings(items, app)
+        except Exception:
+            if fresh_hold:
+                try:
+                    from app.express_partner.commission_escrow import release_publish_hold
+
+                    release_publish_hold(code_key(target), reason="restore_failed", force=True)
+                except Exception:
+                    pass
+            raise
         saved_code = code_key(target)
         for land in written:
             if isinstance(land, dict) and code_key(land) == saved_code:

@@ -1374,38 +1374,43 @@ def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> Non
     from datetime import datetime, timedelta
 
     from .commissions_flow import remove_pending_deal_commissions_for
+    from .deal_wallet import commission_store_lock
 
     now = datetime.now()
-    updated = False
     released: List[tuple[str, str]] = []
 
-    for a in assignments:
-        if _assignment_display_status(a) != 'in_transaction':
-            continue
-
-        started_at_str = a.get('transaction_started_at')
-        if not started_at_str:
-            continue
-
-        try:
-            started_at = datetime.strptime(started_at_str, '%Y-%m-%d %H:%M:%S')
-            if now - started_at > timedelta(days=5):
-                code = str(a.get('land_code') or '').strip()
-                holder = str(a.get('transaction_holder') or '').strip()
-                a['status'] = 'active'
-                a['updated_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
-                a['auto_released'] = True
-                a['auto_released_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
-                a.pop('transaction_holder', None)
-                a.pop('transaction_started_at', None)
-                updated = True
-                if code and holder:
-                    released.append((code, holder))
-        except Exception:
-            continue
-
-    if updated:
-        save_express_assignments(assignments)
+    with commission_store_lock():
+        fresh_assignments = load_express_assignments() or []
+        if not isinstance(fresh_assignments, list) or not fresh_assignments:
+            fresh_assignments = list(assignments or [])
+        disk_updated = False
+        for a in fresh_assignments:
+            if _assignment_display_status(a) != 'in_transaction':
+                continue
+            started_at_str = a.get('transaction_started_at')
+            if not started_at_str:
+                continue
+            try:
+                started_at = datetime.strptime(started_at_str, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                continue
+            if now - started_at <= timedelta(days=5):
+                continue
+            code = str(a.get('land_code') or '').strip()
+            holder = str(a.get('transaction_holder') or '').strip()
+            a['status'] = 'active'
+            a['updated_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
+            a['auto_released'] = True
+            a['auto_released_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
+            a.pop('transaction_holder', None)
+            a.pop('transaction_started_at', None)
+            disk_updated = True
+            if code and holder:
+                released.append((code, holder))
+        if disk_updated:
+            save_express_assignments(fresh_assignments)
+        if isinstance(assignments, list):
+            assignments[:] = fresh_assignments
         if released:
             try:
                 commissions = load_express_commissions() or []
@@ -1428,26 +1433,28 @@ def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> Non
                 current_app.logger.exception(
                     'auto-release pending deal commission cleanup failed'
                 )
-            # پیام در چت — همکار بداند می‌تواند دوباره معامله ثبت کند
-            try:
-                from .sales_coach import deliver_partner_progress_update
-                from app.utils.storage import load_ads_cached
 
-                lands = load_ads_cached() or []
-                title_by_code = {
-                    str(l.get('code') or '').strip(): str(l.get('title') or '').strip()
-                    for l in lands
-                    if isinstance(l, dict)
-                }
-                for code, holder in released:
-                    deliver_partner_progress_update(
-                        partner_phone=holder,
-                        event='deal_auto_released',
-                        land_code=code,
-                        land_title=title_by_code.get(code, ''),
-                    )
-            except Exception:
-                current_app.logger.exception('auto-release chat progress failed')
+    if not released:
+        return
+    try:
+        from .sales_coach import deliver_partner_progress_update
+        from app.utils.storage import load_ads_cached
+
+        lands = load_ads_cached() or []
+        title_by_code = {
+            str(l.get('code') or '').strip(): str(l.get('title') or '').strip()
+            for l in lands
+            if isinstance(l, dict)
+        }
+        for code, holder in released:
+            deliver_partner_progress_update(
+                partner_phone=holder,
+                event='deal_auto_released',
+                land_code=code,
+                land_title=title_by_code.get(code, ''),
+            )
+    except Exception:
+        current_app.logger.exception('auto-release chat progress failed')
 
 
 _AUTO_RELEASE_LAST_MONO = 0.0
@@ -4755,6 +4762,23 @@ def _listing_archive_response(phone: str, code: str, *, restore: bool):
         message = 'آگهی بایگانی شد.'
     if err == 'forbidden':
         return _apk_json({'ok': False, 'error': 'این آگهی برای شما نیست.', 'error_code': 'forbidden'}, 403)
+    if err == 'wallet_insufficient':
+        from .commission_escrow import last_hold_detail
+
+        detail = last_hold_detail()
+        body = archive_payload(land) if isinstance(land, dict) else {}
+        body.update({
+            'ok': False,
+            'code': str((land or {}).get('code') or code),
+            'error': str(detail.get('message') or 'موجودی کیف پول برای بلوکه کردن پورسانت کافی نیست.'),
+            'error_code': 'wallet_insufficient',
+            'required_amount': int(detail.get('required_amount') or 0),
+            'balance': int(detail.get('balance') or 0),
+            'shortfall': int(detail.get('shortfall') or 0),
+            'charge_path': detail.get('charge_path') or '/express/partner/wallet/charge',
+            'published_for_sale': False,
+        })
+        return _apk_json(body, 400)
     if err or land is None:
         return _apk_json({'ok': False, 'error': 'این آگهی پیدا نشد.', 'error_code': 'not_found'}, 404)
     body = archive_payload(land)
@@ -10371,47 +10395,60 @@ def mark_in_transaction(code: str):
                                 price_total = 0
                             
                             # همیشه پورسانت معاملهٔ pending بساز تا کارت تأیید ادمین در روند بازدید بیاید
-                            if commission_blocks_new_deal_record(commissions, partner_phone, str(code)):
-                                current_app.logger.info(
-                                    "Pending deal commission already exists for partner %s land %s",
-                                    partner_phone,
-                                    code,
-                                )
-                                skipped_count += 1
-                            else:
-                                if commission_pct <= 0:
-                                    current_app.logger.warning(
-                                        "Commission percentage missing for partner %s land %s — creating pending deal for admin close",
+                            pending_notice = None
+                            from .deal_wallet import commission_store_lock
+                            with commission_store_lock():
+                                commissions = load_express_commissions() or []
+                                if not isinstance(commissions, list):
+                                    commissions = []
+                                if commission_blocks_new_deal_record(commissions, partner_phone, str(code)):
+                                    current_app.logger.info(
+                                        "Pending deal commission already exists for partner %s land %s",
                                         partner_phone,
                                         code,
                                     )
-                                if commission_amount <= 0 and commission_pct > 0:
-                                    current_app.logger.warning(
-                                        "Commission amount is 0 for partner %s, land %s: price=%s, pct=%s",
-                                        partner_phone, code, price_total, commission_pct,
-                                    )
-                                new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
-                                try:
-                                    safe_amount = max(0, int(commission_amount or 0))
-                                except Exception:
-                                    safe_amount = 0
-                                try:
-                                    safe_pct = float(commission_pct or 0)
-                                except Exception:
-                                    safe_pct = 0.0
-                                new_commission = {
-                                    'id': new_id,
-                                    'commission_type': 'deal',
-                                    'partner_phone': partner_phone,
-                                    'land_code': str(code),
-                                    'sale_amount': price_total,
-                                    'commission_pct': safe_pct,
-                                    'commission_amount': safe_amount,
-                                    'status': 'pending',
-                                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                                }
-                                commissions.append(new_commission)
-                                created_count += 1
+                                    skipped_count += 1
+                                else:
+                                    if commission_pct <= 0:
+                                        current_app.logger.warning(
+                                            "Commission percentage missing for partner %s land %s — creating pending deal for admin close",
+                                            partner_phone,
+                                            code,
+                                        )
+                                    if commission_amount <= 0 and commission_pct > 0:
+                                        current_app.logger.warning(
+                                            "Commission amount is 0 for partner %s, land %s: price=%s, pct=%s",
+                                            partner_phone, code, price_total, commission_pct,
+                                        )
+                                    new_id = (max([int(x.get('id', 0) or 0) for x in commissions if isinstance(x, dict)], default=0) or 0) + 1
+                                    try:
+                                        safe_amount = max(0, int(commission_amount or 0))
+                                    except Exception:
+                                        safe_amount = 0
+                                    try:
+                                        safe_pct = float(commission_pct or 0)
+                                    except Exception:
+                                        safe_pct = 0.0
+                                    commissions.append({
+                                        'id': new_id,
+                                        'commission_type': 'deal',
+                                        'partner_phone': partner_phone,
+                                        'land_code': str(code),
+                                        'sale_amount': price_total,
+                                        'commission_pct': safe_pct,
+                                        'commission_amount': safe_amount,
+                                        'status': 'pending',
+                                        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                    })
+                                    save_express_commissions(commissions)
+                                    created_count += 1
+                                    pending_notice = {
+                                        'id': new_id,
+                                        'amount': safe_amount,
+                                        'pct': safe_pct,
+                                        'price': price_total,
+                                    }
+                            if pending_notice:
                                 try:
                                     from .admin_action_sms import notify_admin_pending_action
                                     notify_admin_pending_action(
@@ -10419,7 +10456,7 @@ def mark_in_transaction(code: str):
                                         partner_phone=partner_phone,
                                         partner_name=_partner_display_name(partner_phone),
                                         land_code=str(code),
-                                        amount=safe_amount,
+                                        amount=pending_notice['amount'],
                                     )
                                 except Exception:
                                     current_app.logger.exception(
@@ -10432,9 +10469,9 @@ def mark_in_transaction(code: str):
                                     notify_partner_commission_txn(
                                         partner_phone=partner_phone,
                                         event='commission_pending',
-                                        amount=safe_amount,
+                                        amount=pending_notice['amount'],
                                         land_code=str(code),
-                                        reference_id=str(new_id),
+                                        reference_id=str(pending_notice['id']),
                                     )
                                 except Exception:
                                     current_app.logger.exception(
@@ -10443,16 +10480,21 @@ def mark_in_transaction(code: str):
                                         code,
                                     )
                                 current_app.logger.info(
-                                    f"Created commission record {new_id} for partner {partner_phone} and land {code}: amount={safe_amount}, pct={safe_pct}, price={price_total}"
+                                    "Created commission record %s for partner %s and land %s: amount=%s, pct=%s, price=%s",
+                                    pending_notice['id'],
+                                    partner_phone,
+                                    code,
+                                    pending_notice['amount'],
+                                    pending_notice['pct'],
+                                    pending_notice['price'],
                                 )
-                                # Phase 4 Closing: sync Deal adapter (fail-open; does not mutate commission).
                                 try:
                                     from app.closing.deal_bridge import maybe_sync_deal_from_commission
                                     maybe_sync_deal_from_commission(
                                         partner_phone=partner_phone,
                                         land_code=str(code),
-                                        commission_id=str(new_id),
-                                        sale_amount=price_total,
+                                        commission_id=str(pending_notice['id']),
+                                        sale_amount=pending_notice['price'],
                                         assignment_status='in_transaction',
                                         deal_status='in_transaction',
                                     )
@@ -10460,7 +10502,6 @@ def mark_in_transaction(code: str):
                                     pass
                         
                         if created_count > 0:
-                            save_express_commissions(commissions)
                             success_message = (
                                 'فروش نهایی ثبت شد. پس از تأیید ادمین، فایل بسته می‌شود '
                                 'و پورسانت به کیف پول شما اضافه می‌شود.'
@@ -10491,26 +10532,25 @@ def mark_in_transaction(code: str):
                     save_express_visit_requests(visit_requests)
 
                 try:
-                    commissions = load_express_commissions() or []
-                    removed_count = 0
-                    
-                    # پیدا کردن و حذف پورسانت‌های pending مربوط به این فایل
-                    commissions_to_keep = []
-                    for c in commissions:
-                        if (
-                            str(c.get('land_code')) == str(code)
-                            and str(c.get('partner_phone') or '').strip() == me_phone
-                            and c.get('status') == 'pending'
-                            and commission_is_deal(c)
-                        ):
-                            # این پورسانت را حذف می‌کنیم
-                            removed_count += 1
-                            current_app.logger.info(f"Removed pending commission {c.get('id')} for land {code}")
-                        else:
-                            commissions_to_keep.append(c)
-                    
+                    from .deal_wallet import commission_store_lock
+                    with commission_store_lock():
+                        commissions = load_express_commissions() or []
+                        removed_count = 0
+                        commissions_to_keep = []
+                        for c in commissions:
+                            if (
+                                str(c.get('land_code')) == str(code)
+                                and str(c.get('partner_phone') or '').strip() == me_phone
+                                and c.get('status') == 'pending'
+                                and commission_is_deal(c)
+                            ):
+                                removed_count += 1
+                                current_app.logger.info(f"Removed pending commission {c.get('id')} for land {code}")
+                            else:
+                                commissions_to_keep.append(c)
+                        if removed_count > 0:
+                            save_express_commissions(commissions_to_keep)
                     if removed_count > 0:
-                        save_express_commissions(commissions_to_keep)
                         success_message = f'وضعیت ملک به «فعال» تغییر کرد و {removed_count} پورسانت در انتظار حذف شد.'
                     else:
                         success_message = 'وضعیت ملک به «فعال» تغییر کرد.'
