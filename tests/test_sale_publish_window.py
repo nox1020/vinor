@@ -118,9 +118,14 @@ def test_legacy_published_30_days_ago_stops_and_younger_legacy_stays(app):
     from app.utils.public_listings import is_publicly_visible_listing
     from app.utils.storage import load_express_lands_cached, save_ads
 
+    from app.listings.performance import parse_ts
+    from app.utils.dates import iso_z
+
     now = datetime(2026, 10, 19, 6, 0, 0)
+    young_at = datetime.now().replace(microsecond=0) - timedelta(days=9)
     old_created = "2026-08-01 08:00:00"
-    young_created = "2026-10-10 08:00:00"
+    young_created = young_at.strftime("%Y-%m-%d %H:%M:%S")
+    young_stamp = iso_z(parse_ts(young_created))
     old = _published("40", created_at=old_created, title="قدیمی بدون مهر")
     young = _published("10", created_at=young_created, title="تازه بدون مهر")
     catalog = {
@@ -163,8 +168,8 @@ def test_legacy_published_30_days_ago_stops_and_younger_legacy_stays(app):
         assert is_published_for_sale(kept) is True
         assert is_archived(kept) is False
         assert kept.get("published_at") in (None, "")
-        assert kept["sale_published_at"] == "2026-10-10T08:00:00Z"
-        assert kept["extras"]["sale_published_at"] == "2026-10-10T08:00:00Z"
+        assert kept["sale_published_at"] == young_stamp
+        assert kept["extras"]["sale_published_at"] == young_stamp
         assert boxed["archived_reason"] == "manual"
         assert boxed["archived_at"] == stamp
         assert boxed["title"] == "بایگانی دستی"

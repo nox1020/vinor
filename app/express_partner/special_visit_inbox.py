@@ -1347,6 +1347,22 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
         return "no_land"
     if not partner_phone:
         return "failed"
+    from .deal_wallet import commission_store_lock
+
+    with commission_store_lock():
+        err, started = _commit_started_deal(rec, code, partner_phone)
+    if err or started is None:
+        return err
+    _notify_started_deal(rec, started)
+    return None
+
+
+def _commit_started_deal(
+    rec: Dict[str, Any],
+    code: str,
+    partner_phone: str,
+) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """خواندن و نوشتن تخصیص و پورسانت زیر قفل مالی. پیامک بیرون از قفل می‌ماند."""
     from .visit_requests import _visit_lands, canonical_land_code
 
     lands = _visit_lands()
@@ -1355,23 +1371,23 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
     if not isinstance(assignments, list):
         assignments = []
     if not _partner_has_assignment(assignments, partner_phone, code):
-        return "no_assignment"
+        return "no_assignment", None
     tx_status, holder = _land_tx_status(assignments, code)
     if tx_status == "sold":
-        return "already_sold"
+        return "already_sold", None
     if holder and not _same_partner_phone(holder, partner_phone):
-        return "held_by_other"
+        return "held_by_other", None
     commissions = load_express_commissions() or []
     if not isinstance(commissions, list):
         commissions = []
     existing = _matching_deal(commissions, partner_phone, code)
     existing_status = str((existing or {}).get("status") or "").strip().lower()
     if existing_status in ("approved", "paid"):
-        return "already_sold"
+        return "already_sold", None
     if existing_status == COMMISSION_PENDING:
-        return "already_pending"
+        return "already_pending", None
     if not holder and _partner_open_tx_count(assignments, partner_phone) >= 2:
-        return "deal_limit"
+        return "deal_limit", None
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for a in assignments:
@@ -1405,6 +1421,7 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
         )
     except Exception:
         price_total = 0
+
     def _commission_id(row: Dict[str, Any]) -> int:
         try:
             return int(row.get("id") or 0)
@@ -1433,12 +1450,28 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
         "source": "special_inbox",
     })
     save_express_commissions(commissions)
+    return None, {
+        "partner_phone": partner_phone,
+        "land_code": code,
+        "amount": safe_amount,
+        "new_id": new_id,
+        "price_total": price_total,
+        "partner_name": str(rec.get("partner_name") or ""),
+    }
+
+
+def _notify_started_deal(rec: Dict[str, Any], started: Dict[str, Any]) -> None:
+    partner_phone = str(started.get("partner_phone") or "")
+    code = str(started.get("land_code") or "")
+    safe_amount = int(started.get("amount") or 0)
+    new_id = started.get("new_id")
+    price_total = int(started.get("price_total") or 0)
     try:
         from .admin_action_sms import notify_admin_pending_action
         notify_admin_pending_action(
             "commission",
             partner_phone=partner_phone,
-            partner_name=str(rec.get("partner_name") or ""),
+            partner_name=str(started.get("partner_name") or ""),
             land_code=code,
             amount=safe_amount,
         )
@@ -1478,7 +1511,6 @@ def _start_deal_for_visit(rec: Dict[str, Any]) -> Optional[str]:
         )
     except Exception:
         pass
-    return None
 
 
 def _decide_deal_commission(
@@ -1572,18 +1604,48 @@ def _reject_pending_deal(
     commission_record: Dict[str, Any],
     commissions: List[Dict[str, Any]],
 ) -> Optional[str]:
+    from .deal_wallet import commission_store_lock
+
+    with commission_store_lock():
+        err, rejected = _commit_rejected_deal(commission_record, commissions)
+    if err or rejected is None:
+        return err
+    _notify_rejected_deal(rejected)
+    return None
+
+
+def _commit_rejected_deal(
+    commission_record: Dict[str, Any],
+    commissions: List[Dict[str, Any]],
+) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """رد معامله روی نسخهٔ تازهٔ فایل پورسانت، زیر همان قفل شارژ و بلوکه."""
+    fresh = load_express_commissions() or []
+    if not isinstance(fresh, list):
+        fresh = []
+    deal_id = str(commission_record.get("id") or "")
+    target = None
+    for row in fresh:
+        if isinstance(row, dict) and deal_id and str(row.get("id")) == deal_id:
+            target = row
+            break
+    rows = fresh
+    if target is None:
+        target = commission_record
+        rows = commissions if isinstance(commissions, list) else [commission_record]
     withdrawals = load_partner_withdrawals() or []
     if not isinstance(withdrawals, list):
         withdrawals = []
-    block = commission_reject_blocked_reason(commission_record, withdrawals)
+    block = commission_reject_blocked_reason(target, withdrawals)
     if block:
-        return "blocked"
+        return "blocked", None
     stamp = iso_z(utcnow())
+    target["status"] = "rejected"
+    target["rejected_at"] = stamp
     commission_record["status"] = "rejected"
     commission_record["rejected_at"] = stamp
-    save_express_commissions(commissions)
-    land_code = str(commission_record.get("land_code") or "").strip()
-    partner_phone = str(commission_record.get("partner_phone") or "").strip()
+    save_express_commissions(rows)
+    land_code = str(target.get("land_code") or "").strip()
+    partner_phone = str(target.get("partner_phone") or "").strip()
     if land_code:
         try:
             assignments = load_express_assignments() or []
@@ -1611,21 +1673,33 @@ def _reject_pending_deal(
             maybe_sync_deal_on_commission_status(
                 partner_phone=partner_phone,
                 land_code=land_code,
-                commission_id=str(commission_record.get("id") or ""),
+                commission_id=str(target.get("id") or ""),
                 commission_status="rejected",
-                sale_amount=int(commission_record.get("sale_amount") or 0),
+                sale_amount=int(target.get("sale_amount") or 0),
             )
         except Exception:
             pass
+    return None, {
+        "partner_phone": partner_phone,
+        "land_code": land_code,
+        "amount": int(target.get("commission_amount") or 0),
+        "commission_type": str(target.get("commission_type") or ""),
+        "id": str(target.get("id") or ""),
+    }
+
+
+def _notify_rejected_deal(rejected: Dict[str, Any]) -> None:
+    partner_phone = str(rejected.get("partner_phone") or "")
+    land_code = str(rejected.get("land_code") or "")
     try:
         from .commission_sms import notify_partner_commission_txn
         notify_partner_commission_txn(
             partner_phone=partner_phone,
             event="commission_rejected",
-            amount=int(commission_record.get("commission_amount") or 0),
+            amount=int(rejected.get("amount") or 0),
             land_code=land_code,
-            commission_type=str(commission_record.get("commission_type") or ""),
-            reference_id=str(commission_record.get("id") or ""),
+            commission_type=str(rejected.get("commission_type") or ""),
+            reference_id=str(rejected.get("id") or ""),
         )
     except Exception:
         pass
