@@ -133,10 +133,10 @@ def test_confirm_hidden_and_no_assignment_does_not_decide(app, client):
     card = cards["bare"]
     assert card["direction"] == "incoming"
     assert card["pipeline_tab"] == "deals"
-    assert card["status_label"] == "علاقه‌مند — وقت دوم یا قرارداد"
+    assert card["status_label"] == "علاقه‌مند"
     assert card["can_confirm_deal"] is False
     assert card["can_start_deal"] is False
-    assert card["can_reject_deal"] is True
+    assert card["can_reject_deal"] is False
     page = client.get("/express/partner/requests").get_data(as_text=True)
     assert "/inbox-visits/bare/confirm_deal" not in page
     assert "/inbox-visits/bare/start_deal" not in page

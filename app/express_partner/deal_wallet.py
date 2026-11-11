@@ -129,7 +129,9 @@ def card_wallet_fields(
     owner_phone: str,
     required: int,
     can_finalize: bool,
+    land_code: str = "",
 ) -> Dict[str, Any]:
+    from .commission_escrow import find_hold, held_total
     from .partner_withdrawals import withdrawable_balance
 
     amount = _amount(required)
@@ -139,13 +141,18 @@ def card_wallet_fields(
             balance = int(withdrawable_balance(commissions or [], withdrawals or [], owner_phone))
         except Exception:
             balance = 0
-    shortfall = max(0, amount - balance)
+    hold = find_hold(commissions or [], land_code, owner_phone) if land_code else None
+    held_here = _amount((hold or {}).get("commission_amount"))
+    other_holds = max(0, held_total(commissions or [], owner_phone) - held_here)
+    spendable = max(0, balance - other_holds)
+    shortfall = max(0, amount - spendable)
     ready = bool(can_finalize) and shortfall <= 0
     code = ""
     message = ""
     if can_finalize and shortfall > 0:
         code = WALLET_INSUFFICIENT
-        message = wallet_insufficient_message(amount, balance)
+        message = wallet_insufficient_message(amount, spendable)
+        balance = spendable
     return {
         "required_commission": amount,
         "owner_wallet_balance": balance,
@@ -154,6 +161,7 @@ def card_wallet_fields(
         "wallet_error": code,
         "final_confirm_message": message,
         "wallet_charge_path": WALLET_CHARGE_PATH if message else "",
+        "listing_hold": held_here,
     }
 
 

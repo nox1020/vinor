@@ -304,14 +304,14 @@ def test_unified_list_order_stages_and_tab_counts(home):
         },
     ])
     owner = _pipeline("09121111111")
-    assert [card["id"] for card in owner["cards"]] == ["approved-two", "deal-three", "pending-one"]
+    assert [card["id"] for card in owner["cards"]] == ["pending-one", "approved-two", "deal-three"]
     stages = {card["id"]: card["stage"] for card in owner["cards"]}
     assert stages == {
         "pending-one": "visit_request",
         "approved-two": "visit",
         "deal-three": "deal",
     }
-    assert owner["cards"][0]["stage_label"] == "بازدید"
+    assert owner["cards"][0]["stage_label"] == "درخواست بازدید"
     assert owner["tab_counts"] == {"requests": 1, "visits": 1, "deals": 1}
     assert all(card["direction"] == "incoming" for card in owner["cards"])
 

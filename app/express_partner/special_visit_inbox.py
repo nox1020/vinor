@@ -777,6 +777,7 @@ def visits_for_special_owner(
             owner_phone=str(phone or ""),
             required=deal_amount,
             can_finalize=bool(can_close_deal),
+            land_code=code,
         )
 
         is_own_request = _canon_phone(partner_phone) == _canon_phone(phone)
@@ -855,6 +856,7 @@ def visits_for_special_owner(
             "wallet_error": wallet_fields["wallet_error"],
             "final_confirm_message": wallet_fields["final_confirm_message"],
             "wallet_charge_path": wallet_fields["wallet_charge_path"],
+            "listing_hold": wallet_fields.get("listing_hold") or 0,
             "sale_amount": sale_amount,
             "can_approve": can_approve,
             "can_reject": can_reject,

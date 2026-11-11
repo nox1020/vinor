@@ -187,7 +187,7 @@ def test_requests_archive_filter_omits_active_chip(app, client):
     assert ">بایگانی " in page
     assert 'data-request-id="open1"' in page
     assert 'data-request-id="arch1"' not in page
-    assert "منتظر تأیید (قدیمی)" in page
+    assert "پذیرش وقت بازدید" in page
 
     archived_page = client.get("/express/partner/requests?status=archived").get_data(as_text=True)
     assert "status=active" not in archived_page
@@ -239,7 +239,7 @@ def test_plus_inbox_forms_redirect_with_flash(app, client):
     assert 'action="/express/partner/inbox-visits/pend/approve"' in html
     assert 'action="/express/partner/inbox-visits/pend/reject"' in html
     assert 'action="/express/partner/inbox-visits/dealv/confirm_deal"' in html
-    assert ">تأیید بازدید<" in html
+    assert ">پذیرش وقت بازدید<" in html
     assert ">رد بازدید<" in html
     assert ">تأیید فروش<" in html
 

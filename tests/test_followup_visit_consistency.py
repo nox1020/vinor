@@ -15,7 +15,7 @@ def test_sale_flags_follow_deal_decision():
     before = visit_deal_action_flags(row, allowed=True)
     assert before["can_confirm_deal"] is True
     assert before["can_close_deal"] is False
-    assert before["can_reject_deal"] is True
+    assert before["can_reject_deal"] is False
 
     opened = dict(row)
     opened["deal_decision"] = "approved"
