@@ -17,6 +17,26 @@
     --rq-muted: #8e8e93;
     --rq-text: #ececec;
   }
+  /* Hide scrollbars on this page only; touch/wheel scrolling stays available. */
+  html:has(#partnerRequestsPage),
+  body:has(#partnerRequestsPage),
+  html:has(#partnerRequestsPage) #tg-page-shell,
+  html:has(#partnerRequestsPage) *,
+  #rqDeleteModal,
+  #rqDeleteModal * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  html:has(#partnerRequestsPage)::-webkit-scrollbar,
+  body:has(#partnerRequestsPage)::-webkit-scrollbar,
+  html:has(#partnerRequestsPage) #tg-page-shell::-webkit-scrollbar,
+  html:has(#partnerRequestsPage) *::-webkit-scrollbar,
+  #rqDeleteModal::-webkit-scrollbar,
+  #rqDeleteModal *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
   #partnerRequestsPage .rq-summary {
     margin: 0;
     padding: 0.45rem 1rem 0.7rem;
@@ -661,7 +681,7 @@
   <main class="mx-auto w-full max-w-lg">
     {% set _arch = archive_status|default('active') %}
     {% set _acounts = archive_counts|default({'active': 0, 'archived': 0}, true) %}
-    <nav class="flex flex-nowrap gap-2 overflow-x-auto px-4 pt-3" aria-label="وضعیت پیگیری‌ها">
+    <nav class="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto px-4 pt-3" aria-label="وضعیت پیگیری‌ها">
       <a href="{{ url_for('express_partner.requests', status='archived') }}"
          data-vinor-express-nav
          class="rq-badge shrink-0{% if _arch == 'archived' %} rq-badge--visit{% endif %}">بایگانی {{ (_acounts.archived|default(0))|fa_digits }}</a>
