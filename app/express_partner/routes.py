@@ -3794,7 +3794,21 @@ def _build_partner_sales_pipeline(
     cards = [card for card in cards if not card_hidden_for(card, ph)]
     items = [card for card in items if not card_hidden_for(card, ph)]
     inbox_items = [card for card in inbox_items if not card_hidden_for(card, ph)]
-    cards.sort(key=lambda card: str(card.get('updated_at') or card.get('created_at') or ''), reverse=True)
+    from .follow_card_contract import build_follow_contract, offer_contract, sort_follow_cards
+
+    for card in cards:
+        if isinstance(card, dict):
+            card['contract'] = build_follow_contract(card)
+            contract = card['contract']
+            card['effective_state'] = contract['effective_state']
+            card['status_label'] = contract['status_label']
+            card['next_actor'] = contract['next_actor']
+            card['primary_action'] = contract['primary_action']
+            card['secondary_actions'] = contract['secondary_actions']
+            card['danger_actions'] = contract['danger_actions']
+            card['disabled_reason'] = contract['disabled_reason']
+            card['financial_state'] = contract['financial_state']
+    cards = sort_follow_cards(cards)
     archive_counts = {
         'active': sum(1 for card in cards if not card.get('archived')),
         'archived': sum(1 for card in cards if card.get('archived')),
@@ -3822,11 +3836,11 @@ def _build_partner_sales_pipeline(
             if not oid or oid in seen_offer_ids:
                 continue
             seen_offer_ids.add(oid)
+            offer_card['contract'] = offer_contract(offer_card)
             cards.append(offer_card)
-        cards.sort(
-            key=lambda card: str(card.get('updated_at') or card.get('created_at') or ''),
-            reverse=True,
-        )
+    for offer in offers if isinstance(offers, list) else []:
+        if isinstance(offer, dict):
+            offer['contract'] = offer_contract(offer)
     from .visit_requests import _visit_lands, follow_card_permissions
 
     card_lands = _visit_lands()
@@ -3845,6 +3859,7 @@ def _build_partner_sales_pipeline(
     # پیشنهادها روی وب جدا از cards رسم می‌شوند. داخل cards که باشند همین حلقه می‌شماردشان.
     if offers and not include_offers_in_cards:
         tab_counts[PIPELINE_DEALS] += len(offers)
+    cards = sort_follow_cards(cards)
 
     return {
         'items': items,
@@ -6731,6 +6746,15 @@ def requests_page():
     if archive_status not in ('active', 'archived'):
         archive_status = 'active'
     pipe = _build_partner_sales_pipeline(me_phone, profile, archive_status=archive_status)
+    tab = (request.args.get('tab') or '').strip().lower()
+    if tab in ('requests', 'visits', 'deals'):
+        pipe['cards'] = [
+            card for card in (pipe.get('cards') or [])
+            if str(card.get('pipeline_tab') or card.get('stage') or '') == tab
+            or (tab == 'requests' and str(card.get('stage') or '') == 'visit_request')
+            or (tab == 'visits' and str(card.get('stage') or '') == 'visit')
+            or (tab == 'deals' and str(card.get('stage') or '') == 'deal')
+        ]
     items = pipe['items']
     inbox_items = pipe['inbox_items']
     offers = pipe['offers']
@@ -11227,7 +11251,7 @@ def special_offer_action(oid: str, action: str):
 
 
 @express_partner_bp.post('/inbox-visits/<vid>/<action>', endpoint='special_visit_action')
-@require_partner_access()
+@require_partner_access(allow_pending=True)
 def special_visit_action(vid: str, action: str):
     """اقدام مالک فایل روی بازدید آگهی خودش. مالک‌بودن داخل special_can_manage_visit چک می‌شود."""
     me_phone = (session.get('user_phone') or '').strip()
@@ -11236,7 +11260,13 @@ def special_visit_action(vid: str, action: str):
     from .visit_sms import notify_partner_land_tx_sms, visit_status_change_event
 
     outcome = (request.form.get('outcome') or '').strip()
-    notes = (request.form.get('notes') or '').strip()
+    notes = (request.form.get('notes') or request.form.get('dispute_reason') or '').strip()
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        if isinstance(payload, dict):
+            notes = str(payload.get('dispute_reason') or payload.get('notes') or notes).strip()
+            if not outcome:
+                outcome = str(payload.get('outcome') or '').strip()
     held: dict = {}
 
     def _mutate(rows):
@@ -11304,6 +11334,12 @@ def special_visit_action(vid: str, action: str):
         return redirect(_sales_pipeline_url('visits'))
     if err == 'archived_readonly':
         flash('کارت بایگانی فقط خواندنی است. اول آن را به پیگیری برگردانید.', 'warning')
+        return redirect(_sales_pipeline_url('visits'))
+    if err == 'dispute_reason_required':
+        message = 'دلیل اعتراض را بنویسید. حداقل ۳ نویسه لازم است.'
+        if request.is_json or (request.headers.get('Accept') or '').lower().startswith('application/json'):
+            return jsonify({'ok': False, 'error': message, 'error_code': 'dispute_reason_required'}), 400
+        flash(message, 'warning')
         return redirect(_sales_pipeline_url('visits'))
     if err == 'disabled':
         flash('ثبت نتیجه بازدید فعلاً فعال نیست.', 'warning')

@@ -160,6 +160,9 @@ def apply_special_offer_action(
         return None, "forbidden"
 
     act = (action or "").strip().lower()
+    proposed = str(getattr(offer, "proposed_by", "") or "").strip().lower()
+    if proposed in ("special", "owner"):
+        return None, "not_your_turn"
     if act in ("accept", "reject"):
         out = respond_offer(offer_id, action=act, actor_key=owner_phone)
         if not out:

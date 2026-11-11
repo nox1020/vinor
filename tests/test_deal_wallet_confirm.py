@@ -269,8 +269,7 @@ def test_insufficient_wallet_does_not_confirm(app, client):
     assert card["final_confirm_message"] == wallet_insufficient_message(COMMISSION, 100_000)
 
     page = client.get("/express/partner/requests").get_data(as_text=True)
-    assert "موجودی کیف پول برای پرداخت پورسانت" in page
-    assert "مشاهدهٔ کیف پول" in page
+    assert "رفع کسری" in page
     assert "/express/partner/commissions" in page
 
     saved = client.post(

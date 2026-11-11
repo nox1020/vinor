@@ -1,154 +1,57 @@
-{# دکمه‌های کارت پیگیری.
-   بازاریاب (کارت خودش): بازدید انجام شد، عدم حضور، نتیجه.
-   مالک فایل (کارت دریافتی): تأیید انجام، و فروش.
-#}
-{% set level = coop_level|default('regular') %}
-{% set field_ok = level in ('plus', 'visitor') %}
-{% set received = (card_kind|default('sent')) == 'received' %}
-{% set own = item.is_own_request if item.is_own_request is defined else (not received) %}
-{% set vid = item.id %}
-{% set has_party_call = item.call_visitor_phone or item.call_marketer_phone or item.call_customer_phone %}
-
-<div class="rq-actions">
-  {% if item.call_visitor_phone %}
-  <a class="rq-btn rq-btn--call" href="tel:{{ item.call_visitor_phone }}" data-vinor-direct-action>
-    <i class="fas fa-phone" aria-hidden="true"></i>
-    تماس ویزیتور
-  </a>
+{# دکمه‌ها فقط از قرارداد کارت. وب حدس نمی‌زند. #}
+{% set contract = item.contract if item.contract is defined else {} %}
+{% set primary = contract.primary_action if contract else none %}
+{% set secondary = contract.secondary_actions if contract else [] %}
+{% set danger = contract.danger_actions if contract else [] %}
+<div class="rq-actions" data-follow-contract="1">
+  {% if contract.disabled_reason %}
+  <p class="sv-hint">{{ contract.disabled_reason }}</p>
   {% endif %}
-  {% if item.call_marketer_phone %}
-  <a class="rq-btn rq-btn--call" href="tel:{{ item.call_marketer_phone }}" data-vinor-direct-action>
-    <i class="fas fa-phone" aria-hidden="true"></i>
-    تماس بازاریاب
-  </a>
+  {% if contract.status_label %}
+  <p class="sv-hint">{{ contract.status_label }}</p>
   {% endif %}
-  {% if item.call_customer_phone %}
-  <a class="rq-btn rq-btn--call" href="tel:{{ item.call_customer_phone }}" data-vinor-direct-action>
-    <i class="fas fa-phone" aria-hidden="true"></i>
-    تماس مشتری
-  </a>
-  {% endif %}
-  {% if not received and not has_party_call and (item.support_phone or support_phone) %}
-  <a class="rq-btn rq-btn--call" href="tel:{{ item.support_phone or support_phone }}" data-vinor-direct-action>
-    <i class="fas fa-phone" aria-hidden="true"></i>
-    تماس پشتیبانی
-  </a>
-  {% endif %}
-
-  {% if received and (item.can_approve or item.can_reject) %}
-    {% if item.can_approve %}
-    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='approve') }}" data-vinor-direct-action class="contents">
+  {% if primary %}
+    {% if primary.id == 'record_result' %}
+    <form method="post" action="{{ primary.endpoint }}" data-vinor-direct-action class="sv-result" onsubmit="this.querySelector('button').disabled=true">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--ok">تأیید بازدید</button>
+      <p class="sv-result__label">نتیجه بازدید را ثبت کنید</p>
+      <div class="sv-result__chips" role="radiogroup" aria-label="نتیجه بازدید">
+        <label class="sv-result__chip"><input type="radio" name="outcome" value="interested" required><span>علاقه‌مند</span></label>
+        <label class="sv-result__chip"><input type="radio" name="outcome" value="follow_up"><span>پیگیری دوباره</span></label>
+        <label class="sv-result__chip sv-result__chip--down"><input type="radio" name="outcome" value="not_interested"><span>بی‌علاقه</span></label>
+      </div>
+      <input name="notes" class="sv-result__notes" placeholder="یادداشت" autocomplete="off">
+      <button type="submit" class="rq-btn rq-btn--ok">{{ primary.label }}</button>
     </form>
-    {% endif %}
-    {% if item.can_reject %}
-    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='reject') }}" data-vinor-direct-action class="contents">
+    {% elif primary.method == 'GET' %}
+    <a class="rq-btn rq-btn--deal" href="{{ primary.endpoint }}" data-vinor-direct-action>{{ primary.label }}</a>
+    {% else %}
+    <form method="post" action="{{ primary.endpoint }}" data-vinor-direct-action class="contents" onsubmit="this.querySelector('button').disabled=true">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('این بازدید رد شود؟')">رد بازدید</button>
+      <button type="submit" class="rq-btn rq-btn--ok"{% if primary.confirmation %} onclick="return confirm({{ primary.confirmation|tojson }})"{% endif %}>{{ primary.label }}</button>
     </form>
     {% endif %}
   {% endif %}
-
-  {% if item.can_complete or item.can_no_show %}
-    {% if item.can_complete %}
-    <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='complete') }}{% else %}{{ url_for('express_partner.requests_complete_visit', vid=vid) }}{% endif %}" data-vinor-direct-action class="contents">
+  {% for action in secondary %}
+    {% if action.method == 'GET' and action.endpoint.startswith('tel:') %}
+    <a class="rq-btn rq-btn--call" href="{{ action.endpoint }}" data-vinor-direct-action>{{ action.label }}</a>
+    {% elif action.method == 'GET' %}
+    <a class="rq-btn" href="{{ action.endpoint }}" data-vinor-direct-action>{{ action.label }}</a>
+    {% else %}
+    <form method="post" action="{{ action.endpoint }}" data-vinor-direct-action class="contents" onsubmit="this.querySelector('button').disabled=true">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--ok">بازدید انجام شد</button>
+      <button type="submit" class="rq-btn"{% if action.confirmation %} onclick="return confirm({{ action.confirmation|tojson }})"{% endif %}>{{ action.label }}</button>
     </form>
     {% endif %}
-    {% if item.can_no_show %}
-    <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='no_show') }}{% else %}{{ url_for('express_partner.requests_no_show_visit', vid=vid) }}{% endif %}" data-vinor-direct-action class="contents">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('عدم حضور ثبت شود؟')">عدم حضور</button>
-    </form>
-    {% endif %}
-  {% endif %}
-
-  {% if received and item.can_confirm_done %}
-  <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='complete') }}" data-vinor-direct-action class="contents">
+  {% endfor %}
+  {% for action in danger %}
+  <form method="post" action="{{ action.endpoint }}" data-vinor-direct-action class="contents" onsubmit="this.querySelector('button').disabled=true">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="rq-btn rq-btn--ok">تأیید بازدید</button>
-  </form>
-  {% endif %}
-  {% if received and item.can_deny_done %}
-  <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='no_show') }}" data-vinor-direct-action class="contents">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('این بازدید انجام‌نشده ثبت شود؟')">بازدید انجام نشده</button>
-  </form>
-  {% endif %}
-
-  {% if received and item.can_reject_done %}
-  <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='reject_done') }}" data-vinor-direct-action class="contents">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="rq-btn rq-btn--remove" onclick="return confirm('انجام بازدید رد شود؟ همکار باید دوباره اعلام کند.')">رد انجام</button>
-  </form>
-  {% endif %}
-
-  {% if not received and item.can_register_result %}
-  <form method="post" action="{% if received %}{{ url_for('express_partner.special_visit_action', vid=vid, action='result') }}{% else %}{{ url_for('express_partner.requests_visit_result', vid=vid) }}{% endif %}" data-vinor-direct-action class="sv-result">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <p class="sv-result__label">نتیجه بازدید را ثبت کنید</p>
-    <div class="sv-result__chips" role="radiogroup" aria-label="نتیجه بازدید">
-      <label class="sv-result__chip">
-        <input type="radio" name="outcome" value="interested" checked>
-        <span>علاقه‌مند</span>
-      </label>
-      <label class="sv-result__chip">
-        <input type="radio" name="outcome" value="follow_up">
-        <span>پیگیری دوباره</span>
-      </label>
-      <label class="sv-result__chip sv-result__chip--down">
-        <input type="radio" name="outcome" value="not_interested">
-        <span>بی‌علاقه</span>
-      </label>
-    </div>
-    <p class="sv-result__help">علاقه‌مند: وقت بازدید دوم یا قرارداد نهایی · پیگیری دوباره: بازاریاب تا وقت دوم پیگیری می‌کند · بی‌علاقه: بدون پیگیری</p>
-    <input name="notes" class="sv-result__notes" placeholder="یادداشت (اختیاری)" autocomplete="off">
-    <button type="submit" class="rq-btn rq-btn--ok">ثبت نتیجه</button>
-  </form>
-  {% elif item.visit_outcome_hint %}
-  <p class="sv-hint{% if item.visit_outcome == 'interested' %} sv-hint--ok{% endif %}">{{ item.visit_outcome_hint }}</p>
-  {% elif level == 'marketer' and item.status == 'done_pending' %}
-  <p class="sv-hint">بازدید انجام شد ثبت شده و منتظر تأیید مالک فایل است.</p>
-  {% elif level == 'marketer' and item.status == 'approved' %}
-  <p class="sv-hint">بعد از بازدید «بازدید انجام شد» را ثبت کن. تأیید با مالک فایل است.</p>
-  {% elif level == 'regular' %}
-  <p class="sv-hint">در سطح عادی فقط مشاهده و لغو درخواست خودتان ممکن است.</p>
-  {% endif %}
-
-  {% if received and item.can_close_deal and not item.can_final_confirm and item.final_confirm_message %}
-  <p class="sv-hint">{{ item.final_confirm_message }}</p>
-  <a class="rq-btn rq-btn--deal" href="{{ item.wallet_charge_path or url_for('express_partner.commissions') }}">مشاهدهٔ کیف پول</a>
-  {% endif %}
-
-  {% if received and (item.can_confirm_deal or item.can_reject_deal or item.can_close_deal) %}
-    {% if item.can_confirm_deal %}
-    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='confirm_deal') }}" data-vinor-direct-action class="contents">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--ok" onclick="return confirm('فروش نهایی برای این همکار ثبت شود؟ فایل در حال معامله می‌شود.')">تأیید فروش</button>
-    </form>
+    {% if action.id == 'dispute_attendance' %}
+    <label class="sv-result__label" for="dispute-reason-{{ item.id }}">دلیل اعتراض</label>
+    <input id="dispute-reason-{{ item.id }}" name="dispute_reason" class="sv-result__notes" placeholder="دلیل اعتراض" required minlength="3" autocomplete="off">
     {% endif %}
-    {% if item.can_reject_deal %}
-    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='reject_deal') }}" data-vinor-direct-action class="contents">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--noshow" onclick="return confirm('این معامله رد شود؟')">رد</button>
-    </form>
-    {% endif %}
-    {% if item.can_close_deal %}
-    <form method="post" action="{{ url_for('express_partner.special_visit_action', vid=vid, action='close_deal') }}" data-vinor-direct-action class="contents">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="rq-btn rq-btn--deal" onclick="return confirm('پرونده بسته شود؟')">بستن پرونده</button>
-    </form>
-    {% endif %}
-  {% endif %}
-
-  {% if own and item.can_revisit and level != 'regular' %}
-  <button type="button" class="rq-btn rq-btn--revisit" data-rq-revisit>{% if item.visit_outcome in ('interested', 'follow_up') %}بازدید دوم{% else %}بازدید مجدد{% endif %}</button>
-  {% endif %}
-  {% if own and item.can_cancel %}
-  <button type="button" class="rq-btn rq-btn--remove" data-rq-remove>لغو</button>
-  {% elif own and item.can_delete %}
-  <button type="button" class="rq-btn rq-btn--remove" data-rq-remove>حذف</button>
-  {% endif %}
+    <button type="submit" class="rq-btn rq-btn--noshow"{% if action.confirmation %} onclick="return confirm({{ action.confirmation|tojson }})"{% endif %}>{{ action.label }}</button>
+  </form>
+  {% endfor %}
 </div>

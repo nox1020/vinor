@@ -7,28 +7,33 @@
     <h2>پیشنهاد قیمت · فایل {{ off.land_code }}</h2>
     <p>{{ '{:,}'.format(off.amount) }} تومان{% if off.terms %} · {{ off.terms }}{% endif %}</p>
     <p class="!text-[10px] !text-zinc-500" dir="ltr">همکار: {{ off.partner_phone }}</p>
+    {% set contract = off.contract if off.contract is defined else {} %}
+    <p>{{ contract.status_label or '' }}</p>
     <div class="sv-offer__actions">
-      {% if off.can_accept %}
-      <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=off.id, action='accept') }}" data-vinor-direct-action>
+      {% if contract.primary_action %}
+      <form method="post" action="{{ contract.primary_action.endpoint }}" data-vinor-direct-action onsubmit="this.querySelector('button').disabled=true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="visits">
-        <button type="submit" class="sv-btn sv-btn--ok">پذیرش پیشنهاد</button>
+        <button type="submit" class="sv-btn sv-btn--ok" onclick="return confirm({{ contract.primary_action.confirmation|tojson }})">{{ contract.primary_action.label }}</button>
       </form>
       {% endif %}
-      {% if off.can_reject %}
-      <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=off.id, action='reject') }}" data-vinor-direct-action>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="return_to" value="visits">
-        <button type="submit" class="sv-btn sv-btn--no">رد</button>
-      </form>
-      {% endif %}
-      {% if off.can_counter %}
-      <form method="post" action="{{ url_for('express_partner.special_offer_action', oid=off.id, action='counter') }}" data-vinor-direct-action class="flex gap-1 items-center">
+      {% for action in contract.secondary_actions or [] %}
+      <form method="post" action="{{ action.endpoint }}" data-vinor-direct-action class="flex gap-1 items-center" onsubmit="this.querySelector('button').disabled=true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="visits">
         <input name="amount" type="number" min="1" required placeholder="مبلغ متقابل" dir="ltr">
-        <button type="submit" class="sv-btn sv-btn--deal">متقابل</button>
+        <button type="submit" class="sv-btn sv-btn--deal" onclick="return confirm({{ action.confirmation|tojson }})">{{ action.label }}</button>
       </form>
+      {% endfor %}
+      {% for action in contract.danger_actions or [] %}
+      <form method="post" action="{{ action.endpoint }}" data-vinor-direct-action onsubmit="this.querySelector('button').disabled=true">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_to" value="visits">
+        <button type="submit" class="sv-btn sv-btn--no" onclick="return confirm({{ action.confirmation|tojson }})">{{ action.label }}</button>
+      </form>
+      {% endfor %}
+      {% if contract.disabled_reason %}
+      <p>{{ contract.disabled_reason }}</p>
       {% endif %}
     </div>
   </article>

@@ -681,7 +681,15 @@
   <main class="mx-auto w-full max-w-lg">
     {% set _arch = archive_status|default('active') %}
     {% set _acounts = archive_counts|default({'active': 0, 'archived': 0}, true) %}
-    <nav class="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto px-4 pt-3" aria-label="وضعیت پیگیری‌ها">
+    <nav class="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto px-4 pt-3" aria-label="پیگیری‌ها">
+      {% if _arch == 'archived' %}
+      <a href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav class="rq-badge shrink-0">بازگشت به پیگیری</a>
+      {% else %}
+      <a href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav class="rq-badge shrink-0">همه</a>
+      <a href="{{ url_for('express_partner.requests', tab='requests') }}" data-vinor-express-nav class="rq-badge shrink-0">درخواست</a>
+      <a href="{{ url_for('express_partner.requests', tab='visits') }}" data-vinor-express-nav class="rq-badge shrink-0">بازدید</a>
+      <a href="{{ url_for('express_partner.requests', tab='deals') }}" data-vinor-express-nav class="rq-badge shrink-0">معامله</a>
+      {% endif %}
       <a href="{{ url_for('express_partner.requests', status='archived') }}"
          data-vinor-express-nav
          class="rq-badge shrink-0{% if _arch == 'archived' %} rq-badge--visit{% endif %}">بایگانی {{ (_acounts.archived|default(0))|fa_digits }}</a>
@@ -724,7 +732,7 @@
                data-title="{{ item.title }}"
                {% if item.can_cancel %}data-rq-cancel="1"{% endif %}>
         <p class="rq-badges">
-          <span class="rq-badge rq-badge--{{ item.stage|default('visit_request') }}">{{ item.stage_label|default('درخواست بازدید') }}</span>
+          <span class="rq-badge rq-badge--{{ item.stage|default('visit_request') }}">{{ item.contract.status_label if item.contract is defined and item.contract.status_label else item.stage_label|default('درخواست بازدید') }}</span>
           <span class="rq-badge rq-badge--{{ item.direction|default('outgoing') }}">{{ item.direction_label|default('ارسالی') }}</span>
           {% if item.revisit_count %}
           <span class="rq-badge">بازدید {{ item.revisit_count|fa_digits }}</span>

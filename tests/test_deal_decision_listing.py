@@ -53,7 +53,7 @@ def test_close_not_offered_before_a_deal_exists():
     flags = visit_deal_action_flags(_completed_row(), allowed=True)
     assert flags["can_close_deal"] is False
     assert flags["can_confirm_deal"] is True
-    assert flags["can_reject_deal"] is True
+    assert flags["can_reject_deal"] is False
 
     started = dict(_completed_row())
     started["deal_decision"] = "approved"

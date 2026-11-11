@@ -15,7 +15,7 @@ def test_sale_flags_follow_deal_decision():
     before = visit_deal_action_flags(row, allowed=True)
     assert before["can_confirm_deal"] is True
     assert before["can_close_deal"] is False
-    assert before["can_reject_deal"] is True
+    assert before["can_reject_deal"] is False
 
     opened = dict(row)
     opened["deal_decision"] = "approved"
@@ -345,7 +345,10 @@ def test_owner_deny_marks_no_show_and_tells_the_marketer(app, client, monkeypatc
             "status": "done_pending",
         }])
     _login(client, OWNER)
-    denied = client.post("/express/partner/inbox-visits/m2/no_show")
+    denied = client.post(
+        "/express/partner/inbox-visits/m2/no_show",
+        data={"dispute_reason": "بازدید انجام نشده بود"},
+    )
     assert denied.status_code == 302
     with app.app_context():
         row = load_express_visit_requests()[0]

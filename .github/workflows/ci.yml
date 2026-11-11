@@ -167,6 +167,7 @@ jobs:
             tests/test_visit_followups.py
             tests/test_followup_visit_consistency.py
             tests/test_followup_integrity.py
+            tests/test_follow_card_contract.py
             tests/test_commission_escrow.py
             tests/test_escrow_audit_fixes.py
             tests/test_visit_schedule_payload.py
