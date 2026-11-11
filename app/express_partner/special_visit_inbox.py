@@ -337,14 +337,14 @@ def visit_inbox_badge_count(phone: str) -> int:
     me = _norm_phone(phone)
     if not codes and not me:
         return 0
-    from .visit_requests import card_is_archived, collapse_visit_rows
+    from .visit_requests import card_archived_for, card_hidden_for, collapse_visit_rows
 
     rows = collapse_visit_rows(load_express_visit_requests() or [])
     need: Set[str] = set()
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
             continue
-        if card_is_archived(row):
+        if card_archived_for(row, phone) or card_hidden_for(row, phone):
             continue
         if not _visit_row_for_plus_owner(row, phone, codes):
             continue
@@ -565,10 +565,15 @@ def visits_for_special_owner(
         COMPLETED_STATUS: "بازدید انجام شد",
         CANCELLED_STATUS: "رد شده",
         NO_SHOW_STATUS: "عدم حضور",
+        "disputed": "اعتراض مالک",
     }
+    from .visit_requests import card_hidden_for
+
     out: List[Dict[str, Any]] = []
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
+            continue
+        if card_hidden_for(row, phone):
             continue
         code = str(row.get("land_code") or "").strip()
         if not _visit_row_for_plus_owner(row, phone, codes):
@@ -830,6 +835,10 @@ def visits_for_special_owner(
             "visit_presence_address": str(row.get("visit_presence_address") or "").strip() or owner_addr,
             "status": st,
             "status_label": status_label,
+            "hidden_for": list(row.get("hidden_for") or []),
+            "archived_for": dict(row.get("archived_for") or {}) if isinstance(row.get("archived_for"), dict) else {},
+            "archive_restored_for": list(row.get("archive_restored_for") or []),
+            "dispute_reason": str(row.get("dispute_reason") or ""),
             "stage_label": stage_label,
             "current_hint": current_hint,
             "tx_status": tx_status,
@@ -1001,6 +1010,65 @@ LISTING_DEAL_ERROR_FA = {
 }
 
 
+def overdue_transaction_rows() -> List[Dict[str, Any]]:
+    """معامله‌های در جریان که ۵ روز گذشته و فقط پرچم دیرکرد خورده‌اند."""
+    from app.utils.storage import load_express_assignments
+
+    rows = load_express_assignments() or []
+    out: List[Dict[str, Any]] = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or not row.get("deal_overdue"):
+            continue
+        if str(row.get("status") or "").strip().lower() != "in_transaction":
+            continue
+        out.append({
+            "land_code": str(row.get("land_code") or ""),
+            "partner_phone": str(row.get("transaction_holder") or row.get("partner_phone") or ""),
+            "deal_overdue_at": str(row.get("deal_overdue_at") or ""),
+            "transaction_started_at": str(row.get("transaction_started_at") or ""),
+        })
+    return out
+
+
+def approved_deals_missing_pending() -> List[Dict[str, Any]]:
+    """تصمیم تأیید شده ولی پورسانت pending معامله نیست. پولی جابه‌جا نمی‌شود."""
+    from app.express_partner.commissions_flow import commission_is_deal
+    from app.utils.storage import load_express_commissions, load_express_visit_requests
+    from .visit_requests import DEAL_DECISION_APPROVED, _phones_match, visit_deal_decision
+
+    commissions = load_express_commissions() or []
+    if not isinstance(commissions, list):
+        commissions = []
+    visits = load_express_visit_requests() or []
+    out: List[Dict[str, Any]] = []
+    for rec in visits if isinstance(visits, list) else []:
+        if not isinstance(rec, dict) or visit_deal_decision(rec) != DEAL_DECISION_APPROVED:
+            continue
+        code = str(rec.get("land_code") or "").strip()
+        phone = str(rec.get("partner_phone") or "").strip()
+        pending = False
+        for row in commissions:
+            if not isinstance(row, dict) or not commission_is_deal(row):
+                continue
+            if str(row.get("land_code") or "").strip() != code:
+                continue
+            if phone and not _phones_match(row.get("partner_phone"), phone):
+                continue
+            if str(row.get("status") or "").strip().lower() == "pending":
+                pending = True
+                break
+        if pending:
+            continue
+        out.append({
+            "visit_id": str(rec.get("id") or ""),
+            "land_code": code,
+            "partner_phone": phone,
+            "title": str(rec.get("land_title") or ""),
+            "deal_decided_at": str(rec.get("deal_decided_at") or ""),
+        })
+    return out
+
+
 def listing_deal_error_fa(code: str) -> str:
     key = str(code or "").strip()
     if key == "wallet_insufficient":
@@ -1030,6 +1098,7 @@ def commit_deal_after_listing(
         DEAL_DECISION_CLOSED,
         DEAL_DECISION_REJECTED,
         _DEAL_DECISION_ALIASES,
+        card_archived_for,
         record_visit_deal_decision,
         visit_deal_decision,
     )
@@ -1039,6 +1108,8 @@ def commit_deal_after_listing(
         return None, "invalid_decision"
     if str(rec.get("status") or "").strip() != COMPLETED_STATUS:
         return None, "invalid_status"
+    if card_archived_for(rec, actor_phone):
+        return None, "archived_readonly"
     current = visit_deal_decision(rec)
     if current in (DEAL_DECISION_REJECTED, DEAL_DECISION_CLOSED):
         return rec, "already_decided"
@@ -1114,12 +1185,13 @@ def apply_special_visit_action(
 
         return record_visit_attendance(requests, rid, outcome="done", by_owner=True)
     if act == "reject_done":
-        if current != DONE_PENDING_STATUS:
-            return None, "invalid_transition"
-        if not admin_can_transition_visit(current, APPROVED_STATUS):
-            return None, "invalid_transition"
-        return admin_update_visit_request_status(
-            requests, rid, APPROVED_STATUS, admin_note=notes or "انجام بازدید رد شد",
+        from .visit_requests import record_visit_dispute
+
+        return record_visit_dispute(
+            requests,
+            rid,
+            reason=notes or "مالک انجام بازدید را تأیید نکرد",
+            actor_phone=owner_phone,
         )
     if act in ("start_deal", "approve_deal", "reject_deal"):
         updated, err = _apply_special_deal_action(rec, owner_phone=owner_phone, action=act)
@@ -1152,6 +1224,15 @@ def apply_special_visit_action(
             owner_phone=owner_phone,
         )
     if act == "no_show":
+        from .visit_requests import DONE_PENDING_STATUS, record_visit_attendance, record_visit_dispute
+
+        if current == DONE_PENDING_STATUS:
+            return record_visit_dispute(
+                requests,
+                rid,
+                reason=notes or "مالک انجام بازدید را تأیید نکرد",
+                actor_phone=owner_phone,
+            )
         from .visit_requests import record_visit_attendance
 
         updated, err = record_visit_attendance(requests, rid, outcome="no_show")
@@ -1173,18 +1254,7 @@ def apply_special_visit_action(
             pass
         return updated, None
     if act == "result":
-        from .visit_requests import record_visit_outcome
-
-        updated, err = record_visit_outcome(
-            requests,
-            rid,
-            outcome=(outcome or "").strip() or "follow_up",
-            notes=notes,
-            actor_phone=owner_phone,
-        )
-        if err:
-            return None, err
-        return updated or rec, None
+        return None, "owner_result_forbidden"
     return None, "invalid_action"
 
 

@@ -5077,7 +5077,18 @@ def _execute_complete_visit(phone: str, code: str) -> dict[str, Any]:
 
 
 def _execute_start_deal(phone: str, code: str) -> dict[str, Any]:
-    """شروع معامله از چت — همان منطق mark_in_transaction با درخواست AJAX."""
+    """شروع معامله از چت بسته است. فقط مالک فایل از پیگیری معامله را پیش می‌برد."""
+    del phone
+    return {
+        "ok": False,
+        "error": "owner_flow_required",
+        "message": "شروع معامله فقط برای مالک فایل و از پیگیری است.",
+        "land_code": str(code or "").strip(),
+    }
+
+
+def _execute_start_deal_retired(phone: str, code: str) -> dict[str, Any]:
+    """بدنهٔ قدیمی. دیگر صدا زده نمی‌شود."""
     from flask import session
 
     from app.express_partner.routes import mark_in_transaction
@@ -5124,6 +5135,17 @@ def _execute_start_deal(phone: str, code: str) -> dict[str, Any]:
 
 
 def _execute_release_deal(phone: str, code: str) -> dict[str, Any]:
+    """لغو معامله از چت بسته است. فقط مالک فایل از پیگیری این کار را می‌کند."""
+    del phone
+    return {
+        "ok": False,
+        "error": "owner_flow_required",
+        "message": "لغو معامله فقط برای مالک فایل و از پیگیری است.",
+        "land_code": str(code or "").strip(),
+    }
+
+
+def _execute_release_deal_retired(phone: str, code: str) -> dict[str, Any]:
     from flask import session
 
     from app.express_partner.routes import mark_in_transaction

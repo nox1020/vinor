@@ -5436,6 +5436,50 @@ def express_escrow_missing():
     return render_template_string(_ESCROW_MISSING_TEMPLATE, rows=listings_missing_hold())
 
 
+_DEAL_INTEGRITY_TEMPLATE = """{% autoescape true %}
+<h1>{{ title }}</h1>
+<p>{{ intro }}</p>
+<ul>
+{% for row in rows %}
+<li>{{ row.land_code }} — {{ row.partner_phone }} — {{ row.visit_id or row.deal_overdue_at }} — {{ row.title or '' }}</li>
+{% else %}
+<li>موردی نیست.</li>
+{% endfor %}
+</ul>
+{% endautoescape %}
+"""
+
+
+@admin_bp.get('/express/deals/overdue', endpoint='express_deals_overdue')
+@login_required
+def express_deals_overdue():
+    """معامله‌های در جریان که دیرکرد خورده‌اند. پورسانت پاک نشده است."""
+    from flask import render_template_string
+    from app.express_partner.special_visit_inbox import overdue_transaction_rows
+
+    return render_template_string(
+        _DEAL_INTEGRITY_TEMPLATE,
+        title='معامله‌های دیرکرد',
+        intro='این پرونده‌ها هنوز در حال معامله‌اند. پورسانت و بلوکه حذف نشده است.',
+        rows=overdue_transaction_rows(),
+    )
+
+
+@admin_bp.get('/express/deals/missing-pending', endpoint='express_deals_missing_pending')
+@login_required
+def express_deals_missing_pending():
+    """تأیید فروش بدون پورسانت pending. هیچ انتقال پولی انجام نمی‌شود."""
+    from flask import render_template_string
+    from app.express_partner.special_visit_inbox import approved_deals_missing_pending
+
+    return render_template_string(
+        _DEAL_INTEGRITY_TEMPLATE,
+        title='تأیید بدون پورسانت در انتظار',
+        intro='تصمیم فروش تأیید شده ولی ردیف pending معامله نیست. این فهرست فقط برای بازبینی است.',
+        rows=approved_deals_missing_pending(),
+    )
+
+
 @admin_bp.post('/express/commissions/<int:cid>/approve')
 @login_required
 def express_commission_approve(cid: int):
