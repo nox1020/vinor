@@ -27,6 +27,7 @@ PENDING_STATUS = "pending"
 APPROVED_STATUS = "approved"
 DONE_PENDING_STATUS = "done_pending"
 DISPUTED_STATUS = "disputed"
+DISPUTE_REASON_MIN = 3
 COMPLETED_STATUS = "completed"
 CANCELLED_STATUS = "cancelled"
 # Phase 2 additive — never remove the five statuses above.
@@ -3029,9 +3030,12 @@ def record_visit_dispute(
         return None, "not_found"
     if str(rec.get("status") or "").strip() != DONE_PENDING_STATUS:
         return None, "invalid_transition"
+    clean = str(reason or "").strip()
+    if len(clean) < DISPUTE_REASON_MIN:
+        return None, "dispute_reason_required"
     now_iso = datetime.utcnow().isoformat() + "Z"
     rec["status"] = DISPUTED_STATUS
-    rec["dispute_reason"] = str(reason or "").strip()
+    rec["dispute_reason"] = clean
     rec["dispute_at"] = now_iso
     rec["dispute_by"] = str(actor_phone or "").strip()
     rec["updated_at"] = now_iso

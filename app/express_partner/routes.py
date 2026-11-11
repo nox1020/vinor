@@ -11260,7 +11260,13 @@ def special_visit_action(vid: str, action: str):
     from .visit_sms import notify_partner_land_tx_sms, visit_status_change_event
 
     outcome = (request.form.get('outcome') or '').strip()
-    notes = (request.form.get('notes') or '').strip()
+    notes = (request.form.get('notes') or request.form.get('dispute_reason') or '').strip()
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        if isinstance(payload, dict):
+            notes = str(payload.get('dispute_reason') or payload.get('notes') or notes).strip()
+            if not outcome:
+                outcome = str(payload.get('outcome') or '').strip()
     held: dict = {}
 
     def _mutate(rows):
@@ -11328,6 +11334,12 @@ def special_visit_action(vid: str, action: str):
         return redirect(_sales_pipeline_url('visits'))
     if err == 'archived_readonly':
         flash('کارت بایگانی فقط خواندنی است. اول آن را به پیگیری برگردانید.', 'warning')
+        return redirect(_sales_pipeline_url('visits'))
+    if err == 'dispute_reason_required':
+        message = 'دلیل اعتراض را بنویسید. حداقل ۳ نویسه لازم است.'
+        if request.is_json or (request.headers.get('Accept') or '').lower().startswith('application/json'):
+            return jsonify({'ok': False, 'error': message, 'error_code': 'dispute_reason_required'}), 400
+        flash(message, 'warning')
         return redirect(_sales_pipeline_url('visits'))
     if err == 'disabled':
         flash('ثبت نتیجه بازدید فعلاً فعال نیست.', 'warning')

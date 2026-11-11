@@ -48,7 +48,8 @@
   <form method="post" action="{{ action.endpoint }}" data-vinor-direct-action class="contents" onsubmit="this.querySelector('button').disabled=true">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if action.id == 'dispute_attendance' %}
-    <input name="notes" placeholder="دلیل اعتراض" class="sv-result__notes">
+    <label class="sv-result__label" for="dispute-reason-{{ item.id }}">دلیل اعتراض</label>
+    <input id="dispute-reason-{{ item.id }}" name="dispute_reason" class="sv-result__notes" placeholder="دلیل اعتراض" required minlength="3" autocomplete="off">
     {% endif %}
     <button type="submit" class="rq-btn rq-btn--noshow"{% if action.confirmation %} onclick="return confirm({{ action.confirmation|tojson }})"{% endif %}>{{ action.label }}</button>
   </form>

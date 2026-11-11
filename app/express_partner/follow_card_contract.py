@@ -175,7 +175,8 @@ def build_follow_contract(card: Dict[str, Any], *, now: Optional[datetime] = Non
             "اعتراض",
             owner("no_show"),
             tone="danger",
-            confirmation="اعتراض به انجام بازدید ثبت شود؟ این عدم حضور مشتری نیست.",
+            confirmation="اعتراض به انجام بازدید ثبت شود؟ دلیل حداقل ۳ نویسه لازم است. این عدم حضور مشتری نیست.",
+            body={"requires_reason": True},
         ))
     elif not incoming and state == "completed":
         label = "نتیجه بازدید"

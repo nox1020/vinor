@@ -345,7 +345,10 @@ def test_owner_deny_marks_no_show_and_tells_the_marketer(app, client, monkeypatc
             "status": "done_pending",
         }])
     _login(client, OWNER)
-    denied = client.post("/express/partner/inbox-visits/m2/no_show")
+    denied = client.post(
+        "/express/partner/inbox-visits/m2/no_show",
+        data={"dispute_reason": "بازدید انجام نشده بود"},
+    )
     assert denied.status_code == 302
     with app.app_context():
         row = load_express_visit_requests()[0]

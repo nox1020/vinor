@@ -85,6 +85,19 @@ def test_sort_puts_my_action_before_overdue_then_latest():
     assert [card["id"] for card in sort_follow_cards(cards)] == ["mine", "late", "old"]
 
 
+def test_empty_dispute_reason_does_not_change_the_visit():
+    from app.express_partner.visit_requests import record_visit_dispute
+
+    rows = [{"id": "v", "status": "done_pending"}]
+    rec, err = record_visit_dispute(rows, "v", reason="  ")
+    assert rec is None and err == "dispute_reason_required"
+    assert rows[0]["status"] == "done_pending"
+    ok, err = record_visit_dispute(rows, "v", reason="نبود")
+    assert err is None
+    assert ok["status"] == "disputed"
+    assert ok["dispute_reason"] == "نبود"
+
+
 def test_offer_turn_comes_from_proposed_by():
     mine = offer_contract({"id": "o", "proposed_by": "partner", "amount": 10})
     assert mine["your_turn"] is True

@@ -1192,7 +1192,7 @@ def apply_special_visit_action(
         return record_visit_dispute(
             requests,
             rid,
-            reason=notes or "مالک انجام بازدید را تأیید نکرد",
+            reason=notes,
             actor_phone=owner_phone,
         )
     if act in ("start_deal", "approve_deal", "reject_deal"):
@@ -1232,7 +1232,7 @@ def apply_special_visit_action(
             return record_visit_dispute(
                 requests,
                 rid,
-                reason=notes or "مالک انجام بازدید را تأیید نکرد",
+                reason=notes,
                 actor_phone=owner_phone,
             )
         from .visit_requests import record_visit_attendance
