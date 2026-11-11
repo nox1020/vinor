@@ -184,13 +184,33 @@ def test_requests_archive_filter_omits_active_chip(app, client):
     page = client.get("/express/partner/requests").get_data(as_text=True)
     assert "status=active" not in page
     assert "status=archived" in page
-    assert ">بایگانی " in page
+    assert 'aria-label="بایگانی"' in page
+    assert 'aria-label="فیلتر پیگیری"' in page
+    assert 'id="rqFilterBtn"' in page
+    assert 'class="rq-filter-menu"' in page
+    assert ">همه</a>" in page
+    assert ">درخواست</a>" in page
+    assert ">بازدید</a>" in page
+    assert ">معامله</a>" in page
+    assert 'class="rq-filter-dot"' not in page
+    assert 'aria-pressed="false"' in page
+    assert "no-scrollbar flex flex-nowrap" not in page
     assert 'data-request-id="open1"' in page
     assert 'data-request-id="arch1"' not in page
     assert "پذیرش وقت بازدید" in page
 
+    visits = client.get("/express/partner/requests?tab=visits").get_data(as_text=True)
+    assert 'class="rq-filter-dot"' in visits
+    assert 'aria-label="فیلتر پیگیری، بازدید"' in visits
+    assert 'href="/express/partner/requests?tab=visits" aria-current="true"' in visits or (
+        'tab=visits' in visits and 'aria-current="true"' in visits
+    )
+
     archived_page = client.get("/express/partner/requests?status=archived").get_data(as_text=True)
     assert "status=active" not in archived_page
+    assert 'aria-pressed="true"' in archived_page
+    assert 'aria-label="بازگشت به پیگیری"' in archived_page
+    assert ">بازگشت به پیگیری</a>" in archived_page
     assert 'data-request-id="arch1"' in archived_page
     assert 'data-request-id="open1"' not in archived_page
 

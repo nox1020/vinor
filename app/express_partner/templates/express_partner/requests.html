@@ -3,11 +3,50 @@
 
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{% macro rq_list_href(tab='', archived=false) -%}
+  {%- if archived and tab -%}
+    {{- url_for('express_partner.requests', tab=tab, status='archived') -}}
+  {%- elif archived -%}
+    {{- url_for('express_partner.requests', status='archived') -}}
+  {%- elif tab -%}
+    {{- url_for('express_partner.requests', tab=tab) -}}
+  {%- else -%}
+    {{- url_for('express_partner.requests') -}}
+  {%- endif -%}
+{%- endmacro %}
+{% set _follow_tab = follow_tab|default('') %}
+{% set _follow_archived = (archive_status|default('active')) == 'archived' %}
 {{ ep_header_start(id='partnerRequestsHeader', sticky=true) }}
 {% call ep_header_row('پیگیری', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
-  {% if is_special|default(false) %}
-    {% include 'express_partner/partials/special_visit_schedule.html' %}
-  {% endif %}
+  <div class="flex items-center gap-1">
+    <details class="rq-filter">
+      <summary id="rqFilterBtn"
+               class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn"
+               aria-label="فیلتر پیگیری{% if _follow_tab == 'requests' %}، درخواست{% elif _follow_tab == 'visits' %}، بازدید{% elif _follow_tab == 'deals' %}، معامله{% endif %}"
+               aria-haspopup="menu">
+        <i class="fas fa-filter ep-partner-header-btn-icon" aria-hidden="true"></i>
+        {% if _follow_tab %}<span class="rq-filter-dot" aria-hidden="true"></span>{% endif %}
+      </summary>
+      <div class="rq-filter-menu" role="menu" aria-label="فیلتر پیگیری">
+        {% for key, label in [('', 'همه'), ('requests', 'درخواست'), ('visits', 'بازدید'), ('deals', 'معامله')] %}
+        <a role="menuitem"
+           href="{{ rq_list_href(key, _follow_archived) }}"
+           data-vinor-express-nav
+           {% if _follow_tab == key %}aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </div>
+    </details>
+    <a href="{{ rq_list_href(_follow_tab, not _follow_archived) }}"
+       data-vinor-express-nav
+       class="ep-partner-header-btn vinor-dash-glass-pill comm-header-glass-btn rq-archive-btn"
+       aria-pressed="{{ 'true' if _follow_archived else 'false' }}"
+       aria-label="{{ 'بازگشت به پیگیری' if _follow_archived else 'بایگانی' }}">
+      <i class="fas fa-box-archive ep-partner-header-btn-icon" aria-hidden="true"></i>
+    </a>
+    {% if is_special|default(false) %}
+      {% include 'express_partner/partials/special_visit_schedule.html' %}
+    {% endif %}
+  </div>
 {% endcall %}
 {{ ep_header_end() }}
 
@@ -462,72 +501,71 @@
     margin-top: 0.7rem;
   }
   #partnerRequestsHeader,
-  #partnerRequestsHeader .ep-partner-header-bar {
+  #partnerRequestsHeader .ep-partner-header-bar,
+  #partnerRequestsHeader .ep-partner-header-inner--auto,
+  #partnerRequestsHeader .ep-partner-header-inner--auto > .flex {
     overflow: visible;
   }
-  #partnerRequestsPage .rq-tabs {
-    display: flex;
-    gap: 0.28rem;
-    margin: 0.55rem 0.85rem 0;
-    padding: 0.28rem;
-    border-radius: 1rem;
-    background: #161616;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+  #partnerRequestsHeader .rq-filter {
+    position: relative;
   }
-  #partnerRequestsPage .rq-tab {
-    flex: 1;
+  #partnerRequestsHeader .rq-filter > summary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.32rem;
-    min-height: 2.45rem;
-    min-width: 0;
-    padding: 0 0.35rem;
-    border: 0;
-    border-radius: 0.78rem;
-    background: transparent;
-    color: #a1a1aa;
-    font-size: 0.74rem;
-    font-weight: 750;
-    font-family: inherit;
+    position: relative;
+    list-style: none;
     cursor: pointer;
-    white-space: nowrap;
-    -webkit-tap-highlight-color: transparent;
   }
-  #partnerRequestsPage .rq-tab.is-active {
-    background: #2a2a2e;
-    color: #fff;
-    box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.35);
+  #partnerRequestsHeader .rq-filter > summary::-webkit-details-marker {
+    display: none;
   }
-  #partnerRequestsPage .rq-tab:focus-visible {
-    outline: 2px solid #14b8a6;
-    outline-offset: 1px;
+  #partnerRequestsHeader .rq-filter-menu {
+    position: absolute;
+    z-index: 40;
+    inset-inline-end: 0;
+    top: calc(100% + 0.4rem);
+    min-width: 11.5rem;
+    margin: 0;
+    padding: 0.35rem;
+    border-radius: 0.9rem;
+    background: #1c1c1e;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   }
-  #partnerRequestsPage .rq-tab__label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  #partnerRequestsPage .rq-tab__count {
-    display: inline-flex;
+  #partnerRequestsHeader .rq-filter-menu a {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    min-width: 1.2rem;
-    height: 1.2rem;
-    padding: 0 0.32rem;
-    border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #d4d4d8;
-    font-size: 0.62rem;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
+    min-height: 2.4rem;
+    padding: 0 0.75rem;
+    border-radius: 0.65rem;
+    color: #ececec;
+    text-decoration: none;
+    font-size: 0.84rem;
+    font-weight: 700;
   }
-  #partnerRequestsPage .rq-tab.is-active .rq-tab__count {
-    background: rgba(45, 212, 191, 0.22);
+  #partnerRequestsHeader .rq-filter-menu a[aria-current="true"] {
+    background: rgba(45, 212, 191, 0.16);
     color: #99f6e4;
   }
-  #partnerRequestsPage .rq-tab__count.is-zero {
-    opacity: 0.45;
+  #partnerRequestsHeader .rq-filter-dot {
+    position: absolute;
+    top: 0.35rem;
+    inset-inline-end: 0.35rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: #2dd4bf;
+    box-shadow: 0 0 0 2px #111;
+  }
+  #partnerRequestsHeader .rq-archive-btn[aria-pressed="true"] {
+    box-shadow: inset 0 0 0 1.5px #5eead4;
+    color: #99f6e4;
+  }
+  #partnerRequestsPage .rq-archive-back {
+    color: #5eead4;
+    font-weight: 800;
+    text-decoration: none;
   }
   #partnerRequestsPage .rq-section-label {
     margin: 0.85rem 1rem 0.15rem;
@@ -680,21 +718,11 @@
      data-active-tab="requests">
   <main class="mx-auto w-full max-w-lg">
     {% set _arch = archive_status|default('active') %}
-    {% set _acounts = archive_counts|default({'active': 0, 'archived': 0}, true) %}
-    <nav class="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto px-4 pt-3" aria-label="پیگیری‌ها">
-      {% if _arch == 'archived' %}
-      <a href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav class="rq-badge shrink-0">بازگشت به پیگیری</a>
-      {% else %}
-      <a href="{{ url_for('express_partner.requests') }}" data-vinor-express-nav class="rq-badge shrink-0">همه</a>
-      <a href="{{ url_for('express_partner.requests', tab='requests') }}" data-vinor-express-nav class="rq-badge shrink-0">درخواست</a>
-      <a href="{{ url_for('express_partner.requests', tab='visits') }}" data-vinor-express-nav class="rq-badge shrink-0">بازدید</a>
-      <a href="{{ url_for('express_partner.requests', tab='deals') }}" data-vinor-express-nav class="rq-badge shrink-0">معامله</a>
-      {% endif %}
-      <a href="{{ url_for('express_partner.requests', status='archived') }}"
-         data-vinor-express-nav
-         class="rq-badge shrink-0{% if _arch == 'archived' %} rq-badge--visit{% endif %}">بایگانی {{ (_acounts.archived|default(0))|fa_digits }}</a>
-    </nav>
     <p class="rq-summary" data-rq-summary>
+      {% if _arch == 'archived' %}
+      <a href="{{ rq_list_href(_follow_tab, false) }}" data-vinor-express-nav class="rq-archive-back">بازگشت به پیگیری</a>
+      ·
+      {% endif %}
       <strong>{{ _n_cards|fa_digits }}</strong> پیگیری
     </p>
     <p id="rqToast" class="rq-toast" role="status" aria-live="polite"></p>
