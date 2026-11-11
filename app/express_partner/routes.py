@@ -6833,6 +6833,7 @@ def requests_page():
         visit_presence_address=visit_presence_address,
         schedule_open=(request.args.get('schedule') or '').strip() == '1',
         cards=pipe.get('cards') or [],
+        follow_tab=tab if tab in ('requests', 'visits', 'deals') else '',
         archive_status=pipe.get('archive_status') or archive_status,
         archive_counts=pipe.get('archive_counts') or {'active': 0, 'archived': 0},
     ))
