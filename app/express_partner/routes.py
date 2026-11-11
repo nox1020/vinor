@@ -1370,14 +1370,13 @@ def _express_assignment_indexes(
 
 
 def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> None:
-    """رفع خودکار معاملات بعد از ۵ روز بدون تأیید پشتیبان"""
+    """معاملهٔ بازِ بیش از ۵ روز دیرکرد می‌خورد. پورسانت و بلوکه پاک نمی‌شوند."""
     from datetime import datetime, timedelta
 
-    from .commissions_flow import remove_pending_deal_commissions_for
     from .deal_wallet import commission_store_lock
 
     now = datetime.now()
-    released: List[tuple[str, str]] = []
+    overdue: List[tuple[str, str]] = []
 
     with commission_store_lock():
         fresh_assignments = load_express_assignments() or []
@@ -1396,65 +1395,27 @@ def _auto_release_expired_transactions(assignments: List[Dict[str, Any]]) -> Non
                 continue
             if now - started_at <= timedelta(days=5):
                 continue
+            if a.get('deal_overdue'):
+                continue
             code = str(a.get('land_code') or '').strip()
             holder = str(a.get('transaction_holder') or '').strip()
-            a['status'] = 'active'
+            a['deal_overdue'] = True
+            a['deal_overdue_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
             a['updated_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
-            a['auto_released'] = True
-            a['auto_released_at'] = now.strftime('%Y-%m-%d %H:%M:%S')
-            a.pop('transaction_holder', None)
-            a.pop('transaction_started_at', None)
             disk_updated = True
             if code and holder:
-                released.append((code, holder))
+                overdue.append((code, holder))
         if disk_updated:
             save_express_assignments(fresh_assignments)
         if isinstance(assignments, list):
             assignments[:] = fresh_assignments
-        if released:
-            try:
-                commissions = load_express_commissions() or []
-                if not isinstance(commissions, list):
-                    commissions = []
-                total_removed = 0
-                for code, holder in released:
-                    commissions, removed = remove_pending_deal_commissions_for(
-                        commissions, partner_phone=holder, land_code=code
-                    )
-                    total_removed += removed
-                if total_removed > 0:
-                    save_express_commissions(commissions)
-                    current_app.logger.info(
-                        'auto-release removed %s pending deal commission(s) for %s land(s)',
-                        total_removed,
-                        len(released),
-                    )
-            except Exception:
-                current_app.logger.exception(
-                    'auto-release pending deal commission cleanup failed'
-                )
 
-    if not released:
+    if not overdue:
         return
-    try:
-        from .sales_coach import deliver_partner_progress_update
-        from app.utils.storage import load_ads_cached
-
-        lands = load_ads_cached() or []
-        title_by_code = {
-            str(l.get('code') or '').strip(): str(l.get('title') or '').strip()
-            for l in lands
-            if isinstance(l, dict)
-        }
-        for code, holder in released:
-            deliver_partner_progress_update(
-                partner_phone=holder,
-                event='deal_auto_released',
-                land_code=code,
-                land_title=title_by_code.get(code, ''),
-            )
-    except Exception:
-        current_app.logger.exception('auto-release chat progress failed')
+    current_app.logger.warning(
+        'deal overdue without deleting commission: %s',
+        ', '.join(f'{code}:{holder}' for code, holder in overdue),
+    )
 
 
 _AUTO_RELEASE_LAST_MONO = 0.0
@@ -3676,7 +3637,8 @@ def _build_partner_sales_pipeline(
         PIPELINE_REQUESTS,
         PIPELINE_VISITS,
         annotate_follow_card,
-        card_is_archived,
+        card_archived_for,
+        card_hidden_for,
         collapse_visit_rows,
         partner_request_feed_item,
         partner_requests_can_revisit,
@@ -3699,7 +3661,10 @@ def _build_partner_sales_pipeline(
     if not isinstance(raw_rows, list):
         raw_rows = []
     rows = collapse_visit_rows(raw_rows)
-    mine = partner_visits_for_phone(rows, ph)
+    mine = [
+        row for row in partner_visits_for_phone(rows, ph)
+        if not card_hidden_for(row, ph)
+    ]
 
     if land_status is None:
         land_status = {}
@@ -3752,7 +3717,8 @@ def _build_partner_sales_pipeline(
         1
         for r in mine
         if str(r.get('status') or '').strip() in OPEN_VISIT_STATUSES
-        and not card_is_archived(r)
+        and not card_archived_for(r, ph)
+        and not card_hidden_for(r, ph)
     )
 
     inbox_items: list = []
@@ -3813,9 +3779,9 @@ def _build_partner_sales_pipeline(
             ]
 
     for it in items:
-        annotate_follow_card(it, DIRECTION_OUTGOING)
+        annotate_follow_card(it, DIRECTION_OUTGOING, ph)
     for it in inbox_items:
-        annotate_follow_card(it, DIRECTION_INCOMING)
+        annotate_follow_card(it, DIRECTION_INCOMING, ph)
     seen_ids = set()
     cards: List[Dict[str, Any]] = []
     for it in list(inbox_items) + list(items):
@@ -3825,6 +3791,9 @@ def _build_partner_sales_pipeline(
         if cid:
             seen_ids.add(cid)
         cards.append(it)
+    cards = [card for card in cards if not card_hidden_for(card, ph)]
+    items = [card for card in items if not card_hidden_for(card, ph)]
+    inbox_items = [card for card in inbox_items if not card_hidden_for(card, ph)]
     cards.sort(key=lambda card: str(card.get('updated_at') or card.get('created_at') or ''), reverse=True)
     archive_counts = {
         'active': sum(1 for card in cards if not card.get('archived')),
@@ -4828,12 +4797,13 @@ def _card_archive_response(vid: str, *, restore: bool):
     from .apk_native import session_phone
     from .visit_requests import follow_archive_fields, submit_visit_card_archive
 
-    rec, err, changed = submit_visit_card_archive(vid, session_phone(), archived=not restore)
+    actor = session_phone()
+    rec, err, changed = submit_visit_card_archive(vid, actor, archived=not restore)
     if err == 'forbidden':
         return _apk_json({'ok': False, 'error': 'دسترسی ندارید.', 'error_code': 'forbidden'}, 403)
     if err or not isinstance(rec, dict):
         return _apk_json({'ok': False, 'error': 'این پیگیری پیدا نشد.', 'error_code': 'not_found'}, 404)
-    body = follow_archive_fields(rec)
+    body = follow_archive_fields(rec, actor)
     body.update({
         'ok': True,
         'id': str(rec.get('id') or vid),
@@ -6836,10 +6806,11 @@ def requests_page():
     return resp
 
 
-def _requests_action_json(ok: bool, *, message: str = '', error: str = '', **extra):
+def _requests_action_json(ok: bool, *, message: str = '', error: str = '', http_status: int | None = None, **extra):
     payload = {'ok': bool(ok), 'message': message, 'error': error}
     payload.update(extra)
-    return jsonify(payload), (200 if ok else 400)
+    code = http_status if http_status is not None else (200 if ok else 400)
+    return jsonify(payload), code
 
 
 @express_partner_bp.post('/requests/<vid>/remove', endpoint='requests_remove')
@@ -6864,7 +6835,7 @@ def requests_remove(vid: str):
         if updated and not err:
             held['action'] = 'cancelled'
             return True
-        if err in (None, 'not_cancellable'):
+        if err in (None, 'not_cancellable', 'forbidden'):
             ok, derr = partner_delete_own_visit(
                 rows, request_id=str(vid or ''), partner_phone=me_phone
             )
@@ -6896,7 +6867,7 @@ def requests_remove(vid: str):
             pass
         return _requests_action_json(True, message='درخواست حذف شد.', action='cancelled')
     if held.get('action') == 'deleted':
-        return _requests_action_json(True, message='از لیست حذف شد.', action='deleted')
+        return _requests_action_json(True, message='از پیگیری شما برداشته شد.', action='hidden')
     err = held.get('err')
 
     msg = {
@@ -7095,6 +7066,17 @@ def requests_visit_result(vid: str):
         return _requests_action_json(False, error='درخواست پیدا نشد.')
     if err == 'forbidden':
         return _requests_action_json(False, error='دسترسی ندارید.')
+    if err == 'outcome_frozen':
+        return _requests_action_json(
+            False,
+            error='بعد از تأیید معامله، نتیجهٔ بازدید عوض نمی‌شود.',
+            error_code='outcome_frozen',
+            http_status=409,
+        )
+    if err == 'archived_readonly':
+        return _requests_action_json(False, error='کارت بایگانی فقط خواندنی است.', http_status=409)
+    if err:
+        return _requests_action_json(False, error='ثبت نتیجه ممکن نشد.')
     try:
         from .special_visit_inbox import inject_visit_outcome_chat
 
@@ -10220,7 +10202,28 @@ def land_tx_status(code: str):
 @express_partner_bp.route('/mark-in-transaction/<code>', methods=['POST'], endpoint='mark_in_transaction')
 @require_partner_access()
 def mark_in_transaction(code: str):
-    """Toggle وضعیت ملک بین در حال معامله و فعال - فقط یک همکار می‌تواند معامله کند"""
+    """شروع و لغو معامله فقط از پیگیری مالک است. این مسیر دیگر پورسانت را عوض نمی‌کند."""
+    message = 'شروع و لغو معامله فقط برای مالک فایل و از پیگیری است.'
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.is_json
+        or request.accept_mimetypes['application/json']
+        > request.accept_mimetypes['text/html']
+    )
+    if wants_json:
+        return jsonify({
+            'success': False,
+            'ok': False,
+            'error': 'owner_flow_required',
+            'error_code': 'owner_flow_required',
+            'message': message,
+        }), 403
+    flash(message, 'error')
+    return redirect(url_for('express_partner.home'))
+
+
+def _mark_in_transaction_retired(code: str):
+    """بدنهٔ قدیمی. دیگر از مسیر همکار صدا زده نمی‌شود."""
     me_phone = (session.get("user_phone") or "").strip()
     success_message = ''
     success_category = 'success'
@@ -11283,6 +11286,24 @@ def special_visit_action(vid: str, action: str):
         return redirect(_sales_pipeline_url('visits'))
     if err == 'forbidden':
         flash('اجازه مدیریت این درخواست را ندارید.', 'warning')
+        return redirect(_sales_pipeline_url('visits'))
+    if err == 'outcome_frozen':
+        message = 'بعد از تأیید معامله، نتیجهٔ بازدید عوض نمی‌شود.'
+        if request.is_json or (request.headers.get('Accept') or '').lower().startswith('application/json'):
+            return jsonify({'ok': False, 'error': message, 'error_code': 'outcome_frozen'}), 409
+        flash(message, 'warning')
+        return redirect(_sales_pipeline_url('visits'))
+    if err == 'owner_result_forbidden':
+        message = 'نتیجهٔ بازدید را مالک ثبت نمی‌کند. این کار برای بازاریاب است.'
+        if request.is_json or (request.headers.get('Accept') or '').lower().startswith('application/json'):
+            return jsonify({'ok': False, 'error': message, 'error_code': 'owner_result_forbidden'}), 403
+        flash(message, 'warning')
+        return redirect(_sales_pipeline_url('visits'))
+    if err == 'owner_must_wait':
+        flash('تأیید انجام فقط بعد از «بازدید انجام شد» بازاریاب ممکن است.', 'warning')
+        return redirect(_sales_pipeline_url('visits'))
+    if err == 'archived_readonly':
+        flash('کارت بایگانی فقط خواندنی است. اول آن را به پیگیری برگردانید.', 'warning')
         return redirect(_sales_pipeline_url('visits'))
     if err == 'disabled':
         flash('ثبت نتیجه بازدید فعلاً فعال نیست.', 'warning')

@@ -26,6 +26,7 @@ from .commissions_flow import (
 PENDING_STATUS = "pending"
 APPROVED_STATUS = "approved"
 DONE_PENDING_STATUS = "done_pending"
+DISPUTED_STATUS = "disputed"
 COMPLETED_STATUS = "completed"
 CANCELLED_STATUS = "cancelled"
 # Phase 2 additive — never remove the five statuses above.
@@ -1101,6 +1102,7 @@ def partner_request_feed_item(
         COMPLETED_STATUS: "انجام شد",
         CANCELLED_STATUS: "لغو شده",
         NO_SHOW_STATUS: "عدم حضور",
+        DISPUTED_STATUS: "اعتراض مالک",
     }
     deal_dec = visit_deal_decision(row)
     if st == COMPLETED_STATUS and deal_dec == DEAL_DECISION_APPROVED:
@@ -1194,6 +1196,10 @@ def partner_request_feed_item(
         "support_phone": support,
         "status": st,
         "status_label": labels.get(st, st or "در جریان"),
+        "hidden_for": list(row.get("hidden_for") or []),
+        "archived_for": dict(row.get("archived_for") or {}) if isinstance(row.get("archived_for"), dict) else {},
+        "archive_restored_for": list(row.get("archive_restored_for") or []),
+        "dispute_reason": str(row.get("dispute_reason") or ""),
         "can_cancel": can_cancel,
         "can_delete": can_delete,
         "can_complete": can_complete,
@@ -1240,7 +1246,7 @@ def follow_card_stage(item: Dict[str, Any] | None) -> str:
     return STAGE_VISIT
 
 
-def annotate_follow_card(item: Dict[str, Any], direction: str) -> Dict[str, Any]:
+def annotate_follow_card(item: Dict[str, Any], direction: str, actor: str = "") -> Dict[str, Any]:
     """فیلدهای مشترک لیست واحد. pipeline_tab با stage یکی می‌شود تا tab_counts درست بماند."""
     stage = follow_card_stage(item)
     item["stage"] = stage
@@ -1257,11 +1263,28 @@ def annotate_follow_card(item: Dict[str, Any], direction: str) -> Dict[str, Any]
     history = item.get("history")
     item["history"] = [dict(row) for row in history if isinstance(row, dict)] if isinstance(history, list) else []
     item["owner_phone"] = str(item.get("owner_phone") or "")
-    item.update(follow_archive_fields(item))
+    item.update(follow_archive_fields(item, actor))
+    if item.get("read_only"):
+        for flag in (
+            "can_confirm_deal",
+            "can_reject_deal",
+            "can_close_deal",
+            "can_register_result",
+            "can_complete",
+            "can_no_show",
+            "can_mark_attendance",
+            "can_final_confirm",
+            "can_confirm_done",
+            "can_approve",
+            "can_reject",
+        ):
+            if flag in item:
+                item[flag] = False
     return item
 
 
 def card_is_archived(row: Dict[str, Any] | None) -> bool:
+    """بایگانی سراسری (بستن فایل یا ردیف قدیمی). بایگانی یک طرف اینجا نیست."""
     if not isinstance(row, dict):
         return False
     flag = row.get("archived")
@@ -1270,20 +1293,70 @@ def card_is_archived(row: Dict[str, Any] | None) -> bool:
     return str(flag or "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def follow_archive_fields(row: Dict[str, Any] | None) -> Dict[str, Any]:
-    """کلیدهای بایگانی کارت. کارت فعال هم همین فیلدها را خالی برمی‌گرداند."""
-    archived = card_is_archived(row)
+def _actor_phone_key(phone: Any) -> str:
+    return _canonical_visit_phone(phone) or str(phone or "").strip()
+
+
+def _actor_phone_list(raw: Any) -> List[str]:
+    if isinstance(raw, dict):
+        raw = list(raw.keys())
+    if not isinstance(raw, list):
+        return []
+    out: List[str] = []
+    for item in raw:
+        key = _actor_phone_key(item)
+        if key and key not in out:
+            out.append(key)
+    return out
+
+
+def _phone_in_actor_list(raw: Any, actor: str) -> bool:
+    me = _actor_phone_key(actor)
+    if not me:
+        return False
+    for item in _actor_phone_list(raw):
+        if _phones_match(item, me):
+            return True
+    return False
+
+
+def card_hidden_for(row: Dict[str, Any] | None, actor: str) -> bool:
+    """حذف از پیگیری فقط برای همین شماره. سند مشترک سر جایش می‌ماند."""
+    if not isinstance(row, dict):
+        return False
+    return _phone_in_actor_list(row.get("hidden_for"), actor)
+
+
+def card_archived_for(row: Dict[str, Any] | None, actor: str = "") -> bool:
+    """بایگانی کارت برای بیننده. بایگانی سراسری برای کسی که خودش برگردانده، دیده نمی‌شود."""
+    if not isinstance(row, dict):
+        return False
+    me = _actor_phone_key(actor)
+    if me and _phone_in_actor_list(row.get("archived_for"), me):
+        return True
+    if me and _phone_in_actor_list(row.get("archive_restored_for"), me):
+        return False
+    return card_is_archived(row)
+
+
+def follow_archive_fields(row: Dict[str, Any] | None, actor: str = "") -> Dict[str, Any]:
+    """کلیدهای بایگانی از نگاه همین کاربر."""
+    archived = card_archived_for(row, actor) if actor else card_is_archived(row)
     reason = ""
     stamp = ""
     if archived and isinstance(row, dict):
-        raw = str(row.get("archived_reason") or "").strip().lower()
+        me = _actor_phone_key(actor)
+        per = row.get("archived_for") if isinstance(row.get("archived_for"), dict) else {}
+        own = per.get(me) if me and isinstance(per.get(me), dict) else {}
+        raw = str((own or {}).get("reason") or row.get("archived_reason") or "").strip().lower()
         reason = raw if raw in ("manual", "inactive", "closed") else ""
-        stamp = str(row.get("archived_at") or "").strip()
+        stamp = str((own or {}).get("at") or row.get("archived_at") or "").strip()
     return {
         "archived": archived,
         "is_archived": archived,
         "archived_at": stamp,
         "archived_reason": reason,
+        "read_only": archived,
     }
 
 
@@ -1341,21 +1414,27 @@ def _touch_visit_card_archive(
     from app.listings.service import _archive_now
 
     now_iso = _archive_now()
+    me = _actor_phone_key(actor)
+    if not me:
+        return None, "forbidden", False
+    archived_for = rec.get("archived_for") if isinstance(rec.get("archived_for"), dict) else {}
+    restored_for = _actor_phone_list(rec.get("archive_restored_for"))
     if archived:
-        if card_is_archived(rec):
+        if card_archived_for(rec, me):
             return rec, None, False
-        rec["archived"] = True
-        rec["archived_at"] = now_iso
-        rec["archived_reason"] = "manual"
-        rec.pop("archive_restored_at", None)
+        archived_for[me] = {"at": now_iso, "reason": "manual"}
+        rec["archived_for"] = archived_for
+        rec["archive_restored_for"] = [item for item in restored_for if not _phones_match(item, me)]
         rec["updated_at"] = now_iso
         return rec, None, True
-    if not card_is_archived(rec):
+    if not card_archived_for(rec, me):
         return rec, None, False
-    rec["archived"] = False
-    rec["archived_at"] = ""
-    rec["archived_reason"] = ""
-    rec["archive_restored_at"] = now_iso
+    rec["archived_for"] = {
+        key: value for key, value in archived_for.items() if not _phones_match(key, me)
+    }
+    if card_is_archived(rec) and me not in restored_for:
+        restored_for.append(me)
+    rec["archive_restored_for"] = restored_for
     rec["updated_at"] = now_iso
     return rec, None, True
 
@@ -1406,6 +1485,13 @@ def sync_archived_listing_cards(code: str, reason: str, listing_archived_at: str
             if canonical_land_code(str(row.get("land_code") or ""), lands) != want:
                 continue
             if card_is_archived(row):
+                old = str(row.get("archived_at") or "").strip()
+                if stamp and old and stamp > old:
+                    row["archived_at"] = stamp
+                    row["archived_reason"] = clean
+                    row["archive_restored_for"] = []
+                    row.pop("archive_restored_at", None)
+                    changed += 1
                 continue
             restored = str(row.get("archive_restored_at") or "").strip()
             if restored and stamp and restored >= stamp:
@@ -1442,30 +1528,94 @@ def partner_cancel_own_visit(
     return admin_update_visit_request_status(requests, rid, CANCELLED_STATUS)
 
 
+def visit_record_protected(rec: Dict[str, Any] | None) -> bool:
+    """بازدید انجام‌شده، تصمیم معامله، پورسانت یا بلوکه را نمی‌شود از سند پاک کرد."""
+    if not isinstance(rec, dict):
+        return False
+    if str(rec.get("status") or "").strip() == COMPLETED_STATUS:
+        return True
+    if visit_deal_decision(rec):
+        return True
+    code = str(rec.get("land_code") or "").strip()
+    phone = str(rec.get("partner_phone") or "").strip()
+    if not code:
+        return False
+    try:
+        from app.express_partner.commission_escrow import find_hold
+        from app.express_partner.commissions_flow import commission_is_deal
+        from app.utils.storage import load_express_commissions
+    except Exception:
+        return False
+    rows = load_express_commissions() or []
+    if not isinstance(rows, list):
+        return False
+    if find_hold(rows, code):
+        return True
+    for row in rows:
+        if not isinstance(row, dict) or not commission_is_deal(row):
+            continue
+        if str(row.get("land_code") or "").strip() != code:
+            continue
+        if phone and not _phones_match(row.get("partner_phone"), phone):
+            continue
+        return True
+    return False
+
+
+def hide_follow_card_for_actor(
+    requests: List[Dict[str, Any]],
+    visit_id: str,
+    actor: str,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], bool]:
+    """کارت را فقط برای همین نفر از پیگیری برمی‌دارد. ردیف مشترک حذف نمی‌شود."""
+    rid = str(visit_id or "").strip()
+    rec = _find_visit_request(requests, rid) if rid else None
+    if not rec:
+        return None, "not_found", False
+    if not _actor_can_touch_card(rec, actor, _visit_lands()):
+        return None, "forbidden", False
+    me = _actor_phone_key(actor)
+    if not me:
+        return None, "forbidden", False
+    hidden = _actor_phone_list(rec.get("hidden_for"))
+    if any(_phones_match(item, me) for item in hidden):
+        return rec, None, False
+    hidden.append(me)
+    rec["hidden_for"] = hidden
+    from app.listings.service import _archive_now
+
+    rec["updated_at"] = _archive_now()
+    return rec, None, True
+
+
 def partner_delete_own_visit(
     requests: List[Dict[str, Any]],
     *,
     request_id: str,
     partner_phone: str,
 ) -> Tuple[bool, Optional[str]]:
-    """حذف قطعی درخواست لغو/عدم‌حضور/انجام‌شده از لیست همکار."""
+    """حذف فیزیکی ممنوع است. کارت فقط برای همین همکار پنهان می‌شود."""
     ph = (partner_phone or "").strip()
     rid = (request_id or "").strip()
     if not ph or not rid:
         return False, "invalid"
-    for i, r in enumerate(list(requests or [])):
-        if not isinstance(r, dict):
-            continue
-        if str(r.get("id") or "").strip() != rid:
-            continue
-        if not _phones_match(r.get("partner_phone"), ph):
-            return False, "forbidden"
-        st = (str(r.get("status") or "")).strip()
-        if st not in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS):
-            return False, "not_deletable"
-        requests.pop(i)
+    rec = _find_visit_request(requests, rid)
+    if not rec:
+        return False, "not_found"
+    if not _phones_match(rec.get("partner_phone"), ph) and not _actor_can_touch_card(rec, ph):
+        return False, "forbidden"
+    st = (str(rec.get("status") or "")).strip()
+    if st not in (CANCELLED_STATUS, NO_SHOW_STATUS, COMPLETED_STATUS, DISPUTED_STATUS):
+        return False, "not_deletable"
+    if visit_record_protected(rec):
+        _rec, err, _changed = hide_follow_card_for_actor(requests, rid, ph)
+        if err:
+            return False, "protected" if err == "forbidden" else err
         return True, None
-    return False, "not_found"
+    _rec, err, _changed = hide_follow_card_for_actor(requests, rid, ph)
+    if err:
+        return False, err
+    return True, None
 
 
 _VISIT_DATE_ORDINALS: Dict[str, int] = {
@@ -2734,14 +2884,11 @@ def mark_visit_done_by_id(
         return rec, "already_completed"
     now_iso = datetime.utcnow().isoformat() + "Z"
     if st == APPROVED_STATUS:
+        if by_owner:
+            return None, "owner_must_wait"
         rec["updated_at"] = now_iso
         rec["visit_done_requested_at"] = now_iso
-        if by_owner:
-            rec["status"] = COMPLETED_STATUS
-            rec["completed_at"] = now_iso
-            rec["completed_by_owner"] = True
-        else:
-            rec["status"] = DONE_PENDING_STATUS
+        rec["status"] = DONE_PENDING_STATUS
         if not rec.get("approved_at"):
             rec["approved_at"] = now_iso
         return rec, None
@@ -2842,6 +2989,55 @@ def visit_outcome_hint(outcome: str) -> str:
     return _VISIT_OUTCOME_HINTS.get((outcome or "").strip().lower(), "")
 
 
+def visit_outcome_frozen(rec: Dict[str, Any] | None) -> bool:
+    """بعد از تأیید معامله، نتیجهٔ بازدید دیگر عوض نمی‌شود."""
+    if not isinstance(rec, dict):
+        return False
+    dec = visit_deal_decision(rec)
+    if dec in (DEAL_DECISION_APPROVED, DEAL_DECISION_CLOSED, "in_transaction"):
+        return True
+    code = str(rec.get("land_code") or "").strip()
+    if not code:
+        return False
+    try:
+        from app.utils.storage import load_express_assignments
+    except Exception:
+        return False
+    rows = load_express_assignments() or []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("land_code") or "").strip() != code:
+            continue
+        if str(row.get("status") or "").strip().lower() == "in_transaction":
+            return True
+        if row.get("deal_overdue") and str(row.get("status") or "").strip().lower() == "in_transaction":
+            return True
+    return False
+
+
+def record_visit_dispute(
+    requests: List[Dict[str, Any]],
+    visit_id: str,
+    *,
+    reason: str = "",
+    actor_phone: str = "",
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """اعتراض مالک جدا از عدم حضور مشتری است."""
+    rec = _find_visit_request(requests, str(visit_id or "").strip())
+    if not rec:
+        return None, "not_found"
+    if str(rec.get("status") or "").strip() != DONE_PENDING_STATUS:
+        return None, "invalid_transition"
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    rec["status"] = DISPUTED_STATUS
+    rec["dispute_reason"] = str(reason or "").strip()
+    rec["dispute_at"] = now_iso
+    rec["dispute_by"] = str(actor_phone or "").strip()
+    rec["updated_at"] = now_iso
+    return rec, None
+
+
 def record_visit_outcome(
     requests: List[Dict[str, Any]],
     visit_id: str,
@@ -2857,6 +3053,10 @@ def record_visit_outcome(
     st = str(rec.get("status") or "").strip()
     if st != COMPLETED_STATUS:
         return None, "invalid_status"
+    if visit_outcome_frozen(rec):
+        return rec, "outcome_frozen"
+    if card_archived_for(rec, actor_phone):
+        return rec, "archived_readonly"
     oc = _VISIT_OUTCOME_ALIASES.get((outcome or "").strip().lower(), "")
     if not oc:
         return None, "invalid_outcome"
@@ -3332,7 +3532,8 @@ def purge_admin_legacy_visits() -> int:
 ADMIN_VISIT_TRANSITIONS: Dict[str, frozenset] = {
     PENDING_STATUS: frozenset({PENDING_STATUS, APPROVED_STATUS, CANCELLED_STATUS}),
     APPROVED_STATUS: frozenset({APPROVED_STATUS, CANCELLED_STATUS}),
-    DONE_PENDING_STATUS: frozenset({DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS, APPROVED_STATUS}),
+    DONE_PENDING_STATUS: frozenset({DONE_PENDING_STATUS, COMPLETED_STATUS, CANCELLED_STATUS, APPROVED_STATUS, DISPUTED_STATUS}),
+    DISPUTED_STATUS: frozenset({DISPUTED_STATUS}),
     # بازدید تکمیل‌شده را نمی‌بندیم — مسیر معامله را خراب می‌کند
     COMPLETED_STATUS: frozenset({COMPLETED_STATUS}),
     CANCELLED_STATUS: frozenset({CANCELLED_STATUS}),

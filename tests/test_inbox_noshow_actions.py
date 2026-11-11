@@ -177,7 +177,8 @@ def test_owner_archives_incoming_noshow_under_lock(app, client, monkeypatch):
     assert again.get_json()["already"] is True
     with app.app_context():
         row = next(item for item in load_express_visit_requests() if item["id"] == "noshow-private")
-    assert row["archived"] is True
+    assert row.get("archived") is not True
+    assert any(str(phone).endswith(OWNER[-10:]) for phone in (row.get("archived_for") or {}))
     assert entered["n"] >= 3
 
     _login(client, REQUESTER)

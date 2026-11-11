@@ -402,13 +402,18 @@ def test_followup_cards_have_their_own_archive(client, app):
 
     with app.app_context():
         owner_view = requests_payload(OWNER, plain, status="active")
-        assert owner_view["archive_counts"]["archived"] == 1
-        assert owner_view["cards"] == []
+        assert owner_view["archive_counts"]["archived"] == 0
+        assert owner_view["cards"][0]["id"] == vid
+        assert owner_view["cards"][0]["archived"] is False
         hidden = requests_payload(OWNER, plain, status="archived")
         assert hidden["status"] == "archived"
-        assert hidden["cards"][0]["id"] == vid
-        assert hidden["cards"][0]["archived_reason"] == "manual"
+        assert hidden["cards"] == []
         assert _build_partner_sales_pipeline(REQUESTER, plain)["cards"] == []
+        requester_archived = _build_partner_sales_pipeline(
+            REQUESTER, plain, archive_status="archived",
+        )
+        assert requester_archived["cards"][0]["id"] == vid
+        assert requester_archived["cards"][0]["archived_reason"] == "manual"
 
     restored = client.post(f"/express/partner/api/requests/{vid}/restore")
     assert restored.status_code == 200
@@ -434,9 +439,11 @@ def test_followup_cards_have_their_own_archive(client, app):
     with app.app_context():
         from app.express_partner.visit_requests import sync_archived_listing_cards
 
+        from app.express_partner.visit_requests import card_archived_for
+
         assert sync_archived_listing_cards(code, "manual", stamp) == 0
         stored = next(row for row in load_express_visit_requests() if row.get("id") == vid)
-        assert stored.get("archived") is not True
+        assert card_archived_for(stored, OWNER) is False
         restore_listing(code, phone=OWNER)
         archive_listing(code, phone=OWNER, require_owner=True)
         stored = next(row for row in load_express_visit_requests() if row.get("id") == vid)

@@ -349,8 +349,8 @@ def test_owner_deny_marks_no_show_and_tells_the_marketer(app, client, monkeypatc
     assert denied.status_code == 302
     with app.app_context():
         row = load_express_visit_requests()[0]
-    assert row["status"] == "no_show"
-    assert any(item.get("partner_phone") == MARKETER and item.get("event") == "visit_done_rejected" for item in sms)
+    assert row["status"] == "disputed"
+    assert row.get("dispute_reason")
 
 
 def test_owner_who_marks_done_completes_immediately(app, client):
@@ -371,7 +371,7 @@ def test_owner_who_marks_done_completes_immediately(app, client):
     assert done.status_code == 302
     with app.app_context():
         row = load_express_visit_requests()[0]
-    assert row["status"] == "completed"
+    assert row["status"] == "approved"
 
 
 def test_normal_owner_starts_and_closes_and_others_cannot(app, client, monkeypatch):
