@@ -5515,10 +5515,22 @@ def express_commission_approve(cid: int):
         err, detail = finalize_deal_payout(deal_id=cid, owner_phone=owner)
         if err:
             message = str((detail or {}).get('message') or wallet_detail().get('message') or '').strip()
+            if err == 'already_settled' and not message:
+                message = 'این فروش قبلاً تسویه شده است.'
             if not message:
                 message = 'تأیید پورسانت ممکن نشد. اگر بلوکه یا موجودی مالک کافی نیست، تعدیل دستی جداگانه ثبت کنید.'
             flash(message, 'error')
             return redirect(_express_commissions_redirect(filter_hint))
+        from app.express_partner.special_visit_inbox import finish_settled_deal
+        finish_settled_deal(detail, pending_deal, notify=not detail.get('idempotent'))
+        _admin_audit(
+            'admin_commission_approve',
+            entity_type='commission',
+            entity_id=str(cid),
+            land_code=str(pending_deal.get('land_code') or ''),
+            summary=f"Commission {cid} approved",
+            payload={'partner_phone': str(pending_deal.get('partner_phone') or '')},
+        )
         flash('پورسانت فروش از بلوکه یا کیف پول مالک به مشاور منتقل شد.', 'success')
         return redirect(_express_commissions_redirect('approved'))
     changed = False
@@ -5528,6 +5540,13 @@ def express_commission_approve(cid: int):
             if int(c.get('id',0) or 0) == int(cid):
                 # فقط اگر در وضعیت pending باشد، تایید کن
                 if c.get('status') == 'pending':
+                    from app.express_partner.commission_escrow import TOPUP_SOURCE
+                    if str(c.get('source') or '') == TOPUP_SOURCE:
+                        flash(
+                            'شارژ زرین‌پال فقط بعد از تأیید پرداخت درگاه به کیف پول می‌نشیند. واریز دستی مسیر جدا دارد.',
+                            'error',
+                        )
+                        return redirect(_express_commissions_redirect(filter_hint))
                     c['status'] = 'approved'
                     c['approved_at'] = iso_z(utcnow())
                     commission_record = c
@@ -5657,6 +5676,39 @@ def express_commission_approve(cid: int):
     elif not changed:
         flash('پورسانت قبلاً تایید شده است.', 'warning')
     return redirect(_express_commissions_redirect(filter_hint))
+
+@admin_bp.post('/express/wallet/manual-credit', endpoint='express_wallet_manual_credit')
+@login_required
+def express_wallet_manual_credit():
+    """واریز دستی به کیف پول. شارژ تأییدنشدهٔ زرین‌پال از اینجا رد نمی‌شود."""
+    try:
+        from app.hardening.permissions import PERM_FINANCE, has_permission
+        if not has_permission(PERM_FINANCE):
+            flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        pass
+    from app.express_partner.wallet_topup import record_manual_wallet_credit
+
+    phone = (request.form.get('phone') or '').strip()
+    reason = (request.form.get('reason') or '').strip()
+    try:
+        amount = int(request.form.get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    err, detail = record_manual_wallet_credit(phone=phone, amount=amount, reason=reason)
+    if err:
+        flash('واریز دستی بدون مبلغ و دلیل (حداقل ۳ نویسه) ثبت نمی‌شود.', 'error')
+        return redirect(_express_commissions_redirect('pending'))
+    _admin_audit(
+        'admin_wallet_manual_credit',
+        entity_type='commission',
+        entity_id=str(detail.get('id') or ''),
+        summary='Manual wallet credit',
+        payload={'amount': int(detail.get('amount') or 0), 'reason': reason},
+    )
+    flash('واریز دستی در کیف پول ثبت شد.', 'success')
+    return redirect(_express_commissions_redirect('approved'))
 
 @admin_bp.post('/express/commissions/<int:cid>/pay')
 @login_required

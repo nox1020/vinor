@@ -3847,6 +3847,17 @@ def _build_partner_sales_pipeline(
     for card in cards:
         if isinstance(card, dict):
             card.update(follow_card_permissions(card, ph, card_lands))
+            if str(card.get('kind') or '') != 'offer':
+                contract = build_follow_contract(card)
+                card['contract'] = contract
+                card['effective_state'] = contract['effective_state']
+                card['status_label'] = contract['status_label']
+                card['next_actor'] = contract['next_actor']
+                card['primary_action'] = contract['primary_action']
+                card['secondary_actions'] = contract['secondary_actions']
+                card['danger_actions'] = contract['danger_actions']
+                card['disabled_reason'] = contract['disabled_reason']
+                card['financial_state'] = contract['financial_state']
     tab_counts = {
         PIPELINE_REQUESTS: 0,
         PIPELINE_VISITS: 0,

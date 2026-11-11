@@ -13,9 +13,25 @@ from app.services.sms_config import get_sms_line_number
 
 # فقط تغییر واقعی موجودی کیف‌پول
 PARTNER_TXN_EVENTS = frozenset({
-    "commission_approved",  # +
-    "withdrawal_paid",      # −
+    "commission_approved",
+    "commission_pending",
+    "commission_rejected",
+    "withdrawal_paid",
 })
+
+
+def _partner_sms_allowed() -> bool:
+    """همان کلید تنظیمات پیامک همکار. خاموش باشد، رویداد فرستاده نمی‌شود."""
+    try:
+        from .zarinpal_config import get_zarinpal_settings
+        raw = (get_zarinpal_settings() or {}).get("partner_sms_enabled")
+    except Exception:
+        return True
+    if raw is None:
+        return True
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
 def _format_toman(amount: Any) -> str:
@@ -63,6 +79,10 @@ def _build_message(event: str, ctx: Dict[str, Any]) -> str:
 
     if event == "commission_approved":
         return f"وینور\n+{amt} تومن\n{title}"
+    if event == "commission_pending":
+        return f"وینور\nپورسانت در انتظار تأیید\n{title}\n{amt} تومن"
+    if event == "commission_rejected":
+        return f"وینور\nپورسانت رد شد\n{title}\n{amt} تومن"
     if event == "withdrawal_paid":
         msg = f"وینور\n−{amt} تومن\nواریز به حسابت"
         if bank:
@@ -85,6 +105,8 @@ def notify_partner_commission_txn(
     ev = (event or "").strip()
     if ev not in PARTNER_TXN_EVENTS:
         return {"ok": False, "skipped": True, "error": "not_wallet_balance_event"}
+    if not _partner_sms_allowed():
+        return {"ok": False, "skipped": True, "error": "sms_disabled"}
 
     settings = load_settings(current_app) or {}
     sms_line_number = (
@@ -94,8 +116,7 @@ def notify_partner_commission_txn(
 
     if not is_valid_iran_mobile(mobile):
         current_app.logger.warning(
-            "Partner commission txn SMS skipped: invalid phone %r event=%s",
-            partner_phone,
+            "Partner commission txn SMS skipped: invalid phone event=%s",
             ev,
         )
         return {"ok": False, "skipped": True, "error": "invalid_partner_phone"}
@@ -120,11 +141,9 @@ def notify_partner_commission_txn(
         body = sms_result.get("body") or {}
         err = str(body.get("message") or body.get("error") or "sms_send_failed")
         current_app.logger.error(
-            "Partner commission txn SMS failed mobile=%s event=%s status=%s body=%s",
-            mobile,
+            "Partner commission txn SMS failed event=%s status=%s",
             ev,
             sms_result.get("status"),
-            body,
         )
 
     _append_sms_history({
@@ -156,7 +175,7 @@ def notify_partner_commission_txn(
         )
     except Exception:
         current_app.logger.exception(
-            "commission progress chat failed event=%s phone=%s", ev, mobile
+            "commission progress chat failed event=%s", ev
         )
 
     return {"ok": ok, "skipped": False, "error": err}
