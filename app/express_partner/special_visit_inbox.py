@@ -1520,6 +1520,7 @@ def _commit_started_deal(
         "status": COMMISSION_PENDING,
         "created_at": now,
         "source": "special_inbox",
+        "visit_id": str(rec.get("id") or ""),
     })
     save_express_commissions(commissions)
     return None, {
@@ -1627,14 +1628,18 @@ def _approve_pending_deal(
     )
     if err:
         return err
-    if detail.get("idempotent"):
-        commission_record["status"] = "approved"
-        return None
+    finish_settled_deal(detail, commission_record, notify=not detail.get("idempotent"))
+    return None
+
+
+def finish_settled_deal(detail: Dict[str, Any], commission_record: Dict[str, Any], *, notify: bool) -> None:
+    """بستن آگهی و بازدید و پیامک، همان مسیر بستن پرونده. تأیید ادمین هم از اینجا می‌گذرد."""
     land_code = str(detail.get("land_code") or commission_record.get("land_code") or "").strip()
     partner_phone = str(detail.get("partner_phone") or commission_record.get("partner_phone") or "").strip()
     commission_record["status"] = "approved"
     commission_record["payout_settled"] = True
-    commission_record["owner_payout_id"] = detail.get("payout_id") or 0
+    if detail.get("payout_id"):
+        commission_record["owner_payout_id"] = detail.get("payout_id") or 0
     if land_code:
         try:
             _mark_land_sold(land_code)
@@ -1647,6 +1652,39 @@ def _approve_pending_deal(
             except Exception:
                 pass
         try:
+            from .visit_requests import (
+                DEAL_DECISION_CLOSED,
+                locked_mutate_visit_requests,
+                record_visit_deal_decision,
+                visit_deal_decision,
+            )
+
+            def _close(rows):
+                changed = False
+                for rec in rows:
+                    if not isinstance(rec, dict):
+                        continue
+                    if str(rec.get("land_code") or "").strip() != land_code:
+                        continue
+                    if partner_phone and str(rec.get("partner_phone") or "").strip() != partner_phone:
+                        continue
+                    if visit_deal_decision(rec) == DEAL_DECISION_CLOSED:
+                        continue
+                    if str(rec.get("status") or "").strip() != "completed":
+                        continue
+                    _updated, err = record_visit_deal_decision(
+                        rows,
+                        str(rec.get("id") or ""),
+                        decision="closed",
+                        actor_phone="admin",
+                    )
+                    changed = changed or not err
+                return changed
+
+            locked_mutate_visit_requests(_close)
+        except Exception:
+            pass
+        try:
             from app.closing.deal_bridge import maybe_sync_deal_on_commission_status
             maybe_sync_deal_on_commission_status(
                 partner_phone=partner_phone,
@@ -1657,6 +1695,8 @@ def _approve_pending_deal(
             )
         except Exception:
             pass
+    if not notify:
+        return
     try:
         from .commission_sms import notify_partner_commission_txn
         notify_partner_commission_txn(
@@ -1669,7 +1709,6 @@ def _approve_pending_deal(
         )
     except Exception:
         pass
-    return None
 
 
 def _reject_pending_deal(

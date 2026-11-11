@@ -71,7 +71,7 @@ def test_result_has_no_default_and_closed_names_the_amount():
         "deal_decision": "closed",
         "deal_commission_amount": 25000,
     })
-    assert "25000" in closed["status_label"]
+    assert "25،000" in closed["status_label"]
     assert closed["secondary_actions"][0]["id"] == "view_receipt"
     assert closed["primary_action"] is None
 

@@ -52,6 +52,14 @@ def _money(value: Any) -> int:
         return 0
 
 
+def _grouped(amount: int) -> str:
+    return f"{int(amount):,}".replace(",", "،")
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _visit_started(card: Dict[str, Any], now: datetime) -> bool:
     raw_date = str(card.get("visit_date") or "").strip()
     if not raw_date:
@@ -212,7 +220,7 @@ def build_follow_contract(card: Dict[str, Any], *, now: Optional[datetime] = Non
                 "رفع کسری",
                 str(card.get("wallet_charge_path") or "/express/partner/wallet/charge"),
                 method="GET",
-                confirmation=f"کسری {shortfall} تومان. بعد از شارژ این کارت تازه می‌شود.",
+                confirmation=f"کسری {_grouped(shortfall)} تومان. بعد از شارژ این کارت تازه می‌شود.",
             )
         else:
             hold_bit = "بلوکه کافی است." if hold >= amount and amount else "مانده از موجودی قابل استفاده کم می‌شود."
@@ -220,13 +228,13 @@ def build_follow_contract(card: Dict[str, Any], *, now: Optional[datetime] = Non
                 "close_case",
                 "بستن پرونده و پرداخت پورسانت",
                 owner("close_deal"),
-                confirmation=f"پرداخت {amount} تومان به {marketer}. {hold_bit}",
+                confirmation=f"پرداخت {_grouped(amount)} تومان به {marketer}. {hold_bit}",
             )
     elif state == "deal_approved":
         label = "فروش تأیید شد؛ منتظر بستن پرونده توسط مالک"
         next_actor = "owner"
     elif state == "closed":
-        label = f"پرونده بسته شد؛ {amount} تومان به کیف پول افزوده شد" if not incoming and amount else "پرونده بسته شد"
+        label = f"پرونده بسته شد؛ {_grouped(amount)} تومان به کیف پول افزوده شد" if not incoming and amount else "پرونده بسته شد"
         next_actor = "none"
         if not incoming:
             secondary.append(_action(
@@ -266,6 +274,22 @@ def build_follow_contract(card: Dict[str, Any], *, now: Optional[datetime] = Non
         next_actor = "owner"
     else:
         label = label or state
+
+    if not archived and card.get("can_archive"):
+        secondary.append(_action(
+            "archive_card",
+            "بایگانی این پیگیری",
+            f"/express/partner/api/requests/{vid}/archive",
+            tone="secondary",
+        ))
+    if not archived and card.get("can_remove"):
+        danger.append(_action(
+            "hide_card",
+            "حذف از پیگیری من",
+            f"/express/partner/requests/{vid}/remove",
+            tone="danger",
+            confirmation="این مورد فقط از پیگیری شما برداشته می‌شود و برای طرف دیگر می‌ماند.",
+        ))
 
     if card.get("deal_overdue") and state == "deal_approved":
         label = "معامله دیرکرد دارد. " + label

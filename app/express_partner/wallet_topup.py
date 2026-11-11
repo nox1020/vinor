@@ -168,3 +168,57 @@ def complete_wallet_topup(authority: str, status_param: str) -> Dict[str, Any]:
         row["ref_id"] = ref
         save_express_commissions(rows)
         return {"ok": True, "idempotent": False, "amount": _amount(row.get("commission_amount")), "ref_id": ref}
+
+
+MANUAL_CREDIT_SOURCE = "admin_manual_credit"
+MANUAL_REASON_MIN = 3
+
+
+def topup_verified_paid(row: Dict[str, Any] | None) -> bool:
+    """فقط شارژی که درگاه با ref_id تأیید کرده موجودی است."""
+    if not isinstance(row, dict):
+        return False
+    if str(row.get("source") or "") != TOPUP_SOURCE:
+        return False
+    return str(row.get("status") or "") == "approved" and bool(str(row.get("ref_id") or "").strip())
+
+
+def record_manual_wallet_credit(*, phone: str, amount: int, reason: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    """واریز دستی جدا از زرین‌پال. بدون دلیل ثبت نمی‌شود."""
+    from app.utils.storage import save_express_commissions
+
+    note = str(reason or "").strip()
+    if len(note) < MANUAL_REASON_MIN:
+        return "reason_required", {}
+    need = _amount(amount)
+    if need <= 0 or not str(phone or "").strip():
+        return "invalid_amount", {}
+    with commission_store_lock():
+        rows = _rows()
+        best = 0
+        for row in rows:
+            if isinstance(row, dict):
+                try:
+                    best = max(best, int(row.get("id") or 0))
+                except (TypeError, ValueError):
+                    continue
+        stamp = iso_z(utcnow())
+        rec = {
+            "id": best + 1,
+            "commission_type": "manual_adjustment",
+            "partner_phone": str(phone or "").strip(),
+            "land_code": "wallet",
+            "sale_amount": 0,
+            "commission_pct": 0,
+            "commission_amount": need,
+            "status": "approved",
+            "created_at": stamp,
+            "approved_at": stamp,
+            "source": MANUAL_CREDIT_SOURCE,
+            "admin_note": note,
+            "authority": "",
+            "ref_id": "",
+        }
+        rows.append(rec)
+        save_express_commissions(rows)
+        return None, {"id": rec["id"], "amount": need}

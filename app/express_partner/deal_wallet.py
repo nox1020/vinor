@@ -122,6 +122,46 @@ def find_deal_payout(commissions: List[Dict[str, Any]], deal_id: Any) -> Optiona
     return None
 
 
+def sale_settlement_key(deal: Dict[str, Any] | None) -> Tuple[str, str, str]:
+    """یک فروش = آگهی + بازدید + بازاریاب. شناسهٔ پورسانت به‌تنهایی کافی نیست."""
+    row = deal if isinstance(deal, dict) else {}
+    return (
+        str(row.get("land_code") or row.get("payout_land_code") or "").strip(),
+        str(row.get("visit_id") or row.get("visit_request_id") or row.get("payout_visit_id") or "").strip(),
+        str(row.get("partner_phone") or row.get("payout_marketer") or row.get("counterparty_phone") or "").strip(),
+    )
+
+
+def _same_sale(left: Tuple[str, str, str], right: Tuple[str, str, str]) -> bool:
+    if not left[0] or not left[2] or left[0] != right[0] or left[2] != right[2]:
+        return False
+    if left[1] and right[1]:
+        return left[1] == right[1]
+    return not left[1] and not right[1]
+
+
+def find_sale_settlement(commissions: List[Dict[str, Any]], deal: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """تسویهٔ قبلی همین فروش، حتی اگر شناسهٔ پورسانت فرق داشته باشد."""
+    want = sale_settlement_key(deal)
+    same_id = find_deal_payout(commissions, deal.get("id"))
+    if same_id is not None:
+        return same_id
+    for row in commissions or []:
+        if not isinstance(row, dict) or row is deal:
+            continue
+        if str(row.get("source") or "").strip() == PAYOUT_SOURCE and _same_sale(want, sale_settlement_key(row)):
+            return row
+        if str(row.get("commission_type") or "") != "deal":
+            continue
+        if str(row.get("status") or "").strip().lower() not in ("approved", "paid"):
+            continue
+        if not row.get("payout_settled"):
+            continue
+        if _same_sale(want, sale_settlement_key(row)):
+            return row
+    return None
+
+
 def card_wallet_fields(
     commissions: List[Dict[str, Any]] | None,
     withdrawals: List[Dict[str, Any]] | None,
@@ -176,7 +216,18 @@ def _stage_payout(
 
     amount = _amount(deal.get("commission_amount"))
     status = str(deal.get("status") or "").strip().lower()
-    existing = find_deal_payout(commissions, deal.get("id"))
+    existing = find_sale_settlement(commissions, deal)
+    same_deal = existing is not None and str(existing.get("payout_deal_id") or existing.get("id") or "") == str(deal.get("id") or "")
+    if existing is not None and not same_deal and str(existing.get("source") or "") == PAYOUT_SOURCE:
+        return "already_settled", {
+            "idempotent": False,
+            "message": "این فروش قبلاً تسویه شده است.",
+        }
+    if existing is not None and not same_deal and existing.get("payout_settled"):
+        return "already_settled", {
+            "idempotent": False,
+            "message": "این فروش قبلاً تسویه شده است.",
+        }
     settled = bool(existing) or bool(deal.get("payout_settled")) or amount == 0
     if status in ("approved", "paid") and settled:
         balance = 0
@@ -233,6 +284,9 @@ def _stage_payout(
             "approved_at": stamp,
             "source": PAYOUT_SOURCE,
             "payout_deal_id": str(deal.get("id") or ""),
+            "payout_land_code": str(deal.get("land_code") or "").strip(),
+            "payout_visit_id": str(deal.get("visit_id") or deal.get("visit_request_id") or "").strip(),
+            "payout_marketer": str(deal.get("partner_phone") or "").strip(),
             "counterparty_phone": str(deal.get("partner_phone") or "").strip(),
             "admin_note": "انتقال پورسانت معامله به مشاور",
         })
