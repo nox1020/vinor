@@ -57,9 +57,9 @@ def ascii_text(raw: Any) -> str:
     return str(raw or "").translate(_FA_DIGITS)
 
 
-def parse_amount(raw: Any) -> float:
+def parse_amount(raw: Any, *, label: str = "مبلغ چک") -> float:
     if isinstance(raw, bool) or raw is None:
-        raise CheckError("مبلغ چک باید بزرگ‌تر از صفر باشد.")
+        raise CheckError(f"{label} باید بزرگ‌تر از صفر باشد.")
     if isinstance(raw, (int, float)):
         value = float(raw)
     else:
@@ -68,15 +68,15 @@ def parse_amount(raw: Any) -> float:
             text = text.replace(ch, "")
         text = text.strip()
         if not text:
-            raise CheckError("مبلغ چک باید بزرگ‌تر از صفر باشد.")
+            raise CheckError(f"{label} باید بزرگ‌تر از صفر باشد.")
         try:
             value = float(text)
         except ValueError as exc:
-            raise CheckError("مبلغ چک نامعتبر است.") from exc
+            raise CheckError(f"{label} نامعتبر است.") from exc
     if math.isnan(value) or math.isinf(value) or value <= 0:
-        raise CheckError("مبلغ چک باید بزرگ‌تر از صفر باشد.")
+        raise CheckError(f"{label} باید بزرگ‌تر از صفر باشد.")
     if value > 1e16:
-        raise CheckError("مبلغ چک نامعتبر است.")
+        raise CheckError(f"{label} نامعتبر است.")
     return value
 
 
@@ -122,6 +122,64 @@ def _fold(raw: Any, key: str) -> str:
 
 def _sayad(raw: Any) -> str:
     return "".join(ch for ch in ascii_text(raw) if ch.isdigit())
+
+
+def _kind_of(data: dict[str, Any], current: dict[str, Any] | None) -> str:
+    if "kind" in data and data.get("kind") is not None:
+        kind = str(data.get("kind") or "").strip().lower()
+    else:
+        kind = str((current or {}).get("kind") or "check")
+    if kind not in ("check", "deposit"):
+        raise CheckError("نوع تراکنش نامعتبر است.")
+    return kind
+
+
+def _payments_of(
+    data: dict[str, Any],
+    current: dict[str, Any] | None,
+    amount: float,
+) -> list[dict[str, Any]]:
+    """Keep the previous list when the client omits `payments`."""
+    if "payments" not in data:
+        return [dict(row) for row in ((current or {}).get("payments") or []) if isinstance(row, dict)]
+    raw = data.get("payments")
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list):
+        raise CheckError("تاریخچه پرداخت نامعتبر است.")
+    out: list[dict[str, Any]] = []
+    total = 0.0
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise CheckError("یکی از پرداخت‌ها نامعتبر است.")
+        paid = parse_amount(_pick(entry, "amount"), label="مبلغ پرداخت")
+        when = parse_calendar_date(
+            _pick(entry, "paid_at", "paidAt"),
+            label="تاریخ پرداخت",
+        )
+        note = _fold(_pick(entry, "note", default=""), "note")
+        total += paid
+        payment_id = entry.get("id")
+        if payment_id in ("", None):
+            payment_id = None
+        else:
+            try:
+                payment_id = int(payment_id)
+            except (TypeError, ValueError) as exc:
+                raise CheckError("شناسه پرداخت نامعتبر است.") from exc
+            if payment_id <= 0:
+                raise CheckError("شناسه پرداخت نامعتبر است.")
+        created = str(_pick(entry, "created_at", "createdAt") or "").strip() or now_iso()
+        out.append({
+            "id": payment_id,
+            "amount": paid,
+            "paid_at": when,
+            "note": note,
+            "created_at": created,
+        })
+    if total - amount > 0.001:
+        raise CheckError("مبلغ پرداخت از مانده بیشتر است.")
+    return out
 
 
 def _pick(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -241,6 +299,9 @@ class CheckService:
             raise CheckError("وضعیت چک نامعتبر است.")
         if direction == DIRECTION_PAYABLE and status == STATUS_ENDORSED:
             raise CheckError("چک پرداختی را نمی‌توان خرج‌شده ثبت کرد.")
+        kind = _kind_of(data, current)
+        if kind == "deposit" and status in ("bounced", STATUS_ENDORSED):
+            raise CheckError("ودیعه را نمی‌توان برگشتی یا خرج‌شده ثبت کرد.")
         if enforce_transition and current is not None:
             previous = str(current.get("status") or STATUS_PENDING)
             allowed = TRANSITIONS.get(previous, frozenset({previous}))
@@ -261,7 +322,7 @@ class CheckService:
 
         number = _fold(_pick(data, "check_number", "checkNumber", default=""), "check_number")
         sayad = _sayad(_pick(data, "sayad_id", "sayadId", default=""))
-        if not number and not sayad:
+        if kind != "deposit" and not number and not sayad:
             raise CheckError("شماره چک یا شناسه صیادی را وارد کنید.")
         if sayad and len(sayad) != 16:
             raise CheckError("شناسه صیادی باید ۱۶ رقم باشد.")
@@ -269,6 +330,8 @@ class CheckService:
         bank = _fold(_pick(data, "bank_name", "bankName", default=""), "bank_name")
         branch = _fold(_pick(data, "branch", default=""), "branch")
         party = _fold(_pick(data, "counterparty", default=""), "counterparty")
+        if kind == "deposit" and not party:
+            raise CheckError("طرف حساب ودیعه را وارد کنید.")
         purpose = _fold(_pick(data, "purpose", default=""), "purpose")
         note = _fold(_pick(data, "note", default=""), "note")
 
@@ -293,15 +356,17 @@ class CheckService:
             if check_id <= 0:
                 raise CheckError("شناسه چک نامعتبر است.")
 
-        self._ensure_unique(
-            direction=direction,
-            number=number,
-            bank=bank,
-            sayad=sayad,
-            self_id=check_id,
-            extra=others or [],
-            against_db=against_db,
-        )
+        if kind != "deposit":
+            self._ensure_unique(
+                direction=direction,
+                number=number,
+                bank=bank,
+                sayad=sayad,
+                self_id=check_id,
+                extra=others or [],
+                against_db=against_db,
+            )
+        payments = _payments_of(data, current, amount)
         stamp = now_iso()
         created = str(_pick(data, "created_at", "createdAt") or "").strip() or stamp
         archived_at = _archived_value(data, current, stamp)
@@ -325,6 +390,8 @@ class CheckService:
             "archived_at": archived_at,
             "endorsed_to": endorsed_to,
             "endorsed_for": endorsed_for,
+            "kind": kind,
+            "payments": payments,
             "created_at": created,
             "updated_at": stamp,
         }
@@ -355,6 +422,8 @@ class CheckService:
             )
         rows.extend(row for row in extra if str(row.get("status")) != STATUS_CANCELLED)
         for other in rows:
+            if str(other.get("kind") or "check") == "deposit":
+                continue
             other_id = other.get("id")
             if self_id is not None and other_id is not None and int(other_id) == int(self_id):
                 continue

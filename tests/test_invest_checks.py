@@ -391,6 +391,106 @@ def test_endorsed_to_and_for_are_kept_and_searchable(client):
     assert [r["id"] for r in found] == [item["id"]]
 
 
+def test_deposit_and_partial_payment_round_trip(client):
+    _login(client, OWNER)
+    missing = client.post("/invest/api/v1/checks", json=_payload(
+        kind="deposit",
+        sayad_id="",
+        check_number="",
+        counterparty="",
+    ))
+    assert missing.status_code == 400
+    assert "طرف حساب" in missing.get_json()["message"]
+
+    created = client.post("/invest/api/v1/checks", json=_payload(
+        kind="deposit",
+        sayad_id="",
+        check_number="",
+        counterparty="مالک",
+        amount=1000,
+    ))
+    assert created.status_code == 200
+    item = created.get_json()["item"]
+    assert item["kind"] == "deposit"
+    assert "payments" not in item
+    assert item["check_number"] == ""
+    assert item["sayad_id"] == ""
+
+    paid = client.patch(f"/invest/api/v1/checks/{item['id']}", json={
+        "payments": [{
+            "amount": 400,
+            "paid_at": "2026-10-06",
+            "note": "قسط اول",
+        }],
+    })
+    assert paid.status_code == 200
+    row = paid.get_json()["item"]
+    assert row["kind"] == "deposit"
+    assert row["payments"][0]["amount"] == 400
+    assert row["payments"][0]["note"] == "قسط اول"
+    assert row["payments"][0]["paid_at"] == "2026-10-06"
+
+    # An older client that omits the new fields must not wipe them.
+    kept = client.patch(
+        f"/invest/api/v1/checks/{item['id']}",
+        json={"note": "یادداشت"},
+    ).get_json()["item"]
+    assert kept["kind"] == "deposit"
+    assert kept["payments"][0]["amount"] == 400
+    assert kept["note"] == "یادداشت"
+
+    over = client.patch(f"/invest/api/v1/checks/{item['id']}", json={
+        "payments": [{"amount": 5000, "paid_at": "2026-10-07", "note": ""}],
+    })
+    assert over.status_code == 400
+
+    mirrored = client.put("/invest/api/v1/settings", json={
+        "client_checks": [{
+            "id": 88011,
+            "direction": "payable",
+            "kind": "deposit",
+            "amount": 900,
+            "issue_date": "2026-10-01",
+            "due_date": "2026-10-20",
+            "counterparty": "شرکت",
+            "status": "pending",
+            "payments": [{
+                "amount": 100,
+                "paid_at": "2026-10-02",
+                "note": "پیش",
+            }],
+        }],
+    })
+    assert mirrored.status_code == 200
+    body = mirrored.get_json()["settings"]
+    assert "client_checks_error" not in body
+    echoed = body["client_checks"]
+    assert echoed[0]["id"] == 88011
+    assert echoed[0]["kind"] == "deposit"
+    assert echoed[0]["payments"][0]["amount"] == 100
+
+
+def test_migration_13_adds_kind_and_payments_without_touching_rows(tmp_path):
+    import sqlite3
+
+    from invest_app.database.migrations import _migrate_13
+
+    conn = sqlite3.connect(tmp_path / "old.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE checks (id INTEGER PRIMARY KEY, amount REAL, status TEXT, updated_at TEXT)"
+    )
+    conn.execute("INSERT INTO checks VALUES (1, 5, 'pending', 'b')")
+    _migrate_13(conn)
+    _migrate_13(conn)
+    row = dict(conn.execute("SELECT * FROM checks").fetchone())
+    assert row["kind"] == "check"
+    assert row["amount"] == 5 and row["updated_at"] == "b"
+    assert conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='check_payments'"
+    ).fetchone()
+
+
 def test_migration_12_adds_endorse_columns_without_touching_rows(tmp_path):
     import sqlite3
 

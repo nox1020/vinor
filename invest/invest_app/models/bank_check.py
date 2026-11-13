@@ -93,7 +93,20 @@ def row_to_public(row: dict[str, Any], *, today) -> dict[str, Any]:
     open_row = status in OPEN_STATUSES
     archived_at = str(row.get("archived_at") or "").strip() or None
     live = archived_at is None
-    return {
+    kind = str(row.get("kind") or "check")
+    payments = [
+        {
+            "id": payment.get("id"),
+            "check_id": int(row["id"]),
+            "amount": json_amount(float(payment.get("amount") or 0)),
+            "paid_at": str(payment.get("paid_at") or ""),
+            "note": str(payment.get("note") or ""),
+            "created_at": str(payment.get("created_at") or ""),
+        }
+        for payment in (row.get("payments") or [])
+        if isinstance(payment, dict)
+    ]
+    public = {
         "id": int(row["id"]),
         "direction": direction,
         "direction_label": direction_label(direction),
@@ -125,3 +138,10 @@ def row_to_public(row: dict[str, Any], *, today) -> dict[str, Any]:
         "created_at": str(row.get("created_at") or ""),
         "updated_at": str(row.get("updated_at") or ""),
     }
+    # Omit the defaults. An older app treats a missing key as "this server
+    # does not store the field" and keeps the copy already on the phone.
+    if kind != "check":
+        public["kind"] = kind
+    if payments:
+        public["payments"] = payments
+    return public

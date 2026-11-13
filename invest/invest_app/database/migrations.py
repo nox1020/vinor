@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-CURRENT_SCHEMA_VERSION = 12
+CURRENT_SCHEMA_VERSION = 13
 
 _MIGRATION_4_SQL = """
 CREATE TABLE IF NOT EXISTS checks (
@@ -314,6 +314,31 @@ def _migrate_12(conn: sqlite3.Connection) -> None:
     logger.info("Applied schema migration version 12 (checks.endorsed_to/endorsed_for)")
 
 
+def _migrate_13(conn: sqlite3.Connection) -> None:
+    """نوع تراکنش (چک/ودیعه) و پرداخت‌های جزئی. افزودنی؛ ردیف‌های قبلی چک می‌مانند."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(checks)").fetchall()}
+    if "kind" not in cols:
+        conn.execute(
+            "ALTER TABLE checks ADD COLUMN kind TEXT NOT NULL DEFAULT 'check'"
+        )
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS check_payments (
+            id         INTEGER PRIMARY KEY,
+            check_id   INTEGER NOT NULL,
+            amount     REAL NOT NULL,
+            paid_at    TEXT NOT NULL,
+            note       TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_check_payments_check_id
+            ON check_payments (check_id);
+        """
+    )
+    conn.commit()
+    logger.info("Applied schema migration version 13 (checks.kind, check_payments)")
+
+
 def _migrate_11(conn: sqlite3.Connection) -> None:
     """صف آفلاین اپ: پاسخ ذخیره‌شدهٔ نوشتن‌های دارایی/معامله/چک/تنظیمات برای تکرار امن (افزودنی)."""
     conn.executescript(_MIGRATION_11_SQL)
@@ -445,6 +470,11 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     if 12 not in applied:
         _migrate_12(conn)
         _record(conn, 12)
+        applied = _applied_versions(conn)
+
+    if 13 not in applied:
+        _migrate_13(conn)
+        _record(conn, 13)
         applied = _applied_versions(conn)
 
     latest = max(applied) if applied else 0

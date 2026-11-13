@@ -75,9 +75,22 @@ CREATE TABLE IF NOT EXISTS checks (
     archived_at   TEXT,
     endorsed_to   TEXT NOT NULL DEFAULT '',
     endorsed_for  TEXT NOT NULL DEFAULT '',
+    kind          TEXT NOT NULL DEFAULT 'check',
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS check_payments (
+    id         INTEGER PRIMARY KEY,
+    check_id   INTEGER NOT NULL,
+    amount     REAL NOT NULL,
+    paid_at    TEXT NOT NULL,
+    note       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_check_payments_check_id
+    ON check_payments (check_id);
 
 CREATE INDEX IF NOT EXISTS idx_checks_due ON checks (due_date);
 CREATE INDEX IF NOT EXISTS idx_checks_status ON checks (status);
