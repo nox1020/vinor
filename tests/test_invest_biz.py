@@ -70,15 +70,25 @@ def test_import_matches_sheet_and_is_guarded(client):
     assert r.status_code == 200, r.get_json()
     biz = client.get(B + "?year=1405").get_json()["biz"]
     assert len(biz["trades"]) == 3
-    assert biz["trades_totals"]["profit"] == 75 + 30 + 40
+    # سود خالص: معامله ۳ پس از ۷ کد و نقشه (۴۰ − ۷)
+    assert biz["trades_totals"]["profit"] == 75 + 30 + 33
     assert biz["trades_totals"]["extra_cost"] == 7
     t = {x["title"]: x for x in biz["trades"]}
     assert t["معامله 2"]["days"] == 107
     assert t["معامله 3"]["days"] == 178
     assert round(t["معامله 1"]["profit_pct"]) == 43  # profit / sell
+    assert t["معامله 1"]["profit_pct_base"] == "sell"
+    assert t["معامله 3"]["profit"] == 33 and t["معامله 3"]["gross_profit"] == 40
+    assert round(t["معامله 3"]["profit_pct"]) == 33  # (100 − 60 − 7) / 100
     assert t["معامله 1"]["buy_date"] == "1405/01/20"
-    assert [m["net"] for m in biz["months"][:3]] == [85, -26, 0]
-    assert biz["months_totals"]["income"] == 100 and biz["months_totals"]["net"] == 59
+    m1 = biz["months"][0]
+    # هر سه معامله در فروردین فروخته شده‌اند: سود خالص ۱۳۸ به خالص ماه اضافه می‌شود
+    assert m1["trade_profit"] == 138 and m1["trade_gross"] == 145 and m1["sold_count"] == 3
+    assert m1["bought_count"] == 1 and m1["bought_amount"] == 100  # معامله ۱ در فروردین خریده شد
+    assert m1["income_dup_trades"] is False and m1["income_effective"] == 100
+    assert [m["net"] for m in biz["months"][:3]] == [100 - 10 - 5 + 138, -26, 0]
+    assert biz["months_totals"]["income"] == 100 and biz["months_totals"]["trade_profit"] == 138
+    assert biz["months_totals"]["net"] == 223 - 26
     # second import never writes
     r = client.post(B + "/import", json=_seed())
     assert r.get_json()["already_has_data"] is True
@@ -179,3 +189,33 @@ def test_pwo_idempotency_key(client):
     r = client.put(P + "/target", json={"target": 9}, headers=h)
     assert r.get_json()["replayed"] is True
     assert r.get_json()["pwo"]["target"] == 5
+
+
+def test_deal_profit_in_net_by_sell_month_and_no_double_count(client):
+    _login(client, OWNER)
+    client.post(B + "/trades", json={"buy_date": "1405/08/01", "sell_date": "1405/08/20",
+                                     "buy_amount": 5_000_000_000, "sell_amount": 6_000_000_000,
+                                     "extra_cost": 20_000_000, "title": "برج"})
+    client.post(B + "/trades", json={"buy_date": "1405/08/10", "buy_amount": 3_000_000_000})
+    m8 = client.get(B + "?year=1405").get_json()["biz"]["months"][7]
+    assert m8["trade_profit"] == 980_000_000 and m8["sold_count"] == 1
+    assert m8["bought_count"] == 2 and m8["bought_amount"] == 8_000_000_000
+    assert m8["has_ops"] is False and m8["net"] == 980_000_000
+    # درآمد دیگر دفتر + سود معامله
+    client.put(B + "/months/1405/8", json={"income": 50_000_000, "staff": 10_000_000})
+    m8 = client.get(B + "?year=1405").get_json()["biz"]["months"][7]
+    assert m8["income_dup_trades"] is False
+    assert m8["net"] == 50_000_000 - 10_000_000 + 980_000_000
+    # روش قدیمی: درآمد = سود ناخالص معامله → دوبار حساب نمی‌شود و علامت می‌خورد
+    client.put(B + "/months/1405/8", json={"income": 1_000_000_000})
+    m8 = client.get(B + "?year=1405").get_json()["biz"]["months"][7]
+    assert m8["income_dup_trades"] is True and m8["income_effective"] == 0
+    assert m8["income"] == 1_000_000_000
+    assert m8["net"] == -10_000_000 + 980_000_000
+    other_year = client.get(B + "?year=1404").get_json()["biz"]["months"][7]
+    assert other_year["trade_profit"] == 0 and other_year["bought_count"] == 0
+
+
+def test_explicit_year_wins_over_server_clock(client):
+    _login(client, OWNER)
+    assert client.get(B + "?year=1406").get_json()["biz"]["year"] == 1406
