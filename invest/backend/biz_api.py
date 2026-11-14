@@ -3,7 +3,11 @@
 
 - سابقه خرید و فروش ملک (biz_property_trades)
 - جدول ماهانه: کارمندان، تبلیغات، درآمد (biz_monthly_ops). ستون PWO از ماژول PWO خوانده می‌شود
-  (تکرار نمی‌شود). خالص ماه = درآمد − کارمندان − PWO − تبلیغات.
+  (تکرار نمی‌شود).
+- خالص ماه = درآمد دفتر − کارمندان − PWO − تبلیغات + سود معاملات ملکِ فروخته‌شده در همان ماه
+  (سود هر معامله = فروش − خرید − کد و نقشه؛ درصد سود نسبت به مبلغ فروش، مثل شیت).
+- اگر درآمد واردشدهٔ ماه همان سود معاملات آن ماه باشد (روش قدیمی «پر کردن درآمد»)، دوبار حساب
+  نمی‌شود: income_effective = 0 و income_dup_trades = true تا کاربر آن را اصلاح کند.
 """
 from __future__ import annotations
 
@@ -51,28 +55,73 @@ def _jd(s: str):
 
 def trade_public(r) -> dict:
     buy, sell = float(r["buy_amount"]), float(r["sell_amount"])
+    extra = float(r["extra_cost"] or 0)
     sold = bool(r["sell_date"]) and sell > 0
-    profit = sell - buy if sold else None
+    gross = sell - buy if sold else None
+    # سود خالص معامله: پس از کد و نقشه (extra_cost)
+    profit = gross - extra if sold else None
     days = (_jd(r["sell_date"]) - _jd(r["buy_date"])).days if r["sell_date"] else None
     return {
         "id": r["id"], "buy_date": r["buy_date"], "sell_date": r["sell_date"],
         "buy_amount": buy, "sell_amount": sell, "area": r["area"], "title": r["title"],
-        "extra_cost": float(r["extra_cost"]), "note": r["note"],
-        "days": days, "profit": profit,
-        # مثل شیت: درصد سود/زیان = سود ÷ مبلغ فروش
+        "extra_cost": extra, "note": r["note"],
+        "days": days, "profit": profit, "gross_profit": gross,
+        # مثل شیت: درصد سود/زیان (خالص) = سود ÷ مبلغ فروش
         "profit_pct": (profit / sell * 100.0) if profit is not None and sell > 0 else None,
+        "profit_pct_base": "sell",
         "updated_at": r["updated_at"],
     }
 
 
-def _month_public(year: int, month: int, op, pwo: float) -> dict:
+def _month_key(d: str):
+    """'1405/08/20' → (1405, 8); خالی یا نامعتبر → None."""
+    try:
+        y, m, _ = (int(x) for x in str(d or "").split("/"))
+        return y, m
+    except ValueError:
+        return None
+
+
+def income_duplicates_trades(income: float, trade_profit: float, trade_gross: float) -> bool:
+    """درآمدی که با سود (خالص یا ناخالص) معاملات ماه برابر است (تا ۱۰۰۰ تومان، حداکثر ۰٫۵٪)
+    از روی همان معاملات وارد شده و دوباره روی سود خودکار معاملات جمع نمی‌شود."""
+    if not income:
+        return False
+
+    def near(ref: float) -> bool:
+        return bool(ref) and abs(income - ref) <= min(1000.0, abs(ref) * 0.005)
+
+    return near(trade_profit) or near(trade_gross)
+
+
+def _deal_stats(trades: list[dict], year: int, month: int) -> dict:
+    tp = tg = sold_amt = bought_amt = 0.0
+    sold_n = bought_n = 0
+    for t in trades:
+        if t["profit"] is not None and _month_key(t["sell_date"]) == (year, month):
+            sold_n += 1
+            tp += t["profit"]
+            tg += t["gross_profit"]
+            sold_amt += t["sell_amount"]
+        if _month_key(t["buy_date"]) == (year, month):
+            bought_n += 1
+            bought_amt += t["buy_amount"]
+    return {"trade_profit": tp, "trade_gross": tg, "sold_count": sold_n, "sold_amount": sold_amt,
+            "bought_count": bought_n, "bought_amount": bought_amt}
+
+
+def _month_public(year: int, month: int, op, pwo: float, trades: list[dict] | None = None) -> dict:
     staff = float(op["staff"]) if op else 0.0
     ads = float(op["ads"]) if op else 0.0
     income = float(op["income"]) if op else 0.0
+    deals = _deal_stats(trades or [], year, month)
+    dup = income_duplicates_trades(income, deals["trade_profit"], deals["trade_gross"])
+    eff = 0.0 if dup else income
     return {"year": year, "month": month, "id": op["id"] if op else None,
             "staff": staff, "pwo": pwo, "ads": ads, "income": income,
+            "income_effective": eff, "income_dup_trades": dup, **deals,
             "note": op["note"] if op else "",
-            "net": income - staff - pwo - ads, "has_ops": op is not None}
+            "net": eff - staff - pwo - ads + deals["trade_profit"], "has_ops": op is not None}
 
 
 def snapshot(conn, year: int | None = None) -> dict:
@@ -87,9 +136,10 @@ def snapshot(conn, year: int | None = None) -> dict:
     if year not in years:
         years.append(year)
         years.sort()
-    months = [_month_public(year, m, ops.get((year, m)), float(pwo_months.get((year, m), 0.0)))
+    months = [_month_public(year, m, ops.get((year, m)), float(pwo_months.get((year, m), 0.0)), trades)
               for m in range(1, 13)]
-    tot = {k: sum(m[k] for m in months) for k in ("staff", "pwo", "ads", "income", "net")}
+    tot = {k: sum(m[k] for m in months)
+           for k in ("staff", "pwo", "ads", "income", "income_effective", "trade_profit", "net")}
     sold = [t for t in trades if t["profit"] is not None]
     return {
         "trades": trades,
