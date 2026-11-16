@@ -734,16 +734,114 @@ class nardeban:
             token,
             {"data": {"data": values, "online_request_response_data": {}}, "page": page_no},
         ).json()
+        action = (submit_json or {}).get("action") if isinstance(submit_json, dict) else None
+        print(f"[payment] cost-v2 submit action: {self._describe_action(action)}")
         order_id = self._find_order_id(submit_json)
-        try:
-            act = (submit_json or {}).get("action") or {}
-            print(f"[payment] cost-v2 submit: action={act.get('type')} order={'yes' if order_id else 'no'}")
-        except Exception:
-            pass
+        if not order_id:
+            # وب دیوار: پاسخ submit فقط {"action": START_PAYMENT} است؛ کلاینت این action را
+            # اجرا می‌کند: POST {API_URL}{rest_request_path} با بدنهٔ payload.request_data
+            # و از پاسخ order_id می‌گیرد، بعد به promote/payment-method/{order_id} می‌رود.
+            start = self._find_action(submit_json, "START_PAYMENT")
+            if start is not None:
+                order_id = self._execute_start_payment(start)
         if not order_id:
             keys = sorted(submit_json.keys()) if isinstance(submit_json, dict) else type(submit_json).__name__
-            raise ValueError(f"order_id not found in cost-v2 submit response: keys={keys}")
+            raise ValueError(
+                f"order_id not found in cost-v2 submit response: keys={keys} "
+                f"action={self._describe_action(action)}"
+            )
         return order_id
+
+    # --- START_PAYMENT action (services bundle: Nc/Ic/Sc) -------------------
+    _TOKENISH_RE = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9_-]{6,}$|^[A-Za-z0-9_-]{16,}$")
+
+    @classmethod
+    def _mask_path(cls, path) -> str:
+        """مسیر URL با توکن‌های ماسک‌شده (برای لاگ)."""
+        try:
+            parts = _urlsplit(str(path or ""))
+        except Exception:
+            return "<bad-path>"
+        segs = ["<tok>" if cls._TOKENISH_RE.match(seg or "") else seg for seg in (parts.path or "").split("/")]
+        out = "/".join(segs)
+        if parts.query:
+            out += "?" + "&".join(q.split("=", 1)[0] + "=<v>" for q in parts.query.split("&") if q)
+        return out
+
+    @classmethod
+    def _describe_action(cls, action, depth=0) -> str:
+        """ساختار غیرمحرمانهٔ action: type، کلیدهای payload، مسیر با توکن ماسک‌شده."""
+        if not isinstance(action, dict):
+            return type(action).__name__ if action is not None else "none"
+        typ = action.get("type")
+        payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+        bits = [f"type={typ}", f"keys={sorted(action.keys())}"]
+        if payload:
+            bits.append(f"payload_keys={sorted(payload.keys())}")
+            rd = payload.get("request_data")
+            if isinstance(rd, dict):
+                inner = rd.get("request_data")
+                bits.append(f"request_data_keys={sorted(rd.keys())}")
+                if isinstance(inner, dict):
+                    bits.append(f"inner_keys={sorted(inner.keys())}")
+            for k in ("rest_request_path", "url", "link", "web_url", "path"):
+                if isinstance(payload.get(k), str):
+                    bits.append(f"{k}={cls._mask_path(payload[k])}")
+            nested = payload.get("action")
+            if isinstance(nested, dict) and depth < 2:
+                bits.append("nested{" + cls._describe_action(nested, depth + 1) + "}")
+        return " ".join(bits)
+
+    @staticmethod
+    def _find_action(obj, action_type):
+        stack = [obj]
+        seen = 0
+        while stack and seen < 2000:
+            seen += 1
+            cur = stack.pop()
+            if isinstance(cur, dict):
+                if cur.get("type") == action_type and isinstance(cur.get("payload"), dict):
+                    return cur
+                stack.extend(cur.values())
+            elif isinstance(cur, list):
+                stack.extend(cur)
+        return None
+
+    def _execute_start_payment(self, action):
+        """مثل Nc.execute وب: POST https://api.divar.ir{rest_request_path} با payload.request_data.
+
+        این درخواست فقط سفارش را می‌سازد (order_id)؛ پول کسر نمی‌شود. بدون retry (POST).
+        """
+        payload = action.get("payload") or {}
+        path = str(payload.get("rest_request_path") or "").strip()
+        if not path:
+            raise ValueError("START_PAYMENT action without rest_request_path")
+        parts = _urlsplit(path)
+        if parts.scheme or parts.netloc or not parts.path.lstrip("/").startswith("v8/"):
+            raise ValueError(f"START_PAYMENT unexpected rest_request_path: {self._mask_path(path)}")
+        request_data = payload.get("request_data")
+        if not isinstance(request_data, dict):
+            request_data = {}
+        url = "https://api.divar.ir/" + path.lstrip("/")
+        hdr = {**self.headers, "Authorization": divar_authorization_header(str(self.apikey))}
+        r = self._request_with_retries("POST", url, headers=hdr, json_data=request_data)
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+        order_id = None
+        if isinstance(data, dict):
+            order_id = data.get("order_id") or data.get("orderId")
+            if not order_id:
+                order_id = self._find_order_id(data)
+        print(
+            f"[payment] START_PAYMENT {self._mask_path(path)} -> "
+            f"order={'yes' if order_id else 'no'} source={(data or {}).get('source') if isinstance(data, dict) else None}"
+        )
+        if not order_id:
+            keys = sorted(data.keys()) if isinstance(data, dict) else type(data).__name__
+            raise ValueError(f"order_id not found in cost-v2 submit response (START_PAYMENT): keys={keys}")
+        return str(order_id).strip()
 
     def createFlow(self, order):
         """POST flow-v3 (مثل صفحهٔ «انتخاب روش پرداخت» وب)؛ پاسخ شامل option_row_values است."""
