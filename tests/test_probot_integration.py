@@ -28,6 +28,13 @@ def probot_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PROBOT_AUTOSTART", "0")
     return data
 
+def _write_unconfigured(probot_env):
+    """Placeholder data-dir config so packaged default is not used."""
+    probot_env.mkdir(parents=True, exist_ok=True)
+    (probot_env / "configs.json").write_text(
+        json.dumps({"token": "YOUR_BALE_BOT_TOKEN", "admin": 0}), encoding="utf-8"
+    )
+
 
 def _make_client(tmp_path, monkeypatch):
     monkeypatch.setenv("INSTANCE_PATH", str(tmp_path / "instance"))
@@ -67,7 +74,22 @@ def test_config_env_overrides_file(probot_env, monkeypatch):
     from probot import paths
     from probot.loadConfig import configBot
 
-    assert not paths.is_configured()
+    # Packaged default is used when the data-dir file is absent.
+    assert not (probot_env / "configs.json").exists()
+    assert paths.is_configured()
+    packed = paths.load_file_config()
+    assert packed.get("token")
+    assert not str(packed.get("token")).upper().startswith("YOUR_")
+    # Env still overrides the packaged default (no data-dir file yet).
+    monkeypatch.setenv("PROBOT_BALE_TOKEN", "111:env-token")
+    monkeypatch.setenv("PROBOT_ADMIN_ID", "777")
+    env_over_packed = paths.load_config()
+    assert env_over_packed["token"] == "111:env-token"
+    assert paths.load_file_config().get("token") != "111:env-token"
+    monkeypatch.delenv("PROBOT_BALE_TOKEN", raising=False)
+    monkeypatch.delenv("PROBOT_ADMIN_ID", raising=False)
+
+    # A data-dir file, if present, wins over the packaged default.
     probot_env.mkdir(parents=True, exist_ok=True)
     (probot_env / "configs.json").write_text(
         json.dumps({"token": "YOUR_BALE_BOT_TOKEN", "admin": 0, "start_hour": 9}), encoding="utf-8"
@@ -94,6 +116,8 @@ def test_config_env_overrides_file(probot_env, monkeypatch):
 
 
 def test_panel_disabled_without_token(probot_env, tmp_path, monkeypatch):
+    # Explicit unconfigured data-dir file (not the packaged default).
+    _write_unconfigured(probot_env)
     _app, client = _make_client(tmp_path, monkeypatch)
     resp = client.get("/probot/login")
     assert resp.status_code == 503
@@ -101,6 +125,27 @@ def test_panel_disabled_without_token(probot_env, tmp_path, monkeypatch):
     assert not (probot_env / "bot.db").exists()
     # Vinor itself is unaffected
     assert client.get("/healthz").status_code == 204
+
+
+def test_packaged_default_enables_panel_login(probot_env, tmp_path, monkeypatch):
+    """Empty data dir + committed default => login page, not 503."""
+    assert not (probot_env / "configs.json").exists()
+    from probot import paths
+
+    assert paths.is_configured()
+    _app, client = _make_client(tmp_path, monkeypatch)
+    home = client.get("/probot/")
+    assert home.status_code == 303
+    assert home.headers["Location"].endswith("/probot/login")
+    page = client.get("/probot/login")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "فعال نشده" not in html
+    assert 'name="csrf_token"' in html
+    # Never leak the packaged token into the login page.
+    packed_token = str(paths.load_file_config().get("token") or "")
+    if packed_token:
+        assert packed_token not in html
 
 
 def test_panel_requires_login_and_has_csrf(probot_env, tmp_path, monkeypatch):
@@ -162,6 +207,7 @@ def test_divar_relay_disabled_without_secret(probot_env, tmp_path, monkeypatch):
 def test_runner_not_configured_is_noop(probot_env, monkeypatch):
     from probot import runner
 
+    _write_unconfigured(probot_env)
     spawned = []
     monkeypatch.setattr(runner, "spawn_detached", lambda: spawned.append(1))
     assert runner.ensure() == 0
@@ -200,6 +246,38 @@ def test_autostart_spawns_once_when_configured(probot_env, monkeypatch):
     runner.maybe_autostart()
     runner.maybe_autostart()  # throttled
     assert spawned == [1]
+
+
+def test_autostart_uses_packaged_default_when_data_dir_empty(probot_env, monkeypatch):
+    from probot import paths, runner
+
+    assert not (probot_env / "configs.json").exists()
+    assert paths.is_configured()
+    monkeypatch.setenv("PROBOT_AUTOSTART", "1")
+    spawned = []
+    monkeypatch.setattr(runner, "spawn_detached", lambda: spawned.append(1))
+    monkeypatch.setattr(runner, "_last_autostart_check", 0.0)
+    runner.maybe_autostart()
+    assert spawned == [1]
+
+
+def test_seed_data_config_copies_packaged_not_empty(probot_env):
+    from probot import paths
+
+    assert not (probot_env / "configs.json").exists()
+    dest = paths.seed_data_config()
+    assert dest == str(probot_env / "configs.json")
+    assert (probot_env / "configs.json").is_file()
+    data = json.loads((probot_env / "configs.json").read_text(encoding="utf-8"))
+    assert data != {}
+    assert data.get("token")
+    assert not str(data.get("token")).upper().startswith("YOUR_")
+    # Second call must not rewrite / clobber an existing data-dir file.
+    data["start_hour"] = 3
+    (probot_env / "configs.json").write_text(json.dumps(data), encoding="utf-8")
+    paths.seed_data_config()
+    again = json.loads((probot_env / "configs.json").read_text(encoding="utf-8"))
+    assert again.get("start_hour") == 3
 
 
 def test_bot_module_uses_data_dir(probot_env, monkeypatch):

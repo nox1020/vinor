@@ -1,5 +1,6 @@
-# هیچ دادهٔ زمان اجرا یا سکرتی در گیت نیست؛ همه در پوشهٔ داده (PROBOT_DATA_DIR) هستند.
-configs.json
+# Runtime data stays in the data dir (instance/probot), not in git.
+# Packaged configs.json in this folder is a committed default fallback.
+# Do not ignore it here or git will skip the packaged default.
 tokens.json
 *.db
 *.db-journal

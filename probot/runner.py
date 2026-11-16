@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 
-from .paths import REPO_ROOT, config_file, data_dir, data_path, is_configured
+from .paths import REPO_ROOT, data_dir, data_path, is_configured, seed_data_config
 
 try:
     import fcntl  # type: ignore
@@ -233,10 +233,9 @@ def foreground() -> int:
             return 0
     with open(_pid_path(), "w", encoding="utf-8") as f:
         f.write(str(os.getpid()))
-    # توابع ذخیرهٔ ساعت‌ها configs.json را می‌خوانند و بازنویسی می‌کنند؛ فایل باید وجود داشته باشد.
-    if not os.path.exists(config_file()):
-        with open(config_file(), "w", encoding="utf-8") as f:
-            f.write("{}\n")
+    # توابع ذخیرهٔ ساعت‌ها configs.json پوشهٔ داده را می‌خوانند و بازنویسی می‌کنند.
+    # اگر فایل نباشد، پیش‌فرض بسته‌شده کپی می‌شود — نه یک {} خالی که توکن را بپوشاند.
+    seed_data_config()
     try:
         from . import bot  # import = chdir به پوشهٔ داده + مقداردهی
 

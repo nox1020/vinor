@@ -15,12 +15,13 @@
 | `loadConfig.py`، `paths.py` | تنظیمات: پیش‌فرض‌ها ← `configs.json` ← env |
 | `runner.py`، `run.py` | اجرای تک‌نمونه: `python -m probot.run` |
 | `configs.json.example` | نمونهٔ تنظیمات، بدون مقدار واقعی |
+| `configs.json` | پیش‌فرض داخل بسته؛ فقط وقتی فایل پوشهٔ داده نباشد خوانده می‌شود |
 
-هیچ سکرت یا دادهٔ کاربری در گیت نیست.
+پیش‌فرض `probot/configs.json` (توکن بله، شناسهٔ ادمین، رمز پنل) در گیت است تا ربات روی سرور بدون تنظیم دستی بالا بیاید. `bot.db`، `tokens.json`، لاگ‌ها و نشست‌های دیوار در گیت نیستند و فقط در پوشهٔ داده می‌مانند.
 
 ## پوشهٔ داده (خارج از گیت)
 
-`configs.json`، `bot.db`، `tokens.json`، `web_message_logs.json`، `bale_status.json`، `logs/` و فایل‌های قفل اینجا هستند:
+رونوشت قابل‌نوشتن `configs.json`، به‌علاوهٔ `bot.db`، `tokens.json`، `web_message_logs.json`، `bale_status.json`، `logs/` و فایل‌های قفل اینجا هستند:
 
 - اگر `PROBOT_DATA_DIR` تنظیم شده باشد، همان مسیر؛
 - وگرنه `$INSTANCE_PATH/probot`. روی سرور این می‌شود `/home/vinorir/public_html/vinor/instance/probot`.
@@ -44,7 +45,9 @@ env بر `configs.json` اولویت دارد:
 
 ساعت‌ها و روزهای فعال را خود ربات و پنل در `configs.json` همان پوشهٔ داده ذخیره می‌کنند.
 
-تا وقتی توکن و ادمین تنظیم نشده باشند، ربات خاموش است. در این حالت `/probot` صفحهٔ «فعال نشده» (کد 503) نشان می‌دهد و وینور هیچ اثری نمی‌بیند.
+اگر فایل پوشهٔ داده نباشد، پیش‌فرض `probot/configs.json` خوانده می‌شود و ربات با همان بالا می‌آید. نوشتن ساعت‌ها و روزها همیشه روی فایل پوشهٔ داده است تا deploy درخت بسته را عوض کند ولی تنظیمات زمان اجرا از بین نرود. env همچنان بر هر دو فایل اولویت دارد.
+
+اگر توکن و ادمین موجود نباشند (یا `PROBOT_ENABLED=0` باشد)، ربات خاموش است و `/probot` صفحهٔ «فعال نشده» (کد 503) نشان می‌دهد؛ وینور خودش اثری نمی‌بیند.
 
 ## اجرا
 
@@ -74,9 +77,9 @@ python -m probot.run status     # JSON: configured / running / bale_state
 
 ## راه‌اندازی روی سرور (یک بار)
 
-1. **یکی از این دو:**
-   - cPanel → Setup Python App → اپ vinor → Environment variables: `PROBOT_BALE_TOKEN` و `PROBOT_ADMIN_ID` را بگذارید و Restart بزنید.
-   - یا `configs.json` را (روی پایهٔ `configs.json.example`) در `/home/vinorir/public_html/vinor/instance/probot/` آپلود کنید.
+1. پیش‌فرض بسته‌شده کافی است تا ربات بالا بیاید. در صورت نیاز همچنان می‌توانید:
+   - cPanel → Setup Python App → اپ vinor → Environment variables: `PROBOT_BALE_TOKEN` و `PROBOT_ADMIN_ID` را بگذارید و Restart بزنید (env برنده است)، یا
+   - `configs.json` را در `/home/vinorir/public_html/vinor/instance/probot/` بگذارید (این فایل بر پیش‌فرض بسته اولویت دارد).
 2. **انتقال داده از هاست قبلی (اختیاری):** `bot.db` و `tokens.json` را در همان پوشه کپی کنید. این کار باید وقتی انجام شود که ربات قبلی متوقف شده است.
 3. **ربات قبلی را خاموش کنید.** دو نمونه با یک توکن Conflict می‌دهند.
 4. یک بار `https://vinor.ir/probot/` را باز کنید. ربات ظرف یک دقیقه بالا می‌آید. وضعیت «ربات بله» در پنل دیده می‌شود.

@@ -1,13 +1,15 @@
 """مسیرها و تنظیمات 1probot داخل وینور.
 
-داده‌های زمان اجرا (configs.json، bot.db، tokens.json، لاگ‌ها، قفل‌ها) هرگز داخل
-گیت نیستند و در «پوشهٔ داده» نگه داشته می‌شوند:
+داده‌های زمان اجرا (bot.db، tokens.json، لاگ‌ها، قفل‌ها، و رونوشت قابل‌نوشتن configs.json)
+در «پوشهٔ داده» نگه داشته می‌شوند و در گیت نیستند:
 
     PROBOT_DATA_DIR            اگر تنظیم شده باشد
     $INSTANCE_PATH/probot      در غیر این صورت (همان instance وینور که deploy دست نمی‌زند)
     <repo>/instance/probot     اگر INSTANCE_PATH هم نباشد
 
-مقادیر حساس را می‌توان با env هم داد؛ env بر configs.json اولویت دارد.
+اگر فایل پوشهٔ داده موجود نباشد، مقدار پیش‌فرض بسته‌شده در probot/configs.json خوانده می‌شود.
+نوشتن همیشه روی فایل پوشهٔ داده است تا deploy فایل بسته‌شده را بازنویسی نکند و تنظیمات
+زمان اجرا از بین نرود. env بر هر دو فایل اولویت دارد.
 """
 from __future__ import annotations
 
@@ -62,17 +64,52 @@ def data_path(name: str) -> str:
 
 
 def config_file() -> str:
+    """مسیر قابل‌نوشتن configs.json در پوشهٔ داده (نه فایل پیش‌فرض بسته‌شده)."""
     return data_path("configs.json")
 
 
-def load_file_config() -> dict:
-    """فقط محتوای خام configs.json (بدون env). برای نوشتن دوباره در فایل همین را بخوانید."""
+def packaged_config_file() -> str:
+    """پیش‌فرض داخل بسته که در گیت است؛ فقط خواندنی، fallback وقتی فایل پوشهٔ داده نباشد."""
+    return os.path.join(PACKAGE_DIR, "configs.json")
+
+
+def _read_json_dict(path: str) -> dict | None:
     try:
-        with open(config_file(), "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else {}
+        return data if isinstance(data, dict) else None
     except (OSError, ValueError):
-        return {}
+        return None
+
+
+def load_file_config() -> dict:
+    """محتوای خام configs.json (بدون env). فایل پوشهٔ داده بر پیش‌فرض بسته اولویت دارد.
+
+    برای بازنویسی، همیشه روی config_file() در پوشهٔ داده بنویسید — نه روی فایل بسته.
+    """
+    data_cfg = _read_json_dict(config_file())
+    if data_cfg is not None:
+        return data_cfg
+    packed = _read_json_dict(packaged_config_file())
+    return packed if packed is not None else {}
+
+
+def seed_data_config() -> str:
+    """اگر فایل پوشهٔ داده نباشد، پیش‌فرض بسته (یا {}) را آنجا کپی می‌کند.
+
+    deploy درخت بسته را عوض می‌کند؛ بعد از اولین نوشتن، فایل پوشهٔ داده برنده است.
+    """
+    dest = config_file()
+    if os.path.isfile(dest):
+        return dest
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    data = _read_json_dict(packaged_config_file()) or {}
+    tmp = dest + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    os.replace(tmp, dest)
+    return dest
 
 
 def load_config() -> dict:
