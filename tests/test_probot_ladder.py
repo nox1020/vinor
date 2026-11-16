@@ -193,3 +193,76 @@ def test_web_commands_run_in_bot_process_by_default(tmp_path, monkeypatch):
     assert added["fn"] is bot.inprocess_web_commands
     monkeypatch.setenv("PROBOT_SEPARATE_WORKER", "1")
     assert bot.register_inprocess_web_commands() is False
+
+
+# Shape of the cost-v2 submit response per Divar web bundle (services chunk):
+# the form returns only {"action": ...}; START_PAYMENT.execute() POSTs
+# API_URL + payload.rest_request_path with payload.request_data and reads
+# {order_id, brand_token, source} from the response.
+START_PAYMENT_SUBMIT = {
+    "action": {
+        "type": "START_PAYMENT",
+        "payload": {
+            "@type": "type.googleapis.com/widgets.StartPaymentPayload",
+            "rest_request_path": "/v8/promotion/start-payment/MNG1abc",
+            "request_data": {"request_data": {"manage_token": "MNG1abc"}, "cost_ids": [45090]},
+        },
+        "fallback_link": "",
+    }
+}
+
+
+def _cost_handler(submit_response):
+    def cost(body):
+        if body["specification"].get("is_reload"):
+            return _Resp(200, COST_V2_PAGE)
+        return _Resp(200, submit_response)
+    return cost
+
+
+def test_submit_start_payment_action_followed(dapi):
+    n = _nardeban(dapi, {
+        ("POST", "/v8/promotion/cost-v2/"): _cost_handler(START_PAYMENT_SUBMIT),
+        ("POST", "/v8/promotion/start-payment/"): _Resp(200, {"order_id": "ORD777x", "brand_token": "", "source": "SOURCE_PROMOTION_PAGE"}),
+    })
+    assert n.createOrderID("MNG1abc", {"id": 45090, "key": "reorder"}) == "ORD777x"
+    method, url, body = n._http.calls[2]
+    assert method == "POST" and url == "https://api.divar.ir/v8/promotion/start-payment/MNG1abc"
+    assert body == START_PAYMENT_SUBMIT["action"]["payload"]["request_data"]
+    assert len(n._http.calls) == 3  # reload, submit, start — no retries / no payment
+
+
+def test_start_payment_nested_in_pop_action(dapi):
+    nested = {"action": {"type": "POP_FORM_PAGE_AND_PERFORM_ACTION",
+                         "payload": {"action": START_PAYMENT_SUBMIT["action"]}}}
+    n = _nardeban(dapi, {
+        ("POST", "/v8/promotion/cost-v2/"): _cost_handler(nested),
+        ("POST", "/v8/promotion/start-payment/"): _Resp(200, {"order_id": "ORD888y"}),
+    })
+    assert n.createOrderID("MNG1abc", {"id": 45090, "key": "reorder"}) == "ORD888y"
+
+
+def test_start_payment_without_order_stops_login(dapi):
+    n = _nardeban(dapi, {
+        ("POST", "/v8/promotion/cost-v2/"): _cost_handler(START_PAYMENT_SUBMIT),
+        ("POST", "/v8/promotion/start-payment/"): _Resp(200, {"source": "SOURCE_UNKNOWN"}),
+    })
+    with pytest.raises(ValueError) as ei:
+        n.createOrderID("MNG1abc", {"id": 45090, "key": "reorder"})
+    assert dapi.nardeban._error_kind(str(ei.value)) == "blocked"
+
+
+def test_start_payment_rejects_foreign_host(dapi):
+    bad = {"action": {"type": "START_PAYMENT", "payload": {
+        "rest_request_path": "https://evil.example/v8/x", "request_data": {}}}}
+    n = _nardeban(dapi, {("POST", "/v8/promotion/cost-v2/"): _cost_handler(bad)})
+    with pytest.raises(ValueError):
+        n.createOrderID("MNG1abc", {"id": 45090, "key": "reorder"})
+    assert not any("evil" in c[1] for c in n._http.calls)
+
+
+def test_describe_action_masks_tokens(dapi):
+    d = dapi.nardeban._describe_action(START_PAYMENT_SUBMIT["action"])
+    assert "type=START_PAYMENT" in d and "rest_request_path=/v8/promotion/start-payment/<tok>" in d
+    assert "MNG1abc" not in d
+    assert "inner_keys=['manage_token']" in d
