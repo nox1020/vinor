@@ -1,0 +1,17 @@
+# هیچ دادهٔ زمان اجرا یا سکرتی در گیت نیست؛ همه در پوشهٔ داده (PROBOT_DATA_DIR) هستند.
+configs.json
+tokens.json
+*.db
+*.db-journal
+web_message_logs.json
+bale_status.json
+telegram_status.json
+bot_run_*.txt
+logs/
+.*.lock
+.run.*
+.autostart.stamp
+*.bak-audit
+audit.diff
+venv/
+__pycache__/

@@ -588,6 +588,13 @@ def create_app() -> Flask:
     except Exception as e:
         app.logger.error(f"Admin blueprint registration failed: {e}", exc_info=True)
 
+    # 1probot: پنل وب ربات بله زیر /probot (پروسهٔ polling جداست: python -m probot.run)
+    try:
+        from probot import register_probot
+        register_probot(app)
+    except Exception as e:
+        app.logger.warning("probot panel disabled: %s", e)
+
     # Invalid/expired session cookies (SECRET_KEY rotation) → login, before CSRF.
     from .utils.session_guard import INVALID_SESSION_ENV, install_session_guard, invalid_session_response
     install_session_guard(app)
@@ -608,6 +615,12 @@ def create_app() -> Flask:
     if CSRFProtect is not None:
         csrf = CSRFProtect()
         csrf.init_app(app)
+
+        # 1probot: فقط رلهٔ ماشین‌به‌ماشین دیوار (با X-Relay-Secret) معاف است؛ فرم‌های پنل توکن CSRF دارند.
+        for _probot_ep in ("probot.divar_relay", "probot.divar_relay_health"):
+            _probot_view = app.view_functions.get(_probot_ep)
+            if _probot_view is not None:
+                csrf.exempt(_probot_view)
 
         # Webhook از CSRF مستثنا است
         if webhook_bp is not None:
@@ -958,6 +971,10 @@ def create_app() -> Flask:
         if request.path.startswith("/admin"):
             if debug:
                 current_app.logger.debug("PASS (admin-scope): %s", request.path)
+            return
+
+        # 1probot: پنل ربات احراز هویت خودش را دارد (شماره + رمز پنل از ربات بله)
+        if request.path == "/probot" or request.path.startswith("/probot/"):
             return
 
         # دانلود عمومی APK قبل از بقیهٔ گیت — /d، /d/، /d/vinor-{ver}.apk
