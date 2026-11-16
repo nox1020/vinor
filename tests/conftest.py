@@ -19,3 +19,5 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///" + _PYTEST_DB)
 os.environ.setdefault("VINOR_WEBHOOK_SECRET", "pytest-dummy-webhook-secret")
 # Tests point DATABASE_URL at sqlite files that do not exist yet.
 os.environ.setdefault("VINOR_DB_CREATE_ALL", "1")
+# 1probot: تست‌ها هرگز پروسهٔ ربات بله را از درخواست‌های وب بالا نیاورند.
+os.environ.setdefault("PROBOT_AUTOSTART", "0")

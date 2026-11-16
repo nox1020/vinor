@@ -1,0 +1,18 @@
+# Runtime data stays in the data dir (instance/probot), not in git.
+# Packaged configs.json in this folder is a committed default fallback.
+# Do not ignore it here or git will skip the packaged default.
+tokens.json
+*.db
+*.db-journal
+web_message_logs.json
+bale_status.json
+telegram_status.json
+bot_run_*.txt
+logs/
+.*.lock
+.run.*
+.autostart.stamp
+*.bak-audit
+audit.diff
+venv/
+__pycache__/

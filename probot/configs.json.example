@@ -1,0 +1,27 @@
+{
+  "database": "bot.db",
+  "token": "YOUR_BALE_BOT_TOKEN",
+  "admin": 0,
+  "web_password": "CHANGE_ME",
+  "times": [
+    8,
+    22
+  ],
+  "stop_hour": 22,
+  "stop_minute": 0,
+  "start_hour": 8,
+  "start_minute": 0,
+  "active_weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "repeat_days": 365,
+  "repeat_start_date": "2026-01-01",
+  "divar_relay_url": "",
+  "divar_relay_secret": ""
+}

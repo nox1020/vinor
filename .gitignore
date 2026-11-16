@@ -9,6 +9,8 @@
 instance/data/
 instance/invest/
 instance/logs/
+# 1probot: دادهٔ زمان اجرای ربات (configs.json، bot.db، tokens.json، لاگ‌ها، قفل‌ها)
+instance/probot/
 instance/secrets/*.json
 logs/
 *.log

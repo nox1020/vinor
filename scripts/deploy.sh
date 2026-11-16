@@ -344,6 +344,21 @@ apply_tree() {
   mkdir -p "$ROOT/tmp" || return 1
   touch "$ROOT/tmp/restart.txt" || return 1
   health_ok || return 1
+  probot_restart
+  return 0
+}
+
+# 1probot: after a healthy deploy, restart the Bale bot process so it runs the
+# new code (no-op when the bot is not configured). Never fails the deploy and
+# never logs bot output or secrets.
+probot_restart() {
+  if [[ -f "$ROOT/probot/runner.py" ]]; then
+    if (cd "$ROOT" && timeout 60 "$VENV_PY" -m probot.run restart >/dev/null 2>&1); then
+      log_json probot_restart ok
+    else
+      log_json probot_restart failed
+    fi
+  fi
   return 0
 }
 

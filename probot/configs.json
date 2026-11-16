@@ -1,0 +1,26 @@
+{
+  "database": "bot.db",
+  "token": "1963900497:nviS3igrnRzQDagizwDb0GkHfEXfvpTRhUE",
+  "admin": 2061771957,
+  "web_password": "admin12345",
+  "times": [
+    8,
+    22
+  ],
+  "stop_hour": 1,
+  "start_hour": 8,
+  "start_minute": 0,
+  "stop_minute": 0,
+  "active_weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "repeat_days": 365,
+  "repeat_start_date": "2026-04-18",
+  "divar_relay_url": "https://asmanic.ir/divar-relay"
+}

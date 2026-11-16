@@ -35,3 +35,8 @@ WTForms==3.0.1
 jdatetime>=5.0
 openpyxl>=3.1
 reportlab>=4.0
+# 1probot (ربات بله، probot/) — فقط پروسهٔ جدای ربات telegram/apscheduler را import می‌کند
+python-telegram-bot==20.7
+httpx==0.25.2
+aiolimiter==1.1.1
+APScheduler==3.10.4

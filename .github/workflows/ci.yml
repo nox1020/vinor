@@ -175,6 +175,7 @@ jobs:
             tests/test_wallet_admin_status_lock.py
             tests/test_wallet_fixes.py
             tests/test_workflow_engine.py
+            tests/test_probot_integration.py
           )
           python -m pytest -q "${files[@]}"
 
