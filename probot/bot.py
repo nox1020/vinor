@@ -654,6 +654,10 @@ def terminate_aux_processes():
             pass
 
 
+def separate_worker_enabled() -> bool:
+    return (os.environ.get("PROBOT_SEPARATE_WORKER") or "").strip() == "1"
+
+
 def _worker_cmd(py_exe):
     return [py_exe, "-m", "probot.worker"]
 
@@ -686,6 +690,11 @@ def start_aux_services():
                 print(f"✅ پنل وب مستقل اجرا شد (pid={web_proc.pid})")
             except Exception as e:
                 print(f"❌ خطا در اجرای پنل وب: {e}")
+
+    # [vinor] فرمان‌های پنل به‌طور پیش‌فرض داخل همین پروسه اجرا می‌شوند (inprocess_web_commands)
+    # تا scheduler و نمونهٔ Bot مشترک باشد. worker جدا فقط با PROBOT_SEPARATE_WORKER=1.
+    if not separate_worker_enabled():
+        return
 
     # worker
     try:
@@ -4587,6 +4596,78 @@ async def on_startup(application: Application):
         )
     except Exception as e:
         print(f"⚠️ خطا در ثبت resync شروع خودکار: {e}")
+    try:
+        if register_inprocess_web_commands():
+            print("✅ صف فرمان‌های پنل وب داخل پروسهٔ ربات فعال شد.")
+    except Exception as e:
+        print(f"⚠️ خطا در ثبت صف فرمان‌های پنل: {e}")
+    try:
+        await asyncio.to_thread(write_divar_payment_check)
+    except Exception as e:
+        print(f"⚠️ بررسی دسترسی پرداخت دیوار: {e}")
+
+
+WEB_COMMANDS_JOB_ID = "web_commands_inprocess"
+DIVAR_PAYMENT_CHECK_FILE = os.path.join(_PROJECT_ROOT, "divar_payment_check.json")
+
+
+async def inprocess_web_commands():
+    """[vinor] صف فرمان‌های پنل وب (جدول web_commands) را داخل پروسهٔ ربات اجرا می‌کند.
+
+    قبلاً worker پروسهٔ جدا با scheduler جدا داشت: نردبانی که از پنل شروع می‌شد در scheduler
+    worker می‌ماند، «توقف» از ربات بله آن را پیدا نمی‌کرد (پرداخت‌ها ادامه پیدا می‌کرد) و
+    پیام‌های نتیجه به بله نمی‌رسید چون worker نمونهٔ Bot نداشت.
+    """
+    from . import worker
+
+    try:
+        await worker.process_pending_commands()
+    except Exception as e:
+        print(f"❌ خطا در اجرای فرمان‌های پنل: {e}")
+
+
+def register_inprocess_web_commands():
+    if separate_worker_enabled():
+        return False
+    try:
+        curd.cTable_web_commands()
+        curd.reset_abandoned_processing_web_commands()
+    except Exception as e:
+        print(f"⚠️ آماده‌سازی صف فرمان‌های پنل: {e}")
+    scheduler.add_job(
+        inprocess_web_commands,
+        "interval",
+        seconds=3,
+        id=WEB_COMMANDS_JOB_ID,
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    return True
+
+
+def write_divar_payment_check():
+    """پروب بدون احراز endpointهای پرداخت فعلی دیوار؛ تشخیص حذف/تغییر API (هیچ سفارشی نمی‌سازد)."""
+    try:
+        from .dapi import check_divar_payment_reachability
+
+        result = check_divar_payment_reachability()
+    except Exception as e:
+        result = {"state": "error", "detail": str(e)[:200]}
+    result["checked_at"] = now_tehran().isoformat()
+    try:
+        tmp = DIVAR_PAYMENT_CHECK_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, DIVAR_PAYMENT_CHECK_FILE)
+    except Exception:
+        pass
+    if result.get("state") == "blocked":
+        print(
+            "❌ API پرداخت دیوار دوباره تغییر کرده (RBAC: access denied روی "
+            f"{result.get('detail', '')}). ربات باید به‌روزرسانی شود."
+        )
+    return result
 
 
 async def on_shutdown(application: Application):

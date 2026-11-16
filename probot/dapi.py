@@ -200,7 +200,7 @@ def is_divar_payment_url(url) -> bool:
     if host == "bazaar-pay.ir" or host.endswith(".bazaar-pay.ir"):
         return True
     if host == "divar.ir" or host.endswith(".divar.ir"):
-        if "/v8/payment" in path:  # payment/costs, payment/start, paymentcore/...
+        if "/v8/payment" in path or "/v8/promotion/" in path:  # paymentcore/flow-v3, promotion/cost-v2
             return True
         if path.endswith("/promote") or "/promote/" in path:
             return True
@@ -280,6 +280,59 @@ class DivarRelaySession(requests.Session):
         resp.request = prep
         resp.reason = env.get("reason") or ""
         return resp
+
+
+DIVAR_IP_BLOCK_MARKERS = ("rbac: access denied",)
+
+# «403 RBAC: access denied» از gateway دیوار یعنی این مسیر/متد دیگر در API دیوار
+# وجود ندارد (endpoint حذف شده)؛ مشکل IP، لاگین یا کیف پول نیست.
+DIVAR_IP_BLOCK_FA = (
+    "🛠 دیوار این مرحلهٔ پرداخت را رد کرد (RBAC: access denied): "
+    "این endpoint در API جدید دیوار حذف/عوض شده است. لاگین و کیف پول مشکلی ندارند؛ "
+    "ربات باید با API جدید دیوار به‌روزرسانی شود."
+)
+DIVAR_API_CHANGED_FA = DIVAR_IP_BLOCK_FA
+
+
+def is_divar_ip_blocked(error_text) -> bool:
+    """True اگر خطا «RBAC: access denied» باشد (endpoint حذف‌شده در gateway دیوار)."""
+    txt = str(error_text or "").lower()
+    return any(m in txt for m in DIVAR_IP_BLOCK_MARKERS)
+
+
+is_divar_endpoint_removed = is_divar_ip_blocked
+
+# endpointهایی که جریان فعلی ربات صدا می‌زند؛ پروب بدون احراز است و هیچ سفارشی نمی‌سازد
+# (بدون توکن، دیوار پیش از اجرای منطق 401/403-code جواب می‌دهد).
+PAYMENT_PROBE_ENDPOINTS = (
+    ("POST", "https://api.divar.ir/v8/promotion/cost-v2/probe-reachability"),
+    ("POST", "https://api.divar.ir/v8/paymentcore/flow-v3/probe-reachability"),
+    ("GET", "https://api.divar.ir/v8/paymentcore/bazaarpay/initiate/probe-reachability"),
+)
+
+
+def check_divar_payment_reachability(config=None, timeout=12):
+    """بررسی می‌کند endpointهای پرداختی که ربات استفاده می‌کند هنوز در gateway دیوار هستند.
+
+    blocked = حداقل یکی «RBAC: access denied» داد (API دیوار دوباره عوض شده)،
+    reachable = همه به backend دیوار رسیدند (401/403-code/400 هم یعنی مسیر وجود دارد).
+    """
+    session = make_divar_http_session(config)
+    hdr = {"User-Agent": "Dalvik/2.1.0 (Linux; U; Android 13)", "Accept": "*/*", "Content-Type": "application/json"}
+    removed = []
+    for method, url in PAYMENT_PROBE_ENDPOINTS:
+        try:
+            if method == "POST":
+                r = session.post(url, headers=hdr, json={}, timeout=timeout)
+            else:
+                r = session.get(url, headers=hdr, timeout=timeout)
+        except requests.exceptions.RequestException as e:
+            return {"state": "error", "detail": f"{type(e).__name__}"}
+        if r.status_code == 403 and is_divar_ip_blocked((r.text or "")[:200]):
+            removed.append(_urlsplit(url).path.rsplit("/", 1)[0])
+    if removed:
+        return {"state": "blocked", "http": 403, "detail": "removed: " + ", ".join(removed)}
+    return {"state": "reachable", "relay": isinstance(session, DivarRelaySession)}
 
 
 def make_divar_http_session(config=None):
@@ -538,70 +591,198 @@ class nardeban:
             return last_response
         return last_response
 
-    def get_cost_plans(self, token):
+    # ------------------------------------------------------------------
+    # [vinor] جریان جدید پرداخت نردبان دیوار (۱۴۰۵/نوامبر ۲۰۲۶)
+    # دیوار endpointهای قدیمی را از gateway برداشته و برای همهٔ متدها
+    # «403 RBAC: access denied» می‌دهد: /v8/payment/costs، /v8/payment/start/post،
+    # /v8/paymentcore/flow، /v8/paymentcore/bazaarpay/pay و direct-pay/contract.
+    # جریان فعلی وب دیوار (از bundle وب):
+    #   1) POST /v8/promotion/cost-v2/{mng_token}   فرم پلن‌ها (I_COST_ROW)
+    #   2) همان endpoint با data.data={<field.key>: {"boolean": {"value": true}}}
+    #      is_reload=true فقط قیمت/دکمه را تازه می‌کند؛ بدون is_reload سفارش می‌سازد.
+    #   3) POST /v8/paymentcore/flow-v3/{order_id}  روش‌های پرداخت (option_row_values)
+    #   4) GET /v8/paymentcore/bazaarpay/initiate/{order_id} → checkout_token → بازارپی
+    # ------------------------------------------------------------------
+    COST_V2_URL = "https://api.divar.ir/v8/promotion/cost-v2/{token}"
+    FLOW_V3_URL = "https://api.divar.ir/v8/paymentcore/flow-v3/{order_id}"
+    # فقط خریدهای تکی؛ بسته‌های خودکار (options) انتخاب نمی‌شوند.
+    LADDER_FIELD_KEYS = ("reorder", "renew-reorder")
+
+    def _cost_v2_post(self, token, specification, with_request_data=True):
+        body = {"specification": specification}
+        if with_request_data:
+            body["request_data"] = {"mng_token": str(token)}
         hdr = {**self.headers, "Authorization": divar_authorization_header(str(self.apikey))}
+        return self._request_with_retries(
+            "POST", self.COST_V2_URL.format(token=token), headers=hdr, json_data=body
+        )
+
+    @staticmethod
+    def parse_cost_v2_plans(page_json) -> list[dict]:
+        """ردیف‌های I_COST_ROW فرم cost-v2 → [{id, key, uid, name, price, available}]."""
+        page = (page_json or {}).get("page") if isinstance(page_json, dict) else None
+        widgets = (page or {}).get("widget_list") or []
+        plans = []
+        for w in widgets:
+            if not isinstance(w, dict) or w.get("widget_type") != "I_COST_ROW":
+                continue
+            d = w.get("data") or {}
+            key = str(((d.get("field") or {}).get("key")) or w.get("uid") or "").strip()
+            if not key:
+                continue
+            try:
+                pid = int(d.get("id"))
+            except (TypeError, ValueError):
+                continue
+            try:
+                price = int(str(d.get("price") or "0"))
+            except ValueError:
+                price = None
+            is_package = bool(d.get("options"))
+            plans.append(
+                {
+                    "id": pid,
+                    "key": key,
+                    "uid": w.get("uid"),
+                    "name": str(d.get("name") or key),
+                    "price": price,
+                    "package": is_package,
+                    "available": (str(d.get("state") or "").upper() != "DISABLED") and not is_package,
+                }
+            )
+        return plans
+
+    def get_cost_plans(self, token):
         try:
-            response_data = self._request_with_retries(
-                "GET", f"https://api.divar.ir/v8/payment/costs/{token}", headers=hdr
+            response_data = self._cost_v2_post(
+                token, {"is_reload": False, "page": 0}
             ).json()
         except ValueError:
             raise
         except Exception as e:
             raise ValueError(f"invalid costs response: {e}")
-        if not isinstance(response_data, dict) or "costs" not in response_data:
-            raise ValueError(f"costs not found in response: {response_data}")
-        costs = response_data["costs"]
-        if not isinstance(costs, list):
-            raise ValueError(f"costs is not a list: {type(costs)}")
-        if len(costs) == 0:
-            raise ValueError("no costs/plans available for this post")
-
-        normalized = []
-        for row in costs:
-            if not isinstance(row, dict):
-                continue
-            pid = row.get("id")
-            if pid is None:
-                continue
-            try:
-                pid_int = int(pid)
-            except Exception:
-                continue
-            normalized.append(
-                {
-                    "id": pid_int,
-                    "available": bool(row.get("available", False)),
-                    "name": str(row.get("title") or row.get("name") or f"پلن {pid_int}"),
-                    "price": row.get("price"),
-                }
-            )
-        if not normalized:
-            raise ValueError("no valid cost plans in response")
-        return normalized
+        plans = self.parse_cost_v2_plans(response_data)
+        if not plans:
+            raise ValueError(f"costs not found in response: keys={sorted((response_data or {}).keys())}")
+        return plans
 
     def selectPlan(self, token, priority_1=None, priority_2=None):
+        """پلن نردبان قابل خرید را برمی‌گرداند (dict با id/key/price)."""
         plans = self.get_cost_plans(token)
-        available_ids = [p["id"] for p in plans if p.get("available")]
-        if not available_ids:
+        available = [p for p in plans if p.get("available")]
+        if not available:
             raise ValueError("no available plans for this post")
 
-        preferred = []
         for raw in (priority_1, priority_2):
             if raw is None or raw == "":
                 continue
-            try:
-                preferred.append(int(raw))
-            except Exception:
-                continue
+            for p in available:
+                if str(raw).strip() in (str(p["id"]), p["key"]):
+                    return p
 
-        for pid in preferred:
-            if pid in available_ids:
-                return pid
+        for key in self.LADDER_FIELD_KEYS:
+            for p in available:
+                if p["key"] == key:
+                    return p
+        raise ValueError("no available plans for this post (نردبان در فرم دیوار فعال نیست)")
 
-        # fallback: همان رفتار قبلی (اگر اندیس 2 موجود و available بود)
-        if len(plans) >= 3 and plans[2].get("available") and plans[2].get("id"):
-            return int(plans[2]["id"])
-        return int(available_ids[0])
+    @staticmethod
+    def _plan_form_values(plan) -> dict:
+        key = plan["key"] if isinstance(plan, dict) else str(plan)
+        return {key: {"boolean": {"value": True}}}
+
+    @staticmethod
+    def _find_order_id(obj):
+        """order_id را در پاسخ submit فرم (action/payload/url) پیدا می‌کند."""
+        url_re = re.compile(r"payment-method/([A-Za-z0-9_-]{6,})|payment_order_id=([A-Za-z0-9_-]{6,})|flow(?:-v3)?/([A-Za-z0-9_-]{6,})")
+        stack = [obj]
+        seen = 0
+        while stack and seen < 5000:
+            seen += 1
+            cur = stack.pop()
+            if isinstance(cur, dict):
+                for k, v in cur.items():
+                    if k in ("order_id", "orderId", "payment_order_id") and v not in (None, "") and not isinstance(v, (dict, list)):
+                        return str(v).strip()
+                    stack.append(v)
+            elif isinstance(cur, list):
+                stack.extend(cur)
+            elif isinstance(cur, str):
+                m = url_re.search(cur)
+                if m:
+                    return next(g for g in m.groups() if g)
+        return None
+
+    def createOrderID(self, token, planPrice):
+        """سفارش نردبان را از فرم cost-v2 می‌سازد (planPrice = پلن انتخاب‌شده یا id آن)."""
+        plan = planPrice
+        if not isinstance(plan, dict):
+            plans = self.get_cost_plans(token)
+            plan = next((p for p in plans if str(p["id"]) == str(planPrice) or p["key"] == str(planPrice)), None)
+            if plan is None:
+                raise ValueError(f"plan {planPrice} not found in cost-v2 form")
+        values = self._plan_form_values(plan)
+        # reload: دیوار قیمت را حساب می‌کند و دکمهٔ خرید را فعال می‌کند (سفارشی ساخته نمی‌شود)
+        reload_json = self._cost_v2_post(
+            token, {"data": {"data": values}, "is_reload": True, "page": 1}, with_request_data=False
+        ).json()
+        btn = ((reload_json or {}).get("page") or {}).get("submit_button") or {}
+        if btn.get("disabled"):
+            raise ValueError("no available plans for this post (submit disabled after reload)")
+        page_no = ((reload_json or {}).get("page") or {}).get("page", 1)
+        submit_json = self._cost_v2_post(
+            token,
+            {"data": {"data": values, "online_request_response_data": {}}, "page": page_no},
+        ).json()
+        order_id = self._find_order_id(submit_json)
+        try:
+            act = (submit_json or {}).get("action") or {}
+            print(f"[payment] cost-v2 submit: action={act.get('type')} order={'yes' if order_id else 'no'}")
+        except Exception:
+            pass
+        if not order_id:
+            keys = sorted(submit_json.keys()) if isinstance(submit_json, dict) else type(submit_json).__name__
+            raise ValueError(f"order_id not found in cost-v2 submit response: keys={keys}")
+        return order_id
+
+    def createFlow(self, order):
+        """POST flow-v3 (مثل صفحهٔ «انتخاب روش پرداخت» وب)؛ پاسخ شامل option_row_values است."""
+        oid = str(order).strip()
+        body = {
+            "order_id": oid,
+            "bazaar_installed_on_device": False,
+            "install_source": "",
+            "last_update_source": "",
+        }
+        hdr = {**self.headers, "Authorization": divar_authorization_header(str(self.apikey))}
+        r = self._request_with_retries(
+            "POST", self.FLOW_V3_URL.format(order_id=oid), headers=hdr, json_data=body
+        )
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+        return data if isinstance(data, dict) else {}
+
+    @staticmethod
+    def _checkout_token_from_flow(flow_data):
+        """اگر action یکی از روش‌ها لینک بازارپی با token=… باشد، checkout_token را برمی‌دارد."""
+        m_re = re.compile(r"[?&](?:token|checkout_token)=([A-Za-z0-9_-]{8,})")
+        stack = [flow_data]
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, dict):
+                v = cur.get("checkout_token")
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+                stack.extend(cur.values())
+            elif isinstance(cur, list):
+                stack.extend(cur)
+            elif isinstance(cur, str) and "bazaar" in cur:
+                m = m_re.search(cur)
+                if m:
+                    return m.group(1)
+        return None
 
     @staticmethod
     def _is_transient_error(error) -> bool:
@@ -637,6 +818,12 @@ class nardeban:
         txt = f"{raw_error or ''} {humanized or ''}".lower()
         if nardeban._is_transient_error(txt):
             return "transient"
+
+        if is_divar_ip_blocked(txt) or "rbac" in txt:
+            return "blocked"
+        # پاسخ submit فرم دیوار شکل ناشناخته داشت: نباید برای آگهی بعدی هم سفارش ساخت
+        if "cost-v2 submit response" in txt:
+            return "blocked"
 
         login_markers = (
             "412",
@@ -703,15 +890,16 @@ class nardeban:
         except Exception as e:
             return self._payment_step_failed(chatid, token, "createOrderID", e)
         self._between_payment_steps()
+        flow_data = {}
         try:
-            checkout_data = self.createCheckOut(order=order_id)
+            flow_data = self.createFlow(order=order_id)
         except Exception as e:
-            return self._payment_step_failed(chatid, token, "createCheckOut", e)
+            print(f"[payment] flow-v3 نادیده گرفته شد: {e}")
         self._between_payment_steps()
         try:
-            self.createFlow(order=order_id)
+            checkout_data = self.createCheckOut(order=order_id, flow_data=flow_data)
         except Exception as e:
-            print(f"[payment] createFlow نادیده گرفته شد: {e}")
+            return self._payment_step_failed(chatid, token, "createCheckOut", e)
         self._between_payment_steps()
         try:
             self.pay(
@@ -729,19 +917,6 @@ class nardeban:
             return self._payment_step_failed(chatid, token, "promote", e)
         self.curd.addSent(token=token, chatid=chatid, status="success")
         return [1, token, number]
-
-    def createOrderID(self, token, planPrice):
-        response_data = self._request_with_retries(
-            "POST",
-            f"https://api.divar.ir/v8/payment/start/post/{token}",
-            json_data={"cost_ids": [planPrice], "cost_to_option": {}},
-        ).json()
-        if not isinstance(response_data, dict):
-            raise ValueError(f"response is not a dict: {type(response_data)}")
-        order_id = response_data.get("order_id")
-        if not order_id:
-            raise ValueError(f"order_id not found in response: {response_data}")
-        return order_id
 
     def _divar_get_headers_for_paymentcore(self, authorization: str) -> dict:
         """هدر سبک برای GET به paymentcore (بدون Content-Type)."""
@@ -1048,42 +1223,15 @@ class nardeban:
             raise ValueError(f"BazaarPay direct-pay {self._response_error_message(r)}")
         return r
 
-    def createFlow(self, order):
-        oid = str(order).strip()
-        url = f"https://api.divar.ir/v8/paymentcore/flow/{oid}"
-        last_err = None
-        # ابتدا همان سبک createOrderID (هدر + کوکی)، بعد auth probe
-        for use_probe in (False, True):
-            for method, jb in (("GET", None), ("POST", {})):
-                try:
-                    if use_probe:
-                        self._divar_auth_probe_request(
-                            url, method=method, json_body=jb, timeout=28
-                        )
-                        return
-                    if method == "GET":
-                        r = self._http.get(
-                            url, headers=self.headers, cookies=self.cookies, timeout=28
-                        )
-                    else:
-                        r = self._http.post(
-                            url,
-                            headers=self.headers,
-                            cookies=self.cookies,
-                            json=jb if jb is not None else {},
-                            timeout=28,
-                        )
-                    if r.status_code < 400:
-                        return
-                    last_err = ValueError(self._response_error_message(r))
-                except ValueError as e:
-                    last_err = e
-                    continue
-        print(f"[payment] createFlow رد شد (GET و POST هر دو ناموفق): {last_err}")
-
-    def createCheckOut(self, order):
+    def createCheckOut(self, order, flow_data=None):
         try:
-            response = self._paymentcore_get(f"bazaarpay/initiate/{order}")
+            try:
+                response = self._paymentcore_get(f"bazaarpay/initiate/{order}")
+            except ValueError:
+                tok = self._checkout_token_from_flow(flow_data)
+                if tok:
+                    return {"checkout_token": tok, "source": "flow-v3"}
+                raise
             data = response.json()
             if not isinstance(data, dict) or "checkout_token" not in data:
                 raise ValueError(f"checkout_token not found in response: {data}")
@@ -1438,6 +1586,9 @@ class nardeban:
         def _in(*parts):
             return any(p in txt for p in parts)
 
+        if is_divar_ip_blocked(txt):
+            return DIVAR_IP_BLOCK_FA
+
         simple = (
             (("invalid iranian mobile format for bazaarpay", "invalid mobile for bazaarpay"),
              "📱 شمارهٔ همین لاگین برای بازارپی درست نیست (باید موبایل ایران مثل ۹۱۲… باشد، بدون ۹۸ در ابتدا). "
@@ -1511,12 +1662,10 @@ class nardeban:
             plan_err = None
             for plan_attempt in range(2):
                 try:
-                    plan_cost = int(
-                        self.selectPlan(
-                            token=cand,
-                            priority_1=priority_1,
-                            priority_2=priority_2,
-                        )
+                    plan_cost = self.selectPlan(
+                        token=cand,
+                        priority_1=priority_1,
+                        priority_2=priority_2,
                     )
                     plan_err = None
                     break
@@ -1531,7 +1680,7 @@ class nardeban:
                     break
             if plan_cost is None:
                 err_human = self._humanize_payment_error("selectPlan", plan_err)
-                if self._error_kind(plan_err, err_human) == "login":
+                if self._error_kind(plan_err, err_human) in ("login", "blocked"):
                     print(f"[nardeban] توقف لاگین {number} (selectPlan): {err_human[:120]}")
                     return [3, number, err_human]
                 self._mark_token_failed(
@@ -1567,7 +1716,7 @@ class nardeban:
                 return result
 
             err_text = str(result[2] if len(result) > 2 else result)
-            if self._error_kind(err_text, err_text) == "login":
+            if self._error_kind(err_text, err_text) in ("login", "blocked"):
                 print(f"[nardeban] توقف لاگین {number}: {err_text[:120]}")
                 return [3, number, err_text]
 
