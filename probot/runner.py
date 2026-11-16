@@ -215,6 +215,13 @@ def status() -> int:
         info["updated_at"] = st.get("updated_at")
     except (OSError, ValueError):
         pass
+    try:
+        with open(data_path("divar_payment_check.json"), "r", encoding="utf-8") as f:
+            pc = json.load(f)
+        info["divar_payment"] = pc.get("state")
+        info["divar_payment_checked_at"] = pc.get("checked_at")
+    except (OSError, ValueError):
+        pass
     print(json.dumps(info, ensure_ascii=False))
     return 0
 

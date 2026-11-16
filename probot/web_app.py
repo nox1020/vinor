@@ -133,6 +133,15 @@ def _load_bale_status():
         return {"state": "unknown", "detail": "بله غیرفعال یا هنوز ثبت نشده", "updated_at": "-"}
 
 
+def _load_payment_check():
+    try:
+        with open(data_path("divar_payment_check.json"), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def _load_web_message_logs(limit=30, panel_chatid=None):
     try:
         with open(data_path("web_message_logs.json"), "r", encoding="utf-8") as f:
@@ -362,6 +371,7 @@ def panel():
     recent_commands = curd.getRecentWebCommands(limit=25, chatid=cid)
     cfg = _load_raw_config()
     bale_status = _load_bale_status()
+    payment_check = _load_payment_check()
     message_logs = _load_web_message_logs(limit=40, panel_chatid=cid)
     nardeban_runtime = _get_nardeban_runtime_status()
     otp_phone = session.get("probot_otp_phone", "")
@@ -629,6 +639,7 @@ def panel():
             </form>
             {% endif %}
             <span class="pill">ربات بله: {{ bale_status.get("state", "unknown") }}</span>
+            {% if payment_check.get("state") == "blocked" %}<span class="pill" style="background:#7f1d1d;color:#fff" title="{{ payment_check.get('detail','') }}">پرداخت دیوار: API تغییر کرده — ربات نیاز به به‌روزرسانی دارد</span>{% elif payment_check.get("state") == "reachable" %}<span class="pill">پرداخت دیوار: در دسترس</span>{% endif %}
             <a class="btn-link" href="{{ probot_prefix }}/logout">خروج</a>
           </div>
         </div>
@@ -1072,6 +1083,7 @@ def panel():
             recent_commands=recent_commands,
             cfg=cfg,
             bale_status=bale_status,
+            payment_check=payment_check,
             message_logs=message_logs,
             nardeban_runtime=nardeban_runtime,
             weekdays_text=weekdays_text,
