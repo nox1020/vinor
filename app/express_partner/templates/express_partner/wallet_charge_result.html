@@ -1,0 +1,63 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}{{ result.title }} | وینور{% endblock %}
+
+{% block content %}
+{% include 'express_partner/partials/wallet_style.html' %}
+{% set st = result.state %}
+<div class="min-h-[100dvh] flex flex-col bg-zinc-950 text-white" data-wallet-result="{{ st }}">
+  <main class="mx-auto w-full max-w-lg flex-1 px-5 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] pb-[calc(9rem+env(safe-area-inset-bottom,0px))] text-center">
+    {% if st == 'success' %}
+    <div class="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-500/15 ring-8 ring-emerald-500/10">
+      <i class="fas fa-check text-[34px] text-emerald-400" aria-hidden="true"></i>
+    </div>
+    {% elif st == 'pending' %}
+    <div class="mx-auto grid h-20 w-20 place-items-center rounded-full bg-amber-400/15 ring-8 ring-amber-400/10">
+      <i class="fas fa-hourglass-half text-[30px] text-amber-300" aria-hidden="true"></i>
+    </div>
+    {% else %}
+    <div class="mx-auto grid h-20 w-20 place-items-center rounded-full bg-rose-500/15 ring-8 ring-rose-500/10">
+      <i class="fas fa-xmark text-[34px] text-rose-400" aria-hidden="true"></i>
+    </div>
+    {% endif %}
+    <h1 class="mt-6 text-[20px] font-bold" data-wallet-result-title>{{ result.title }}</h1>
+    {% if result.amount_label %}
+    <p class="mt-2 text-[26px] font-extrabold {% if st == 'success' %}text-emerald-300{% else %}text-zinc-200{% endif %}">{{ result.amount_label }}</p>
+    {% endif %}
+    {% if result.message %}<p class="mt-3 text-[14px] leading-7 text-zinc-300">{{ result.message }}</p>{% endif %}
+    {% if result.note %}<p class="mt-3 rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 text-[13px] leading-6 text-zinc-300" data-wallet-result-note>{{ result.note }}</p>{% endif %}
+
+    {% if st == 'success' %}
+    <dl class="mt-6 divide-y divide-white/10 rounded-xl border border-white/10 bg-white/5 text-right text-[14px]">
+      {% if result.balance_label %}
+      <div class="flex justify-between px-3.5 py-3"><dt class="text-zinc-400">{{ texts.success_balance }}</dt><dd class="font-bold" data-wallet-result-balance>{{ result.balance_label }}</dd></div>
+      {% endif %}
+      <div class="flex justify-between px-3.5 py-3"><dt class="text-zinc-400">{{ texts.success_ref }}</dt><dd class="font-mono" dir="ltr" data-wallet-result-ref>{{ result.ref_id|fa_digits }}</dd></div>
+      <div class="flex justify-between px-3.5 py-3"><dt class="text-zinc-400">{{ texts.summary_gateway }}</dt><dd>{{ result.gateway }}</dd></div>
+    </dl>
+    {% endif %}
+  </main>
+
+  <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto max-w-lg space-y-2">
+      {% if st in ['cancelled', 'failed', 'not_found'] and result.retry_url %}
+      <a href="{{ result.retry_url }}" data-wallet-retry
+         class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black">{{ texts.retry }}</a>
+      {% elif st == 'pending' and result.can_recheck and token %}
+      <form method="post" action="{{ url_for('express_partner.wallet_charge_recheck') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="t" value="{{ token }}">
+        <button type="submit" data-wallet-recheck
+                class="h-12 w-full rounded-xl bg-emerald-500 text-[15px] font-bold text-black">{{ texts.recheck }}</button>
+      </form>
+      {% endif %}
+      {% if result.owner %}
+      <a href="{{ result['return'].url }}" data-wallet-return="{{ result['return'].key }}"
+         class="grid h-12 w-full place-items-center rounded-xl {% if st == 'success' %}bg-emerald-500 text-black font-bold{% else %}border border-white/15 text-white{% endif %} text-[15px]">{{ result['return'].label }}</a>
+      {% else %}
+      <a href="{{ app_url }}" data-wallet-back-app
+         class="grid h-12 w-full place-items-center rounded-xl {% if st == 'success' %}bg-emerald-500 text-black font-bold{% else %}border border-white/15 text-white{% endif %} text-[15px]">{{ texts.back_to_app }}</a>
+      {% endif %}
+    </div>
+  </footer>
+</div>
+{% endblock %}

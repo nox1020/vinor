@@ -13,6 +13,9 @@ from .zarinpal_config import effective_merchant_id, get_zarinpal_settings, payme
 
 TOPUP_PRESETS = (100_000, 500_000, 1_000_000, 5_000_000)
 MIN_TOPUP = 1_000
+# سقف پیشینی وجود نداشت؛ این فقط سد ورودی بی‌معنی است، نه محدودیت محصول.
+MAX_TOPUP = 100_000_000_000
+_META_KEYS = ("return_target", "return_code", "charge_reason", "charge_shortfall", "charge_ctx")
 
 
 def _amount(value: Any) -> int:
@@ -57,14 +60,24 @@ def find_topup_by_ref(rows, ref_id: str):
     return None
 
 
-def begin_wallet_topup(*, phone: str, amount: int) -> Tuple[bool, Optional[str], str]:
+def begin_wallet_topup(*, phone: str, amount: int, meta: Optional[Dict[str, Any]] = None) -> Tuple[bool, Optional[str], str]:
+    ok, pay_url, err, _txn = start_wallet_topup(phone=phone, amount=amount, meta=meta)
+    return ok, pay_url, err
+
+
+def start_wallet_topup(
+    *, phone: str, amount: int, meta: Optional[Dict[str, Any]] = None
+) -> Tuple[bool, Optional[str], str, int]:
+    """مثل begin_wallet_topup، به‌علاوهٔ شناسهٔ رکورد برای صفحهٔ نتیجه. meta فقط مسیر بازگشت است."""
     from flask import url_for
 
     need = _amount(amount)
     if need < MIN_TOPUP:
-        return False, None, "مبلغ شارژ خیلی کم است."
+        return False, None, "مبلغ شارژ خیلی کم است.", 0
+    if need > MAX_TOPUP:
+        return False, None, "این مبلغ بیش از حد مجاز است.", 0
     if not payment_flow_active():
-        return False, None, "درگاه پرداخت فعال نیست."
+        return False, None, "درگاه پرداخت فعال نیست.", 0
     cfg = get_zarinpal_settings()
     from app.utils.storage import save_express_commissions
 
@@ -92,6 +105,9 @@ def begin_wallet_topup(*, phone: str, amount: int) -> Tuple[bool, Optional[str],
             "authority": "",
             "ref_id": "",
         }
+        for key in _META_KEYS:
+            if isinstance(meta, dict) and meta.get(key) not in (None, ""):
+                rec[key] = meta[key]
         rows.append(rec)
         save_express_commissions(rows)
         txn_id = rec["id"]
@@ -105,7 +121,7 @@ def begin_wallet_topup(*, phone: str, amount: int) -> Tuple[bool, Optional[str],
         sandbox=bool(cfg.get("sandbox")),
     )
     if not req.get("ok"):
-        return False, None, "شروع پرداخت ممکن نشد."
+        return False, None, "شروع پرداخت ممکن نشد.", 0
     authority = str(req.get("authority") or "").strip()
     with commission_store_lock():
         rows = _rows()
@@ -114,7 +130,7 @@ def begin_wallet_topup(*, phone: str, amount: int) -> Tuple[bool, Optional[str],
                 row["authority"] = authority
                 break
         save_express_commissions(rows)
-    return True, start_pay_url(authority, sandbox=bool(cfg.get("sandbox"))), ""
+    return True, start_pay_url(authority, sandbox=bool(cfg.get("sandbox"))), "", int(txn_id)
 
 
 def complete_wallet_topup(authority: str, status_param: str) -> Dict[str, Any]:
@@ -128,13 +144,15 @@ def complete_wallet_topup(authority: str, status_param: str) -> Dict[str, Any]:
         row = find_topup_by_authority(rows, auth)
         if row is None:
             return {"ok": False, "reason": "unknown_authority"}
+        txn_id = _amount(row.get("id"))
         if str(row.get("status") or "") == "approved" and str(row.get("ref_id") or "").strip():
-            return {"ok": True, "idempotent": True, "amount": _amount(row.get("commission_amount"))}
+            return {"ok": True, "idempotent": True, "amount": _amount(row.get("commission_amount")), "txn_id": txn_id}
         if str(status_param or "").strip().upper() not in ("OK", "1"):
             row["status"] = "rejected"
+            row["result_reason"] = "cancelled"
             row["updated_at"] = iso_z(utcnow())
             save_express_commissions(rows)
-            return {"ok": False, "reason": "cancelled"}
+            return {"ok": False, "reason": "cancelled", "txn_id": txn_id}
         cfg = get_zarinpal_settings()
         verified = payment_verify(
             amount_toman=_amount(row.get("commission_amount")),
@@ -146,28 +164,31 @@ def complete_wallet_topup(authority: str, status_param: str) -> Dict[str, Any]:
             # A dropped response can be retried. A rejected gateway or a mismatched
             # amount must not become spendable.
             if verified.get("code") is None and verified.get("error") != "amount_mismatch":
-                return {"ok": False, "reason": "verify_failed"}
+                return {"ok": False, "reason": "verify_failed", "pending": True, "txn_id": txn_id}
             row["status"] = "rejected"
+            row["result_reason"] = "verify_failed"
             row["updated_at"] = iso_z(utcnow())
             save_express_commissions(rows)
-            return {"ok": False, "reason": "verify_failed"}
+            return {"ok": False, "reason": "verify_failed", "txn_id": txn_id}
         ref = str(verified.get("ref_id") or "").strip()
         if not ref:
-            return {"ok": False, "reason": "missing_ref"}
+            return {"ok": False, "reason": "missing_ref", "pending": True, "txn_id": txn_id}
         prior = find_topup_by_ref(rows, ref)
         if prior is not None and prior is not row:
             row["status"] = "rejected"
             row["updated_at"] = iso_z(utcnow())
             row["reject_reason"] = "duplicate_ref"
+            row["result_reason"] = "duplicate_ref"
             save_express_commissions(rows)
-            return {"ok": False, "reason": "duplicate_ref"}
+            return {"ok": False, "reason": "duplicate_ref", "txn_id": txn_id}
         stamp = iso_z(utcnow())
         row["status"] = "approved"
         row["approved_at"] = stamp
         row["updated_at"] = stamp
         row["ref_id"] = ref
         save_express_commissions(rows)
-        return {"ok": True, "idempotent": False, "amount": _amount(row.get("commission_amount")), "ref_id": ref}
+        return {"ok": True, "idempotent": False, "amount": _amount(row.get("commission_amount")), "ref_id": ref,
+                "txn_id": txn_id}
 
 
 MANUAL_CREDIT_SOURCE = "admin_manual_credit"
