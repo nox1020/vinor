@@ -4802,6 +4802,103 @@ def apk_my_property_archive():
     return resp
 
 
+_SOLD_ERROR_STATUS = {
+    'forbidden': 403,
+    'not_found': 404,
+    'invalid_channel': 400,
+    'visit_required': 400,
+    'visit_not_found': 404,
+    'wallet_insufficient': 400,
+}
+
+
+def _owner_sold_error(err: str, detail: dict | None = None):
+    from app.listings.owner_sold import error_message
+
+    body = {'ok': False, 'error': error_message(err), 'error_code': err}
+    if err == 'wallet_insufficient':
+        from .deal_wallet import wallet_detail
+
+        wd = wallet_detail() or {}
+        body.update({
+            'required_amount': int(wd.get('required_amount') or 0),
+            'balance': int(wd.get('balance') or 0),
+            'shortfall': int(wd.get('shortfall') or 0),
+            'charge_path': '/express/partner/wallet/charge',
+        })
+    return _apk_json(body, _SOLD_ERROR_STATUS.get(err, 400))
+
+
+@express_partner_bp.get('/api/my-property/sold-options', endpoint='apk_my_property_sold_options')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_sold_options():
+    """گزینه‌های «فروخته شد» برای مالک: بازدیدهای انجام‌شده و پیام تأیید هر مسیر."""
+    from app.listings.owner_sold import sold_options
+    from .apk_native import session_phone
+
+    code = (request.args.get('code') or '').strip()
+    body, err = sold_options(session_phone(), code)
+    if err or body is None:
+        return _owner_sold_error(err or 'not_found')
+    return _apk_json(body)
+
+
+@express_partner_bp.post('/api/my-property/sold', endpoint='apk_my_property_sold')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_my_property_sold():
+    """«فروخته شد» از طرف مالک. بدنه: ``{"code", "channel": "vinor"|"outside", "visit_id"}``.
+
+    vinor همان تأیید و بستن معاملهٔ پیگیری است (پرداخت از بلوکه). outside آگهی را می‌بندد؛
+    بلوکه آزاد می‌شود مگر بازاریابی بازدید انجام‌شده داشته باشد که آن‌وقت به بازبینی ادمین می‌رود.
+    """
+    from app.listings.owner_sold import mark_sold
+    from .apk_native import session_phone
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    def _arg(key):
+        return str(data.get(key) or request.form.get(key) or '').strip()
+
+    code = _arg('code')
+    body, err, detail = mark_sold(
+        session_phone(), code, channel=_arg('channel'), visit_id=_arg('visit_id'),
+    )
+    if _browser_form_post():
+        if err or body is None:
+            from app.listings.owner_sold import error_message
+
+            flash(error_message(err or 'failed'), 'error')
+            if err in ('forbidden', 'not_found'):
+                return redirect(url_for('express_partner.my_property'))
+            return redirect(url_for('express_partner.my_property_sold_page', code=code))
+        flash(body.get('message') or 'انجام شد.', 'success')
+        return redirect(url_for('express_partner.my_property', status='archived'))
+    if err or body is None:
+        return _owner_sold_error(err or 'failed', detail)
+    return _apk_json(body)
+
+
+@express_partner_bp.get('/my-property/<code>/sold', endpoint='my_property_sold_page')
+@require_partner_access(allow_pending=True)
+def my_property_sold_page(code: str):
+    """صفحهٔ وب «فروخته شد»: انتخاب بازدید یا فروش بیرون از وینور، با تأیید."""
+    from app.listings.owner_sold import error_message, sold_options
+    from .apk_native import session_phone
+
+    body, err = sold_options(session_phone(), code)
+    if err or body is None:
+        flash(error_message(err or 'not_found'), 'error')
+        if err == 'forbidden':
+            from flask import abort
+            abort(403)
+        return redirect(url_for('express_partner.my_property'))
+    if body.get('sold'):
+        flash('این آگهی از قبل فروخته‌شده ثبت شده است.', 'success')
+        return redirect(url_for('express_partner.my_property', status='archived'))
+    return render_template('express_partner/my_property_sold.html', options=body, hide_header=True)
+
+
 @express_partner_bp.post('/api/my-property/restore', endpoint='apk_my_property_restore')
 @require_partner_access(allow_pending=True, json_response=True)
 def apk_my_property_restore():

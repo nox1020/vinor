@@ -294,10 +294,11 @@ def test_owner_apis_expose_sale_publish_clock(client, app):
 def test_sweep_endpoint_is_token_protected_and_idempotent(client, app):
     from app.utils.storage import save_ads
 
-    nowish = datetime(2026, 10, 18, 0, 0, 0)
+    # Relative to today: a fixed date expired the 30-day window and broke this test on 2026-11-17.
+    nowish = datetime.utcnow() - timedelta(days=1)
     row = _published(
         "11",
-        created_at="2026-10-01 00:00:00",
+        created_at=(nowish - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
         published_at=nowish.strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     with app.app_context():

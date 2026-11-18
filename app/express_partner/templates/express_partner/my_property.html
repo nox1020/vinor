@@ -71,6 +71,13 @@
         <button type="submit" class="text-[13px] font-bold text-slate-300">
           {{ 'بازگرداندن به فعال' if land.archived else 'بایگانی' }}
         </button>
+        {% if land.can_mark_sold %}
+        <a href="{{ url_for('express_partner.my_property_sold_page', code=land.code) }}"
+           class="ms-4 text-[13px] font-bold text-emerald-400"
+           data-owner-mark-sold>فروخته شد</a>
+        {% elif land.sold %}
+        <span class="ms-4 text-[13px] font-bold text-slate-400">فروخته‌شده</span>
+        {% endif %}
       </form>
     {% else %}
       <p class="px-3.5 py-8 text-center text-sm text-slate-400">

@@ -232,11 +232,13 @@ def release_hold(
     reason: str,
     force: bool = False,
 ) -> bool:
-    """آزاد کردن بلوکه. معاملهٔ باز مانع است مگر force."""
+    """آزاد کردن بلوکه. معاملهٔ باز یا بلوکهٔ در انتظار بازبینی ادمین مانع است مگر force."""
     if not force and listing_has_open_deal(land_code):
         return False
     row = find_hold(commissions, land_code)
     if row is None:
+        return False
+    if not force and row.get("review_required"):
         return False
     stamp = iso_z(utcnow())
     row["status"] = STATUS_RELEASED
@@ -349,3 +351,96 @@ def listings_missing_hold(lands: List[Dict[str, Any]] | None = None) -> List[Dic
             "title": str(land.get("title") or ""),
         })
     return report
+
+
+# --- بازبینی ادمین: مالک «فروخته شد» زد ولی بازاریاب بازدید انجام‌شده داشت ---
+REVIEW_OWNER_SOLD_OUTSIDE = "owner_sold_outside_after_visit"
+
+
+def flag_hold_for_review(
+    land_code: str,
+    *,
+    reason: str,
+    actor_phone: str = "",
+    visit_ids: List[str] | None = None,
+) -> Optional[Dict[str, Any]]:
+    """بلوکه آزاد نمی‌شود و برای تصمیم ادمین علامت می‌خورد. تکرار ردیف را عوض نمی‌کند."""
+    from app.utils.storage import load_express_commissions, save_express_commissions
+
+    from .deal_wallet import commission_store_lock
+
+    with commission_store_lock():
+        commissions = load_express_commissions() or []
+        if not isinstance(commissions, list):
+            return None
+        row = find_hold(commissions, land_code)
+        if row is None:
+            return None
+        if row.get("review_required"):
+            return dict(row)
+        stamp = iso_z(utcnow())
+        row["review_required"] = True
+        row["review_reason"] = str(reason or "").strip() or REVIEW_OWNER_SOLD_OUTSIDE
+        row["review_requested_at"] = stamp
+        row["review_requested_by"] = str(actor_phone or "").strip()
+        row["review_visit_ids"] = [str(v) for v in (visit_ids or []) if str(v or "").strip()]
+        row["updated_at"] = stamp
+        save_express_commissions(commissions)
+        return dict(row)
+
+
+def review_rows(commissions: List[Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
+    """بلوکه‌های در انتظار تصمیم ادمین."""
+    if commissions is None:
+        from app.utils.storage import load_express_commissions
+
+        commissions = load_express_commissions() or []
+    return [
+        dict(row) for row in held_rows(commissions if isinstance(commissions, list) else [])
+        if row.get("review_required")
+    ]
+
+
+def resolve_review_release(land_code: str, *, admin: str = "") -> bool:
+    """تصمیم ادمین: پورسانتی به بازاریاب تعلق نمی‌گیرد؛ بلوکه برای مالک آزاد می‌شود."""
+    from app.utils.storage import load_express_commissions, save_express_commissions
+
+    from .deal_wallet import commission_store_lock
+
+    with commission_store_lock():
+        commissions = load_express_commissions() or []
+        if not isinstance(commissions, list):
+            return False
+        row = find_hold(commissions, land_code)
+        if row is None or not row.get("review_required"):
+            return False
+        changed = release_hold(commissions, land_code, reason="admin_review_release", force=True)
+        if changed:
+            row["review_required"] = False
+            row["review_resolution"] = "released"
+            row["review_resolved_by"] = str(admin or "").strip()
+            row["review_resolved_at"] = iso_z(utcnow())
+            save_express_commissions(commissions)
+        return changed
+
+
+def mark_review_deal_started(land_code: str, *, admin: str = "", visit_id: str = "") -> bool:
+    """ادمین معامله را به نام بازاریاب ثبت کرد. بلوکه می‌ماند تا تأیید پورسانت آن را مصرف کند."""
+    from app.utils.storage import load_express_commissions, save_express_commissions
+
+    from .deal_wallet import commission_store_lock
+
+    with commission_store_lock():
+        commissions = load_express_commissions() or []
+        if not isinstance(commissions, list):
+            return False
+        row = find_hold(commissions, land_code)
+        if row is None or not row.get("review_required"):
+            return False
+        row["review_required"] = False
+        row["review_resolution"] = "deal_started"
+        row["review_resolved_by"] = str(admin or "").strip()
+        row["review_resolved_at"] = iso_z(utcnow())
+        row["review_deal_visit_id"] = str(visit_id or "")
+        save_express_commissions(commissions)
+        return True

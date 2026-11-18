@@ -341,6 +341,14 @@ def property_cards(me_phone: str) -> List[Dict[str, Any]]:
             "activity": _activity_from_stats(stats),
         })
         try:
+            from app.listings.owner_sold import can_mark_sold, is_sold
+
+            card["sold"] = is_sold(land)
+            card["can_mark_sold"] = can_mark_sold(land, me_phone)
+        except Exception:
+            card["sold"] = False
+            card["can_mark_sold"] = False
+        try:
             from app.listings.service import archive_payload
 
             card.update(archive_payload(land))
