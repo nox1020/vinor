@@ -32,8 +32,13 @@ CONFIRM_OUTSIDE = (
 )
 CONFIRM_OUTSIDE_REVIEW = (
     "ملک را خودتان بیرون از وینور فروخته‌اید؟ آگهی بسته و از فهرست عمومی برداشته می‌شود. "
-    "چون بازاریاب وینور از این ملک بازدید انجام‌شده دارد، پورسانت بلوکه‌شده تا بررسی "
+    "چون بازاریاب وینور برای این ملک بازدید ثبت‌شده دارد، پورسانت بلوکه‌شده تا بررسی "
     "پشتیبانی وینور آزاد نمی‌شود."
+)
+
+REVIEW_WARNING = (
+    "بازاریاب وینور برای این ملک بازدید ثبت‌شده دارد؛ اگر از طریق او فروخته‌اید، همان بازدید را انتخاب کنید. "
+    "با «بیرون از وینور» پورسانت بلوکه‌شده تا بررسی پشتیبانی آزاد نمی‌شود."
 )
 
 ERRORS_FA = {
@@ -43,7 +48,14 @@ ERRORS_FA = {
     "visit_required": "بازدیدی را که به فروش رسید انتخاب کنید.",
     "visit_not_found": "این بازدید برای این آگهی پیدا نشد یا هنوز انجام نشده است.",
     "failed": "ثبت فروش ممکن نشد. دوباره تلاش کنید.",
+    "csrf_failed": "نشست صفحه منقضی شده است. صفحه را تازه کنید و دوباره تلاش کنید.",
 }
+
+DEAL_STARTED_RETRY = (
+    "معامله با بازاریاب ثبت شد ولی پرداخت پورسانت انجام نشد ({reason}). "
+    "{hint}سپس دوباره «فروخته شد» را بزنید و همین بازدید را انتخاب کنید؛ معامله از همین‌جا ادامه می‌یابد."
+)
+WALLET_TOPUP_HINT = "کیف پول را به اندازهٔ پورسانت شارژ کنید، "
 
 
 def _clean(value: Any) -> str:
@@ -72,13 +84,45 @@ def _resolve_owned(code: str, phone: str) -> Tuple[Optional[Dict[str, Any]], Opt
     return _listing_for_code(items, code, phone, require_owner=True)
 
 
-def completed_visits(code: str, owner: str = "", rows: List[Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
-    """بازدیدهای انجام‌شدهٔ بازاریاب‌ها روی همین آگهی (کد قبلی هم حساب می‌شود)."""
+# وضعیت‌هایی که «فروش با بازدید» در آن‌ها مستقیم ممکن است. done_pending اول با تأیید
+# مالک completed می‌شود (همان «تأیید انجام بازدید») و بعد معامله ثبت می‌شود.
+SELLABLE_STATUSES = ("completed", "done_pending")
+
+
+def _has_dispute(row: Dict[str, Any]) -> bool:
+    return bool(_clean(row.get("dispute_reason")) or _clean(row.get("dispute_at")) or row.get("disputed"))
+
+
+def visit_triggers_review(row: Dict[str, Any]) -> bool:
+    """بازدیدی که با وجودش «فروش بیرون از وینور» نباید بلوکه را خودکار آزاد کند.
+
+    done_pending، disputed، completed، no_show با اعتراض، و approved که وقتش گذشته.
+    """
     from app.express_partner.visit_requests import (
+        APPROVED_STATUS,
         COMPLETED_STATUS,
-        canonical_land_code,
-        load_visit_requests_fresh,
+        DISPUTED_STATUS,
+        DONE_PENDING_STATUS,
+        NO_SHOW_STATUS,
+        visit_slot_has_passed,
     )
+
+    status = _clean(row.get("status"))
+    if status in (COMPLETED_STATUS, DONE_PENDING_STATUS, DISPUTED_STATUS):
+        return True
+    if status == NO_SHOW_STATUS:
+        return _has_dispute(row)
+    if status == APPROVED_STATUS:
+        try:
+            return bool(visit_slot_has_passed(row))
+        except Exception:
+            return False
+    return False
+
+
+def _listing_visits(code: str, owner: str, rows: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
+    """بازدیدهای بازاریاب‌ها (نه خود مالک) روی همین آگهی؛ کد قبلی هم حساب می‌شود."""
+    from app.express_partner.visit_requests import canonical_land_code, load_visit_requests_fresh
     from app.listings.service import same_owner
 
     want = canonical_land_code(code)
@@ -90,8 +134,6 @@ def completed_visits(code: str, owner: str = "", rows: List[Dict[str, Any]] | No
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
             continue
-        if _clean(row.get("status")) != COMPLETED_STATUS:
-            continue
         if canonical_land_code(_clean(row.get("land_code"))) != want:
             continue
         partner = _clean(row.get("partner_phone"))
@@ -101,15 +143,33 @@ def completed_visits(code: str, owner: str = "", rows: List[Dict[str, Any]] | No
     return out
 
 
+def review_visits(code: str, owner: str = "", rows: List[Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
+    """همهٔ بازدیدهایی که فروش بیرون از وینور را به بازبینی ادمین می‌برند."""
+    return [row for row in _listing_visits(code, owner, rows) if visit_triggers_review(row)]
+
+
+def sellable_visits(code: str, owner: str = "", rows: List[Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
+    """بازدیدهایی که مالک می‌تواند «فروش از طریق این بازدید» را رویشان بزند."""
+    return [row for row in _listing_visits(code, owner, rows) if _clean(row.get("status")) in SELLABLE_STATUSES]
+
+
+def completed_visits(code: str, owner: str = "", rows: List[Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
+    """سازگاری: فقط بازدیدهای completed."""
+    return [row for row in _listing_visits(code, owner, rows) if _clean(row.get("status")) == "completed"]
+
+
 def _visit_option(row: Dict[str, Any]) -> Dict[str, Any]:
     name = _clean(row.get("partner_name")) or "بازاریاب وینور"
     day = _clean(row.get("visit_date"))
     label = f"{name} · بازدید {day}" if day else name
+    if _clean(row.get("status")) == "done_pending":
+        label = f"{label} (تأیید انجام بازدید هم ثبت می‌شود)"
     return {
         "visit_id": _clean(row.get("id")),
         "partner_name": name,
         "visit_date": day,
         "deal_decision": _clean(row.get("deal_decision")),
+        "status": _clean(row.get("status")),
         "label": label,
         "confirm_message": CONFIRM_VINOR.format(name=name),
     }
@@ -154,8 +214,8 @@ def sold_options(phone: str, code: str) -> Tuple[Optional[Dict[str, Any]], Optio
     if err or land is None:
         return None, err or "not_found"
     key = code_key(land)
-    visits = [_visit_option(row) for row in completed_visits(key, phone)]
-    review = bool(visits) or _open_deal(key)
+    visits = [_visit_option(row) for row in sellable_visits(key, phone)]
+    review = bool(review_visits(key, phone)) or _open_deal(key)
     return {
         "ok": True,
         "code": key,
@@ -166,6 +226,7 @@ def sold_options(phone: str, code: str) -> Tuple[Optional[Dict[str, Any]], Optio
         "visits": visits,
         "has_completed_visits": bool(visits),
         "review_required_if_outside": review,
+        "review_warning": REVIEW_WARNING if review else "",
         "held_amount": _held_amount(key),
         "outside_confirm_message": CONFIRM_OUTSIDE_REVIEW if review else CONFIRM_OUTSIDE,
         "outside_label": "خودم بیرون از وینور فروختم",
@@ -274,10 +335,20 @@ def _sell_via_visit(phone: str, code: str, visit_id: str) -> Tuple[Optional[str]
 
     def _mutate(rows):
         rec = next((r for r in rows if isinstance(r, dict) and _clean(r.get("id")) == visit_id), None)
-        if rec is None or rec not in completed_visits(code, phone, rows):
+        if rec is None or rec not in sellable_visits(code, phone, rows):
             held["err"] = "visit_not_found"
             return False
         saved = False
+        if _clean(rec.get("status")) == "done_pending":
+            out, err = apply_special_visit_action(
+                rows, owner_phone=phone, visit_id=visit_id, action="complete",
+            )
+            if err:
+                held["err"] = err
+                return False
+            saved = True
+            held["steps"].append("complete")
+            rec = out or rec
         decision = visit_deal_decision(rec)
         if decision == DEAL_DECISION_CLOSED:
             held["rec"] = rec
@@ -297,6 +368,8 @@ def _sell_via_visit(phone: str, code: str, visit_id: str) -> Tuple[Optional[str]
         )
         if err:
             held["err"] = err
+            # تأیید معامله ثبت شد (حالا یا قبلاً) ولی بستن/پرداخت نشد: تلاش دوباره از close_deal ادامه می‌دهد.
+            held["deal_started"] = True
             return saved
         held["steps"].append("close_deal")
         held["rec"] = out
@@ -304,9 +377,12 @@ def _sell_via_visit(phone: str, code: str, visit_id: str) -> Tuple[Optional[str]
 
     locked_mutate_visit_requests(_mutate)
     rec = held.get("rec")
+    chat = {"confirm_deal": "approved", "close_deal": "closed"}
     for step in held["steps"]:
+        if step not in chat:
+            continue
         try:
-            inject_visit_deal_chat(rec, decision={"confirm_deal": "approved", "close_deal": "closed"}[step])
+            inject_visit_deal_chat(rec, decision=chat[step])
         except Exception:
             pass
     return held.get("err"), held
@@ -337,10 +413,16 @@ def mark_sold(
         vid = _clean(visit_id)
         if not vid:
             return None, "visit_required", {}
-        if vid not in {_clean(row.get("id")) for row in completed_visits(key, phone)}:
+        if vid not in {_clean(row.get("id")) for row in sellable_visits(key, phone)}:
             return None, "visit_not_found", {}
         deal_err, detail = _sell_via_visit(phone, key, vid)
         if deal_err:
+            if detail.get("deal_started"):
+                hint = WALLET_TOPUP_HINT if deal_err == "wallet_insufficient" else ""
+                detail["message"] = DEAL_STARTED_RETRY.format(reason=error_message(deal_err), hint=hint)
+                _audit("owner_mark_sold_deal_pending", phone=phone, code=key,
+                       payload={"channel": chan, "visit_id": vid, "error": deal_err,
+                                "steps": detail.get("steps") or []})
             return None, deal_err, detail
         sold_land = _stamp_sold(key, phone, channel=chan, visit_id=vid, review=False)
         if sold_land is None:
@@ -351,19 +433,33 @@ def mark_sold(
         return _result(sold_land, already=False, channel=chan, review=False,
                        message="فروش ثبت شد. پورسانت به بازاریاب رسید و آگهی بسته شد."), None, detail
 
-    visits = completed_visits(key, phone)
+    visits = review_visits(key, phone)
     review = bool(visits) or _open_deal(key)
     if review:
         # Flag before closing the listing, so no auto-release can slip in between.
+        # A legacy listing with no hold still gets a review case so it shows on the admin page.
         try:
-            from app.express_partner.commission_escrow import REVIEW_OWNER_SOLD_OUTSIDE, flag_hold_for_review
+            from app.express_partner.commission_escrow import (
+                REVIEW_OWNER_SOLD_OUTSIDE,
+                flag_hold_for_review,
+                open_review_case,
+            )
 
-            flag_hold_for_review(
+            visit_ids = [_clean(row.get("id")) for row in visits]
+            flagged = flag_hold_for_review(
                 key,
                 reason=REVIEW_OWNER_SOLD_OUTSIDE,
                 actor_phone=phone,
-                visit_ids=[_clean(row.get("id")) for row in visits],
+                visit_ids=visit_ids,
             )
+            if flagged is None:
+                open_review_case(
+                    key,
+                    owner_phone=phone,
+                    reason=REVIEW_OWNER_SOLD_OUTSIDE,
+                    visit_ids=visit_ids,
+                    title=_clean(land.get("title")),
+                )
         except Exception:
             return None, "failed", {}
     sold_land = _stamp_sold(key, phone, channel=chan, visit_id="", review=review)
@@ -382,7 +478,7 @@ def mark_sold(
            payload={"channel": chan, "review_required": review, "hold_released": released,
                     "visit_ids": [_clean(row.get("id")) for row in visits]})
     if review:
-        message = ("آگهی فروخته‌شده ثبت و بسته شد. چون بازاریاب وینور بازدید انجام‌شده داشت، "
+        message = ("آگهی فروخته‌شده ثبت و بسته شد. چون بازاریاب وینور بازدید ثبت‌شده داشت، "
                    "پورسانت بلوکه‌شده تا بررسی پشتیبانی وینور آزاد نمی‌شود.")
     else:
         message = "آگهی فروخته‌شده ثبت و بسته شد. پورسانت بلوکه‌شده آزاد شد."

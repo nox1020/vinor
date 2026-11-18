@@ -4757,6 +4757,17 @@ def _listing_archive_response(phone: str, code: str, *, restore: bool):
         message = 'آگهی بایگانی شد.'
     if err == 'forbidden':
         return _apk_json({'ok': False, 'error': 'این آگهی برای شما نیست.', 'error_code': 'forbidden'}, 403)
+    if err == 'sold_locked':
+        body = archive_payload(land) if isinstance(land, dict) else {}
+        body.update({
+            'ok': False,
+            'code': str((land or {}).get('code') or code),
+            'sold': True,
+            'can_restore': False,
+            'error': 'این آگهی فروخته‌شده ثبت شده و به فهرست فعال برنمی‌گردد.',
+            'error_code': 'sold_locked',
+        })
+        return _apk_json(body, 409)
     if err == 'wallet_insufficient':
         from .commission_escrow import last_hold_detail
 
@@ -4802,7 +4813,34 @@ def apk_my_property_archive():
     return resp
 
 
+def _owner_sold_csrf_ok() -> bool:
+    """مسیرهای /api همکار از CSRF معاف‌اند. این عملیات مالی است: بدنهٔ فرم (وب) باید توکن
+    CSRF معتبر داشته باشد. JSON اپ (Content-Type: application/json، بدون فرم ساده‌ی بین‌سایتی)
+    و درخواست با Authorization: Bearer بدون توکن قبول می‌شوند."""
+    auth = str(request.headers.get('Authorization') or '')
+    if auth.lower().startswith('bearer ') and auth[7:].strip():
+        return True
+    if request.is_json and not request.form:
+        return True
+    token = (
+        request.form.get('csrf_token')
+        or request.headers.get('X-CSRFToken')
+        or request.headers.get('X-CSRF-Token')
+        or ''
+    )
+    if not token:
+        return False
+    try:
+        from flask_wtf.csrf import validate_csrf
+
+        validate_csrf(token)
+        return True
+    except Exception:
+        return False
+
+
 _SOLD_ERROR_STATUS = {
+    'csrf_failed': 400,
     'forbidden': 403,
     'not_found': 404,
     'invalid_channel': 400,
@@ -4815,7 +4853,11 @@ _SOLD_ERROR_STATUS = {
 def _owner_sold_error(err: str, detail: dict | None = None):
     from app.listings.owner_sold import error_message
 
-    body = {'ok': False, 'error': error_message(err), 'error_code': err}
+    detail = detail if isinstance(detail, dict) else {}
+    body = {'ok': False, 'error': str(detail.get('message') or error_message(err)), 'error_code': err}
+    if detail.get('deal_started'):
+        body['deal_started'] = True
+        body['retry'] = True
     if err == 'wallet_insufficient':
         from .deal_wallet import wallet_detail
 
@@ -4854,6 +4896,17 @@ def apk_my_property_sold():
     from app.listings.owner_sold import mark_sold
     from .apk_native import session_phone
 
+    if not _owner_sold_csrf_ok():
+        if _browser_form_post():
+            from app.listings.owner_sold import error_message
+
+            flash(error_message('csrf_failed'), 'error')
+            code = str(request.form.get('code') or '').strip()
+            if code:
+                return redirect(url_for('express_partner.my_property_sold_page', code=code))
+            return redirect(url_for('express_partner.my_property'))
+        return _owner_sold_error('csrf_failed')
+
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         data = {}
@@ -4868,7 +4921,7 @@ def apk_my_property_sold():
         if err or body is None:
             from app.listings.owner_sold import error_message
 
-            flash(error_message(err or 'failed'), 'error')
+            flash(str((detail or {}).get('message') or error_message(err or 'failed')), 'error')
             if err in ('forbidden', 'not_found'):
                 return redirect(url_for('express_partner.my_property'))
             return redirect(url_for('express_partner.my_property_sold_page', code=code))

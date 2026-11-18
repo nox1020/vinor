@@ -39,20 +39,32 @@
       <span>{{ options.outside_label }}</span>
     </label>
     {% if options.review_required_if_outside %}
-    <p class="text-[12px] text-amber-300">بازاریاب وینور از این ملک بازدید انجام‌شده دارد؛ اگر از طریق او فروخته‌اید، همان بازدید را انتخاب کنید.</p>
+    <p class="text-[12px] text-amber-300" data-owner-sold-review-warning>{{ options.review_warning }}</p>
     {% endif %}
-    <button type="submit" class="mt-2 w-full rounded-xl bg-emerald-500 py-3 text-[14px] font-bold text-black">ثبت فروش</button>
+    <button type="submit" data-owner-sold-submit class="mt-2 w-full disabled:opacity-60 rounded-xl bg-emerald-500 py-3 text-[14px] font-bold text-black">ثبت فروش</button>
   </form>
 </div>
 <script>
 (function () {
   var form = document.getElementById('ownerSoldForm');
   if (!form) return;
+  var submitBtn = form.querySelector('[data-owner-sold-submit]');
+  var sending = false;
   form.addEventListener('submit', function (ev) {
+    if (sending) { ev.preventDefault(); return; }
     var picked = form.querySelector('input[name="visit_id"]:checked');
     if (!picked) { ev.preventDefault(); return; }
     form.querySelector('input[name="channel"]').value = picked.getAttribute('data-channel') || '';
-    if (!window.confirm(picked.getAttribute('data-confirm') || 'ثبت فروش؟')) ev.preventDefault();
+    if (!window.confirm(picked.getAttribute('data-confirm') || 'ثبت فروش؟')) { ev.preventDefault(); return; }
+    sending = true;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.setAttribute('aria-busy', 'true');
+      submitBtn.textContent = 'در حال ثبت…';
+    }
+  });
+  window.addEventListener('pageshow', function (ev) {
+    if (ev.persisted && submitBtn) { sending = false; submitBtn.disabled = false; submitBtn.removeAttribute('aria-busy'); submitBtn.textContent = 'ثبت فروش'; }
   });
 })();
 </script>

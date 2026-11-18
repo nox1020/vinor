@@ -916,11 +916,14 @@ def archive_payload(land: Dict[str, Any] | None) -> Dict[str, Any]:
         raw = str(land.get("archived_reason") or "").strip().lower()
         reason = raw if raw in ARCHIVE_REASONS else ""
         stamp = str(land.get("archived_at") or "").strip()
+    sold = isinstance(land, dict) and str(land.get("express_status") or "").strip().lower() == "sold"
     return {
         "archived": archived,
         "is_archived": archived,
         "archived_at": stamp,
         "archived_reason": reason,
+        # فروخته‌شده به فعال برنمی‌گردد؛ وب و اپ دکمهٔ «بازگرداندن به فعال» را با همین پنهان می‌کنند.
+        "can_restore": bool(archived and not sold),
     }
 
 
@@ -1095,6 +1098,9 @@ def restore_listing(
         target, err = _listing_for_code(items, code, phone, require_owner=require_owner)
         if err or target is None:
             return None, err or "not_found", False
+        if str(target.get("express_status") or "").strip().lower() == "sold":
+            # فروخته‌شده برنمی‌گردد؛ وگرنه بلوکهٔ انتشار دوباره ساخته و آگهی دوباره عمومی می‌شد.
+            return target, "sold_locked", False
         if not is_archived(target):
             return target, None, False
         would_publish = is_published_for_sale(target)

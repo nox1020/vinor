@@ -234,8 +234,10 @@ def test_web_page_and_form_post(client, app):
     sold_page = client.get(f"/express/partner/my-property/{code}/sold")
     html = sold_page.get_data(as_text=True)
     assert sold_page.status_code == 200 and "خودم بیرون از وینور فروختم" in html and "confirm" in html
+    import re
+    token = re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
     resp = client.post("/express/partner/api/my-property/sold",
-                       data={"code": code, "channel": "outside", "visit_id": ""})
+                       data={"code": code, "channel": "outside", "visit_id": "", "csrf_token": token})
     assert resp.status_code == 302
     with app.app_context():
         from app.listings.service import get_listing

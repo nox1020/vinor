@@ -68,9 +68,11 @@
             data-vinor-direct-action>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="code" value="{{ land.code }}">
+        {% if not (land.archived and land.sold) %}
         <button type="submit" class="text-[13px] font-bold text-slate-300">
           {{ 'بازگرداندن به فعال' if land.archived else 'بایگانی' }}
         </button>
+        {% endif %}
         {% if land.can_mark_sold %}
         <a href="{{ url_for('express_partner.my_property_sold_page', code=land.code) }}"
            class="ms-4 text-[13px] font-bold text-emerald-400"
