@@ -1,0 +1,59 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}فروخته شد | وینور{% endblock %}
+
+{% block content %}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{{ ep_header_start(id='myPropertySoldHeader') }}
+{% call ep_header_row('فروخته شد', url_for('express_partner.my_property'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mx-auto w-full max-w-lg px-3 sm:px-4 pt-2 space-y-2">
+    {% for category, message in messages %}
+    <div class="rounded-xl border px-4 py-3 text-sm {% if category in ['error', 'danger'] %}border-rose-500/30 bg-rose-950/30 text-rose-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endwith %}
+
+<div class="partner-page-scroll-pad mx-auto w-full max-w-lg px-3.5 pt-3 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+  <h2 class="text-[15px] font-bold text-white">{{ options.title or ('آگهی ' ~ options.code) }}</h2>
+  <p class="mt-2 text-[13px] text-slate-300">{{ options.question }}</p>
+  <form method="post"
+        action="{{ url_for('express_partner.apk_my_property_sold') }}"
+        id="ownerSoldForm"
+        class="mt-3 space-y-2"
+        data-owner-sold-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="code" value="{{ options.code }}">
+    <input type="hidden" name="channel" value="">
+    {% for v in options.visits %}
+    <label class="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-[13px] text-white">
+      <input type="radio" name="visit_id" value="{{ v.visit_id }}" data-channel="vinor" data-confirm="{{ v.confirm_message }}" required>
+      <span>از طریق بازدید {{ v.label }}</span>
+    </label>
+    {% endfor %}
+    <label class="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-[13px] text-white">
+      <input type="radio" name="visit_id" value="" data-channel="outside" data-confirm="{{ options.outside_confirm_message }}" required>
+      <span>{{ options.outside_label }}</span>
+    </label>
+    {% if options.review_required_if_outside %}
+    <p class="text-[12px] text-amber-300">بازاریاب وینور از این ملک بازدید انجام‌شده دارد؛ اگر از طریق او فروخته‌اید، همان بازدید را انتخاب کنید.</p>
+    {% endif %}
+    <button type="submit" class="mt-2 w-full rounded-xl bg-emerald-500 py-3 text-[14px] font-bold text-black">ثبت فروش</button>
+  </form>
+</div>
+<script>
+(function () {
+  var form = document.getElementById('ownerSoldForm');
+  if (!form) return;
+  form.addEventListener('submit', function (ev) {
+    var picked = form.querySelector('input[name="visit_id"]:checked');
+    if (!picked) { ev.preventDefault(); return; }
+    form.querySelector('input[name="channel"]').value = picked.getAttribute('data-channel') || '';
+    if (!window.confirm(picked.getAttribute('data-confirm') || 'ثبت فروش؟')) ev.preventDefault();
+  });
+})();
+</script>
+{% endblock %}
