@@ -1,21 +1,182 @@
-{% extends "express_partner/base.html" %}
+{% extends 'express_partner/base.html' %}
+{% block title %}افزایش اعتبار | وینور{% endblock %}
+
 {% block content %}
-<section class="vn-wallet-card" style="margin:16px">
-  <h1 style="font-size:1.1rem;margin:0 0 8px">شارژ کیف پول</h1>
-  <p>قابل استفاده: {{ (wallet_available or 0)|toman }}</p>
-  {% if shortfall %}
-  <p>کمبود اعلام‌شده برای بلوکهٔ پورسانت: {{ shortfall|toman }}</p>
-  {% endif %}
-  <form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <p>مبلغ (تومان)</p>
-    <input name="amount" inputmode="numeric" value="{{ shortfall or presets[0] }}" required>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0">
-      {% for preset in presets %}
-      <button type="submit" name="amount" value="{{ preset }}">{{ preset|toman }}</button>
+{% set t = options.texts %}
+{% include 'express_partner/partials/wallet_style.html' %}
+<form method="post"
+      action="{{ url_for('express_partner.wallet_charge') }}"
+      class="min-h-[100dvh] flex flex-col bg-zinc-950 text-white"
+      data-wallet-charge
+      data-min="{{ options.min_amount }}"
+      data-max="{{ options.max_amount }}"
+      data-available="{{ options.wallet.available }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if options.ctx %}<input type="hidden" name="ctx" value="{{ options.ctx }}">{% endif %}
+  {% if not options.ctx and request.args.get('from') %}<input type="hidden" name="from" value="{{ request.args.get('from') }}">{% endif %}
+  {% if not options.ctx and not request.args.get('from') and options.return.key in ['commissions', 'wallet'] %}<input type="hidden" name="return" value="{{ options.return.key }}">{% endif %}
+  {% if not options.ctx and not request.args.get('from') and options.reason == 'generic' and options.shortfall %}<input type="hidden" name="shortfall" value="{{ options.shortfall }}">{% endif %}
+  <input type="hidden" name="amount" value="" data-wc-amount-raw>
+
+  <header class="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur px-3.5 pt-[calc(.75rem+env(safe-area-inset-top,0px))] pb-3 border-b border-white/10">
+    <div class="mx-auto flex max-w-lg items-center gap-2">
+      <button type="button" data-wc-back data-href="{{ options.return.url }}"
+              class="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10" aria-label="بازگشت">
+        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+      </button>
+      <p class="min-w-0 flex-1 truncate text-[15px] font-bold" data-wc-title>{{ t.amount_title }}</p>
+      <span class="text-[12px] text-zinc-400" data-wc-progress-label aria-live="polite">مرحلهٔ ۱ از ۲</span>
+    </div>
+    <div class="mx-auto mt-3 flex max-w-lg gap-1.5" aria-hidden="true">
+      <span class="wc-seg is-on"></span><span class="wc-seg" data-wc-seg2></span>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mx-auto w-full max-w-lg px-3.5 pt-3 space-y-2">
+      {% for category, message in messages %}
+      <div class="rounded-xl border px-4 py-3 text-sm {% if category in ['error', 'danger'] %}border-rose-500/30 bg-rose-950/30 text-rose-200{% else %}border-emerald-500/30 bg-emerald-950/30 text-emerald-200{% endif %}" role="alert">{{ message }}</div>
       {% endfor %}
     </div>
-    <button type="submit">پرداخت</button>
-  </form>
-</section>
+    {% endif %}
+  {% endwith %}
+
+  <main class="mx-auto w-full max-w-lg flex-1 px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
+    <section data-wc-step="amount" class="pt-5">
+      <h1 class="text-[18px] font-bold leading-8">{{ t.amount_question }}</h1>
+      <p class="mt-1 text-[13px] text-zinc-400">{{ t.available_label }}: {{ options.wallet.available_label }}</p>
+      {% if options.reason_line %}
+      <p class="mt-4 rounded-xl border border-amber-400/30 bg-amber-950/30 px-3.5 py-3 text-[13px] leading-6 text-amber-200" data-wc-reason>
+        <i class="fas fa-circle-info me-1.5" aria-hidden="true"></i>{{ options.reason_line }}
+      </p>
+      {% endif %}
+
+      <label class="mt-5 wc-field" data-wc-field>
+        <input type="text" inputmode="numeric" autocomplete="off" dir="rtl"
+               placeholder="{{ t.amount_placeholder }}" aria-label="{{ t.amount_placeholder }}"
+               maxlength="20" data-wc-input value="">
+        <span class="text-[14px] text-zinc-400">{{ t.amount_suffix }}</span>
+      </label>
+      <p class="mt-2 min-h-[20px] text-[13px] text-emerald-300" data-wc-words aria-live="polite"></p>
+      <p class="text-[12px] text-zinc-500" data-wc-hint>{{ t.amount_min }}</p>
+      <p class="mt-1 min-h-[18px] text-[12px] text-rose-300" data-wc-error role="alert"></p>
+
+      <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="مبلغ‌های پیشنهادی">
+        {% for p in options.presets %}
+        <button type="button" class="wc-chip" data-wc-chip="{{ p.amount }}" aria-pressed="false">{{ p.label }}</button>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section data-wc-step="summary" class="pt-5" hidden>
+      <h1 class="text-[18px] font-bold leading-8">{{ t.summary_question }}</h1>
+      <dl class="mt-4 divide-y divide-white/10 rounded-xl border border-white/10 bg-white/5 text-[14px]">
+        <div class="flex items-center justify-between px-3.5 py-3.5"><dt class="text-zinc-400">{{ t.summary_amount }}</dt><dd class="font-bold" data-wc-sum-amount></dd></div>
+        <div class="flex items-center justify-between px-3.5 py-3.5"><dt class="text-zinc-400">{{ t.summary_gateway }}</dt><dd class="font-medium">{{ options.gateway.label }}</dd></div>
+        <div class="flex items-center justify-between px-3.5 py-3.5"><dt class="text-zinc-400">{{ t.summary_after }}</dt><dd class="font-medium" data-wc-sum-after></dd></div>
+      </dl>
+      <p class="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3.5 py-3 text-[13px] leading-6 text-emerald-200">
+        <i class="fas fa-shield-halved me-1.5" aria-hidden="true"></i>{{ t.summary_note }}
+      </p>
+    </section>
+  </main>
+
+  <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto max-w-lg">
+      <button type="button" data-wc-next disabled
+              class="h-12 w-full rounded-xl bg-emerald-500 text-[15px] font-bold text-black disabled:opacity-40">{{ t.next }}</button>
+      <button type="submit" data-wc-pay hidden
+              class="h-12 w-full rounded-xl bg-emerald-500 text-[15px] font-bold text-black disabled:opacity-60">{{ t.pay }}</button>
+    </div>
+  </footer>
+</form>
+
+<script>
+(function () {
+  var form = document.querySelector('[data-wallet-charge]');
+  if (!form) return;
+  var $ = function (s) { return form.querySelector(s); };
+  var t = {{ t|tojson }};
+  var MIN = +form.getAttribute('data-min') || 1000;
+  var MAX = +form.getAttribute('data-max') || 0;
+  var AVAILABLE = +form.getAttribute('data-available') || 0;
+  var PREFILL = {{ options.prefill|int }};
+  var FA = '۰۱۲۳۴۵۶۷۸۹';
+  var toFa = function (s) { return String(s).replace(/[0-9]/g, function (d) { return FA[+d]; }); };
+  var toEn = function (s) { return String(s || '').replace(/[۰-۹]/g, function (d) { return FA.indexOf(d); }).replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }); };
+  var group = function (n) { return toFa(String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬')); };
+  var SCALES = ['', 'هزار', 'میلیون', 'میلیارد', 'هزار میلیارد'];
+  function words(n) {
+    if (!n) return '';
+    var parts = [], s = 0;
+    while (n > 0 && s < SCALES.length) {
+      var c = n % 1000; n = Math.floor(n / 1000);
+      if (c) parts.push(toFa(c) + (SCALES[s] ? ' ' + SCALES[s] : ''));
+      s++;
+    }
+    return parts.reverse().join(' و ') + ' تومان';
+  }
+  var input = $('[data-wc-input]');
+  var step = 'amount';
+  function digits() { return toEn(input.value).replace(/[^0-9]/g, '').replace(/^0+/, ''); }
+  function amount() { var d = digits(); return d ? Number(d) : 0; }
+  function error() {
+    var a = amount();
+    if (!a) return '';
+    if (a < MIN) return t.amount_too_low;
+    if (MAX && a > MAX) return t.amount_too_high;
+    return '';
+  }
+  function paint() {
+    var a = amount();
+    $('[data-wc-words]').textContent = a ? words(a) : '';
+    var err = error();
+    $('[data-wc-error]').textContent = err;
+    $('[data-wc-field]').classList.toggle('is-bad', !!err);
+    form.querySelectorAll('[data-wc-chip]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(+b.getAttribute('data-wc-chip') === a));
+    });
+    $('[data-wc-next]').disabled = !a || !!err;
+  }
+  function setAmount(n) { input.value = n ? group(n) : ''; paint(); }
+  input.addEventListener('input', function () { var d = digits().slice(0, 15); input.value = d ? group(d) : ''; paint(); });
+  form.querySelectorAll('[data-wc-chip]').forEach(function (b) {
+    b.addEventListener('click', function () { setAmount(+b.getAttribute('data-wc-chip')); });
+  });
+  function render() {
+    form.querySelectorAll('[data-wc-step]').forEach(function (el) { el.hidden = el.getAttribute('data-wc-step') !== step; });
+    var last = step === 'summary';
+    $('[data-wc-next]').hidden = last;
+    $('[data-wc-pay]').hidden = !last;
+    $('[data-wc-seg2]').classList.toggle('is-on', last);
+    $('[data-wc-title]').textContent = last ? t.summary_title : t.amount_title;
+    $('[data-wc-progress-label]').textContent = last ? 'مرحلهٔ ۲ از ۲' : 'مرحلهٔ ۱ از ۲';
+    if (last) {
+      var a = amount();
+      $('[data-wc-sum-amount]').textContent = group(a) + ' تومان';
+      $('[data-wc-sum-after]').textContent = group(AVAILABLE + a) + ' تومان';
+      $('[data-wc-amount-raw]').value = String(a);
+    }
+    window.scrollTo(0, 0);
+  }
+  $('[data-wc-next]').addEventListener('click', function () { if (!error() && amount()) { step = 'summary'; render(); } });
+  $('[data-wc-back]').addEventListener('click', function () {
+    if (step === 'summary') { step = 'amount'; render(); return; }
+    window.location.href = $('[data-wc-back]').getAttribute('data-href');
+  });
+  var sending = false;
+  form.addEventListener('submit', function (ev) {
+    if (sending || step !== 'summary' || error() || !amount()) { ev.preventDefault(); return; }
+    sending = true;
+    var b = $('[data-wc-pay]'); b.disabled = true; b.setAttribute('aria-busy', 'true'); b.textContent = t.paying;
+  });
+  window.addEventListener('pageshow', function (ev) {
+    if (ev.persisted) { sending = false; var b = $('[data-wc-pay]'); b.disabled = false; b.removeAttribute('aria-busy'); b.textContent = t.pay; }
+  });
+  setAmount(PREFILL);
+  render();
+  window.__walletCharge = { setAmount: setAmount, words: words };
+})();
+</script>
 {% endblock %}

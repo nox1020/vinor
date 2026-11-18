@@ -4784,6 +4784,8 @@ def _listing_archive_response(phone: str, code: str, *, restore: bool):
             'charge_path': detail.get('charge_path') or '/express/partner/wallet/charge',
             'published_for_sale': False,
         })
+        body.update(_charge_context_fields(phone, int(detail.get('shortfall') or 0),
+                                           'restore' if restore else 'generic', str(code)))
         return _apk_json(body, 400)
     if err or land is None:
         return _apk_json({'ok': False, 'error': 'این آگهی پیدا نشد.', 'error_code': 'not_found'}, 404)
@@ -4850,7 +4852,7 @@ _SOLD_ERROR_STATUS = {
 }
 
 
-def _owner_sold_error(err: str, detail: dict | None = None):
+def _owner_sold_error(err: str, detail: dict | None = None, code: str = ''):
     from app.listings.owner_sold import error_message
 
     detail = detail if isinstance(detail, dict) else {}
@@ -4868,6 +4870,8 @@ def _owner_sold_error(err: str, detail: dict | None = None):
             'shortfall': int(wd.get('shortfall') or 0),
             'charge_path': '/express/partner/wallet/charge',
         })
+        body.update(_charge_context_fields((session.get('user_phone') or '').strip(),
+                                           int(wd.get('shortfall') or 0), 'sold', str(code or '')))
     return _apk_json(body, _SOLD_ERROR_STATUS.get(err, 400))
 
 
@@ -4936,7 +4940,7 @@ def apk_my_property_sold():
             return redirect(url_for('express_partner.my_property'))
         return redirect(url_for('express_partner.my_property_sold_done', code=body.get('code') or code))
     if err or body is None:
-        return _owner_sold_error(err or 'failed', detail)
+        return _owner_sold_error(err or 'failed', detail, code)
     return _apk_json(body)
 
 
@@ -5320,7 +5324,14 @@ def my_property_publish():
         msg = SPECIAL_LISTING_ERRORS.get(err, 'انتشار آگهی ناموفق بود.')
         if err == 'wallet_insufficient':
             from .commission_escrow import last_hold_detail
-            msg = str(last_hold_detail().get('message') or msg)
+            detail = last_hold_detail()
+            msg = str(detail.get('message') or msg)
+            short = int(detail.get('shortfall') or 0)
+            if short > 0:
+                # مستقیم به شارژ با همان کمبود؛ صفحهٔ شارژ دلیل را خودش می‌گوید.
+                from .wallet_charge_flow import charge_path_for
+                return redirect(charge_path_for(phone=phone, shortfall=short, reason='publish',
+                                                code=str(fields.get('code') or '')))
         flash(msg, 'error')
         if fields.get('code'):
             return redirect(url_for('express_partner.land_detail', code=fields['code']))
@@ -5368,6 +5379,8 @@ def apk_my_property_publish():
                 'shortfall': int(detail.get('shortfall') or 0),
                 'charge_path': detail.get('charge_path') or '/express/partner/wallet/charge',
             }
+            extra.update(_charge_context_fields(phone, int(detail.get('shortfall') or 0), 'publish',
+                                                str(fields.get('code') or '')))
         return _apk_json({'ok': False, 'error': msg, 'error_code': err, **extra}, 400)
     code = str((rec or {}).get('code') or fields.get('code') or '').strip()
     if stopped:
@@ -7951,62 +7964,227 @@ def commissions_transactions_page():
     return resp
 
 
+def _wallet_header(phone: str) -> Dict[str, int]:
+    """همان اعداد صفحهٔ کمیسیون: کل، بلوکه، قابل استفاده."""
+    my_comms = _commissions_for_phone(phone)
+    stats = _partner_commission_stats(phone, my_comms)
+    return {
+        'total': int(stats.get('withdrawable_balance') or 0),
+        'blocked': int(_partner_blocked_balance(phone) or 0),
+        'available': int(_partner_requestable_balance(phone) or 0),
+    }
+
+
+def _wallet_feed(phone: str) -> List[Dict[str, Any]]:
+    from .wallet_charge_flow import feed_groups
+
+    my_comms = _commissions_for_phone(phone)
+    try:
+        _attach_commission_txn_labels(my_comms)
+    except Exception:
+        pass
+    return feed_groups(_partner_txn_items(phone, my_comms))
+
+
+def _wants_json() -> bool:
+    return request.is_json or 'application/json' in (request.headers.get('Accept') or '')
+
+
+@express_partner_bp.app_template_global('wallet_charge_url')
+def wallet_charge_url(shortfall=0, reason='generic', code=''):
+    """لینک شارژ با زمینهٔ امضاشده برای قالب‌ها (کاربر جاری)."""
+    from .wallet_charge_flow import charge_path_for
+
+    return charge_path_for(phone=(session.get('user_phone') or '').strip(),
+                           shortfall=shortfall, reason=reason, code=code)
+
+
+def _charge_context_fields(phone: str, shortfall: int, reason: str, code: str = '') -> Dict[str, Any]:
+    """فیلدهای تازهٔ پاسخ wallet_insufficient. charge_path قدیمی دست نمی‌خورد."""
+    from .wallet_charge_flow import charge_path_for, make_context
+
+    if int(shortfall or 0) <= 0:
+        return {}
+    return {
+        'charge_context': make_context(phone=phone, shortfall=shortfall, reason=reason, code=code),
+        'charge_url': charge_path_for(phone=phone, shortfall=shortfall, reason=reason, code=code),
+        'charge_reason': reason,
+    }
+
+
+@express_partner_bp.get('/wallet', endpoint='wallet_home')
+@require_partner_access(allow_pending=True)
+def wallet_home():
+    """کیف پول به سبک دیوار: موجودی بزرگ، بلوکه و کل، «افزایش اعتبار»، و تراکنش‌ها بر اساس روز."""
+    from .wallet_charge_flow import TEXTS, header_payload
+
+    me_phone = (session.get('user_phone') or '').strip()
+    return render_template(
+        'express_partner/wallet_home.html',
+        wallet=header_payload(_wallet_header(me_phone)),
+        groups=_wallet_feed(me_phone),
+        texts=TEXTS,
+        hide_header=True,
+    )
+
+
+@express_partner_bp.get('/api/wallet', endpoint='apk_wallet')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_wallet():
+    """دادهٔ کیف پول و صفحهٔ شارژ برای APK. ?ctx= همان زمینهٔ امضاشدهٔ کمبود است."""
+    from .wallet_charge_flow import charge_options, context_from_request
+
+    me_phone = (session.get('user_phone') or '').strip()
+    header = _wallet_header(me_phone)
+    ctx = context_from_request(request.args, me_phone)
+    body = charge_options(header, ctx)
+    body.update({'ok': True, 'groups': _wallet_feed(me_phone)})
+    try:
+        from flask_wtf.csrf import generate_csrf
+        body['csrf_token'] = generate_csrf()
+    except Exception:
+        pass
+    return _apk_json(body)
+
+
 @express_partner_bp.route('/wallet/charge', methods=['GET', 'POST'], endpoint='wallet_charge')
 @require_partner_access(allow_pending=True)
 def wallet_charge():
-    """شارژ کیف پول. مبلغ، پیش‌فرض‌ها، و کمبود دقیق انتشار."""
-    from .wallet_topup import MIN_TOPUP, TOPUP_PRESETS, begin_wallet_topup
+    """شارژ کیف پول: مرحلهٔ مبلغ و مرحلهٔ تأیید. مبلغ نهایی همان است که سرور ثبت می‌کند."""
+    from .wallet_charge_flow import charge_meta, charge_options, context_from_request, result_token
+    from .wallet_topup import start_wallet_topup
 
     me_phone = (session.get('user_phone') or '').strip()
-    shortfall = 0
-    try:
-        shortfall = max(0, int(request.values.get('shortfall') or 0))
-    except (TypeError, ValueError):
-        shortfall = 0
+    payload = request.get_json(silent=True) if request.is_json else None
+    values = request.values.to_dict()
+    if isinstance(payload, dict):
+        for key in ('ctx', 'from', 'return', 'shortfall'):
+            if payload.get(key) not in (None, ''):
+                values[key] = str(payload.get(key))
+    ctx = context_from_request(values, me_phone)
     if request.method == 'POST':
         raw_amount = request.form.get('amount') or request.values.get('amount')
-        if raw_amount is None and request.is_json:
-            payload = request.get_json(silent=True) or {}
+        if raw_amount is None and isinstance(payload, dict):
             raw_amount = payload.get('amount')
-        try:
-            amount = int(str(raw_amount or '0').replace(',', '') or '0')
-        except (TypeError, ValueError):
-            amount = 0
-        ok, pay_url, err = begin_wallet_topup(phone=me_phone, amount=amount)
-        wants_json = request.is_json or 'application/json' in (request.headers.get('Accept') or '')
+        from app.utils.dates import to_en_digits
+
+        digits = re.sub(r'[^0-9]', '', to_en_digits(str(raw_amount or '')))
+        amount = int(digits) if digits and len(digits) <= 15 else 0
+        ok, pay_url, err, txn_id = start_wallet_topup(phone=me_phone, amount=amount, meta=charge_meta(ctx))
         if not ok:
-            if wants_json:
+            if _wants_json():
                 return jsonify({'ok': False, 'error': err}), 400
             flash(err, 'error')
-            return redirect(url_for('express_partner.wallet_charge', shortfall=shortfall or None))
-        if wants_json:
-            return jsonify({'ok': True, 'pay_url': pay_url})
+            keep = {k: values[k] for k in ('ctx', 'from', 'return', 'shortfall') if values.get(k)}
+            return redirect(url_for('express_partner.wallet_charge', **keep))
+        if _wants_json():
+            token = result_token(txn_id)
+            return jsonify({
+                'ok': True,
+                'pay_url': pay_url,
+                'txn_id': txn_id,
+                'result_token': token,
+                'status_path': url_for('express_partner.apk_wallet_topup_status', txn_id=txn_id),
+            })
         return redirect(pay_url)
-    presets = list(TOPUP_PRESETS)
-    if shortfall and shortfall not in presets:
-        presets = [shortfall] + presets
+    options = charge_options(_wallet_header(me_phone), ctx)
+    # قالب قدیمی این‌ها را می‌خواند؛ برای سازگاری می‌مانند.
     return render_template(
         'express_partner/wallet_charge.html',
-        presets=presets,
-        shortfall=shortfall,
-        min_topup=MIN_TOPUP,
-        wallet_available=_partner_requestable_balance(me_phone),
+        options=options,
+        presets=[p['amount'] for p in options['presets']],
+        shortfall=options['shortfall'],
+        min_topup=options['min_amount'],
+        wallet_available=options['wallet']['available'],
         hide_header=True,
     )
 
 
 @express_partner_bp.get('/wallet/zarinpal/callback', endpoint='wallet_zarinpal_callback')
 def wallet_zarinpal_callback():
+    """برگشت از زرین‌پال. تأیید و واریز در complete_wallet_topup؛ این‌جا فقط به صفحهٔ نتیجه می‌رویم."""
+    from .wallet_charge_flow import result_token
     from .wallet_topup import complete_wallet_topup
 
     authority = (request.args.get('Authority') or request.args.get('authority') or '').strip()
     status_param = (request.args.get('Status') or request.args.get('status') or '').strip()
     result = complete_wallet_topup(authority, status_param)
-    if result.get('ok'):
-        flash('کیف پول شارژ شد.', 'success')
-    else:
-        flash('شارژ کیف پول انجام نشد.', 'error')
-    return redirect(url_for('express_partner.commissions'))
+    txn_id = int(result.get('txn_id') or 0)
+    if txn_id:
+        return redirect(url_for('express_partner.wallet_charge_result', t=result_token(txn_id)))
+    return redirect(url_for('express_partner.wallet_charge_result'))
+
+
+@express_partner_bp.get('/wallet/charge/result', endpoint='wallet_charge_result')
+def wallet_charge_result():
+    """نتیجهٔ پرداخت. با توکن امضاشده باز می‌شود تا مرورگر بیرونی APK بدون نشست هم ببیند.
+
+    موجودی تازه و دکمهٔ بازگشت به مقصد فقط برای صاحب همان شارژ با نشست فعال نشان داده می‌شود."""
+    from .wallet_charge_flow import find_topup_row, read_result_token, result_payload
+
+    token = (request.args.get('t') or '').strip()
+    txn_id = read_result_token(token)
+    row = find_topup_row(txn_id) if txn_id else None
+    viewer = (session.get('user_phone') or '').strip()
+    available = None
+    if row is not None and viewer:
+        try:
+            available = _partner_requestable_balance(viewer)
+        except Exception:
+            available = None
+    result = result_payload(row, viewer_phone=viewer, available=available, token=token if row else '')
+    from .wallet_charge_flow import TEXTS
+
+    return render_template(
+        'express_partner/wallet_charge_result.html',
+        result=result,
+        token=token if row is not None else '',
+        texts=TEXTS,
+        app_url=url_for('express_partner.commissions', topup=result.get('txn_id') or None, _external=True),
+        hide_header=True,
+    )
+
+
+@express_partner_bp.post('/wallet/charge/result/recheck', endpoint='wallet_charge_recheck')
+@require_partner_access(allow_pending=True)
+def wallet_charge_recheck():
+    from .wallet_charge_flow import read_result_token, recheck_topup
+
+    token = (request.form.get('t') or '').strip()
+    txn_id = read_result_token(token)
+    if txn_id:
+        recheck_topup(txn_id, (session.get('user_phone') or '').strip())
+        return redirect(url_for('express_partner.wallet_charge_result', t=token))
+    return redirect(url_for('express_partner.wallet_charge_result'))
+
+
+def _topup_status_json(txn_id: int):
+    from .wallet_charge_flow import find_topup_row, result_payload, result_token
+
+    me_phone = (session.get('user_phone') or '').strip()
+    row = find_topup_row(txn_id)
+    from .wallet_charge_flow import _same_phone
+
+    if row is None or not _same_phone(row.get('partner_phone'), me_phone):
+        return _apk_json({'ok': False, 'state': 'not_found', 'error': 'این پرداخت پیدا نشد.'}, 404)
+    body = result_payload(row, viewer_phone=me_phone, available=_partner_requestable_balance(me_phone),
+                          token=result_token(txn_id))
+    return _apk_json(body)
+
+
+@express_partner_bp.get('/api/wallet/topup/<int:txn_id>', endpoint='apk_wallet_topup_status')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_wallet_topup_status(txn_id: int):
+    return _topup_status_json(txn_id)
+
+
+@express_partner_bp.post('/api/wallet/topup/<int:txn_id>/recheck', endpoint='apk_wallet_topup_recheck')
+@require_partner_access(allow_pending=True, json_response=True)
+def apk_wallet_topup_recheck(txn_id: int):
+    from .wallet_charge_flow import recheck_topup
+
+    recheck_topup(txn_id, (session.get('user_phone') or '').strip())
+    return _topup_status_json(txn_id)
 
 
 @express_partner_bp.get('/commissions/data', endpoint='commissions_data')
@@ -11586,6 +11764,8 @@ def special_visit_action(vid: str, action: str):
                 'required_amount': int(detail.get('required_amount') or 0),
                 'balance': int(detail.get('balance') or 0),
                 'shortfall': int(detail.get('shortfall') or 0),
+                **_charge_context_fields((session.get('user_phone') or '').strip(),
+                                         int(detail.get('shortfall') or 0), 'deal'),
             }), 400
         flash(message, 'warning')
         return redirect(_sales_pipeline_url('deals'))

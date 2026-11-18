@@ -43,7 +43,8 @@
             class="vn-wallet-btn vn-wallet-btn--primary">
       درخواست برداشت
     </button>
-    <a href="{{ url_for('express_partner.wallet_charge') }}" class="vn-wallet-btn vn-wallet-btn--ghost">شارژ کیف پول</a>
+    <a href="{{ url_for('express_partner.wallet_charge', **{'return': 'commissions'}) }}" class="vn-wallet-btn vn-wallet-btn--ghost" data-wallet-topup>افزایش اعتبار</a>
+    <a href="{{ url_for('express_partner.wallet_home') }}" class="vn-wallet-btn vn-wallet-btn--ghost" data-wallet-home>کیف پول</a>
     <a href="{{ url_for('express_partner.commissions_transactions') }}"
        data-vinor-express-nav
        data-tour="commission-item"

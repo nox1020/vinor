@@ -1,0 +1,64 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}کیف پول | وینور{% endblock %}
+
+{% block content %}
+{% include 'express_partner/partials/wallet_style.html' %}
+<div class="min-h-[100dvh] flex flex-col bg-zinc-950 text-white" data-wallet-home>
+  <header class="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur px-3.5 pt-[calc(.75rem+env(safe-area-inset-top,0px))] pb-3 border-b border-white/10">
+    <div class="mx-auto flex max-w-lg items-center gap-2">
+      <a href="{{ url_for('express_partner.commissions') }}" class="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10" aria-label="بازگشت">
+        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+      </a>
+      <p class="min-w-0 flex-1 truncate text-[15px] font-bold">{{ texts.wallet_title }}</p>
+    </div>
+  </header>
+
+  <main class="mx-auto w-full max-w-lg flex-1 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
+    <section class="px-4 pt-6 pb-5 border-b border-white/10">
+      <p class="text-[13px] text-zinc-400">{{ texts.available_label }}</p>
+      <p class="mt-1 text-[30px] font-extrabold tracking-tight" data-wallet-available>{{ wallet.available_label }}</p>
+      <p class="mt-1 text-[12px] leading-5 text-zinc-500">{{ texts.available_hint }}</p>
+      <div class="mt-4 divide-y divide-white/10 rounded-xl border border-white/10 bg-white/5">
+        {% for line in wallet.lines %}
+        <div class="px-3.5 py-3" data-wallet-line="{{ line.key }}">
+          <div class="flex items-center justify-between text-[14px]"><span class="text-zinc-300">{{ line.label }}</span><span class="font-semibold">{{ line.value }}</span></div>
+          <p class="mt-0.5 text-[12px] leading-5 text-zinc-500">{{ line.hint }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="pt-4">
+      <h2 class="px-4 text-[15px] font-bold">{{ texts.transactions_title }}</h2>
+      {% if not groups %}
+      <p class="px-4 py-10 text-center text-[13px] text-zinc-500" data-wallet-empty>{{ texts.transactions_empty }}</p>
+      {% endif %}
+      {% for g in groups %}
+      <div data-wallet-group="{{ g.key }}">
+        <p class="sticky top-[64px] bg-zinc-950 px-4 pt-4 pb-2 text-[12px] font-semibold text-zinc-500">{{ g.label }}</p>
+        {% for it in g.entries %}
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-white/5" data-wallet-txn="{{ it.kind }}">
+          <span class="wc-ic wc-ic-{{ it.kind }}"><i class="fas {{ it.icon }}" aria-hidden="true"></i></span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-[14px] font-medium">{{ it.title }}</p>
+            <p class="truncate text-[12px] text-zinc-500">{% if it.time_label %}{{ it.time_label }}{% endif %}{% if it.subtitle %} · {{ it.subtitle }}{% endif %}</p>
+          </div>
+          <div class="text-left">
+            <p class="text-[14px] font-bold wc-tone-{{ it.tone }}" dir="ltr">{{ it.amount_label }}</p>
+            {% if it.chip %}<span class="wc-st wc-st-{{ it.chip.tone }}">{{ it.chip.label }}</span>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </section>
+  </main>
+
+  <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto max-w-lg">
+      <a href="{{ url_for('express_partner.wallet_charge', **{'return': 'wallet'}) }}" data-wallet-topup
+         class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black">{{ texts.topup_button }}</a>
+    </div>
+  </footer>
+</div>
+{% endblock %}
