@@ -5444,6 +5444,7 @@ _ESCROW_REVIEW_TEMPLATE = """{% autoescape true %}
 {% for row in rows %}
 <li>
   آگهی {{ row.land_code }} — مالک {{ row.partner_phone }} — {{ row.commission_amount }} تومان — {{ row.review_requested_at }}
+  {% if row.answers %}<div data-sold-answers="{{ row.land_code }}">پاسخ مالک: از طریق {{ row.answers.sold_source_label or 'ثبت نشد' }} — قیمت نهایی {{ row.answers.final_price_label or 'ثبت نشد' }}</div>{% endif %}
   <form method="post" action="{{ url_for('admin.express_escrow_review_release', code=row.land_code) }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" onclick="return confirm('بلوکه برای مالک آزاد شود؟')">آزادسازی برای مالک</button>
@@ -5460,11 +5461,31 @@ _ESCROW_REVIEW_TEMPLATE = """{% autoescape true %}
 <li>موردی نیست.</li>
 {% endfor %}
 </ul>
+<h2>فروش‌های اعلام‌شده توسط مالک</h2>
+<p>پاسخ‌های پرسش‌نامهٔ «فروخته شد». قیمت نهایی فقط برای اطلاع است و پورسانت با آن محاسبه نمی‌شود.</p>
+<table>
+<tr><th>آگهی</th><th>مالک</th><th>روش</th><th>از طریق</th><th>قیمت نهایی</th><th>امتیاز بازاریاب</th><th>نظر</th><th>بررسی</th><th>زمان</th></tr>
+{% for s in owner_sales %}
+<tr data-owner-sale="{{ s.code }}">
+  <td>{{ s.code }} {{ s.title }}</td><td>{{ s.owner }}</td>
+  <td>{{ 'بازدید وینور' if s.channel == 'vinor' else 'بیرون از وینور' }}</td>
+  <td>{{ s.answers.sold_source_label or '—' }}</td>
+  <td>{{ s.answers.final_price_label or '—' }}</td>
+  <td>{% if s.answers.marketer_rating %}{{ '★' * s.answers.marketer_rating }} ({{ s.answers.marketer_rating }}/5){% else %}—{% endif %}</td>
+  <td>{{ s.answers.marketer_comment or '—' }}</td>
+  <td>{{ 'بله' if s.review else '—' }}</td>
+  <td>{{ s.sold_at }}</td>
+</tr>
+{% else %}
+<tr><td colspan="9">موردی نیست.</td></tr>
+{% endfor %}
+</table>
 <h2>پرونده‌های بدون بلوکه (آگهی قدیمی)</h2>
 <ul>
 {% for row in cases %}
 <li data-review-case="{{ row.land_code }}">
   آگهی {{ row.land_code }} {{ row.title }} — مالک {{ row.owner_phone }} — بدون بلوکهٔ انتشار — {{ row.review_requested_at }}
+  {% if row.answers %}<div data-sold-answers="{{ row.land_code }}">پاسخ مالک: از طریق {{ row.answers.sold_source_label or 'ثبت نشد' }} — قیمت نهایی {{ row.answers.final_price_label or 'ثبت نشد' }}</div>{% endif %}
   <form method="post" action="{{ url_for('admin.express_escrow_review_release', code=row.land_code) }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" onclick="return confirm('پرونده بدون پورسانت بسته شود؟')">بستن پرونده بدون پورسانت</button>
@@ -5533,20 +5554,45 @@ def express_escrow_review():
         return _escrow_review_denied()
     from flask import render_template_string
     from app.express_partner.commission_escrow import open_review_cases, review_rows
-    from app.listings.owner_sold import review_visits
+    from app.listings.owner_sold import details_from_extras, review_visits
+    from app.listings.service import _read_json, code_key, listings_path, owner_phone
+
+    answers_by_code = {}
+    owner_sales = []
+    for land in _read_json(listings_path()) or []:
+        if not isinstance(land, dict):
+            continue
+        extras = land.get('extras') if isinstance(land.get('extras'), dict) else {}
+        if not extras.get('sold_by_owner'):
+            continue
+        answers = details_from_extras(extras)
+        code = code_key(land)
+        answers_by_code[code] = answers
+        owner_sales.append({
+            'code': code,
+            'title': str(land.get('title') or ''),
+            'owner': owner_phone(land),
+            'channel': str(extras.get('sold_channel') or ''),
+            'review': bool(extras.get('sold_review_required')),
+            'sold_at': str(extras.get('sold_at') or ''),
+            'answers': answers,
+        })
+    owner_sales.sort(key=lambda r: r['sold_at'], reverse=True)
 
     rows = []
     for row in review_rows():
         item = dict(row)
         item['visits'] = review_visits(str(row.get('land_code') or ''), str(row.get('partner_phone') or ''))
+        item['answers'] = answers_by_code.get(str(row.get('land_code') or ''))
         rows.append(item)
     cases = []
     for row in open_review_cases():
         item = dict(row)
         item['visits'] = review_visits(str(row.get('land_code') or ''), str(row.get('owner_phone') or ''))
+        item['answers'] = answers_by_code.get(str(row.get('land_code') or ''))
         cases.append(item)
     return render_template_string(_ESCROW_REVIEW_TEMPLATE, rows=rows, cases=cases,
-                                  status_fa=_ESCROW_REVIEW_STATUS_FA)
+                                  owner_sales=owner_sales[:200], status_fa=_ESCROW_REVIEW_STATUS_FA)
 
 
 @admin_bp.post('/express/commissions/escrow-review/<code>/release', endpoint='express_escrow_review_release')

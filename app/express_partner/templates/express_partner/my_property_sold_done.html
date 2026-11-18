@@ -1,0 +1,32 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}فروش ثبت شد | وینور{% endblock %}
+
+{% block content %}
+<div class="min-h-[100dvh] flex flex-col bg-zinc-950 text-white" data-owner-sold-done>
+  <main class="mx-auto w-full max-w-lg flex-1 px-5 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] text-center">
+    <div class="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-500/15 ring-8 ring-emerald-500/10">
+      <i class="fas fa-check text-[34px] text-emerald-400" aria-hidden="true"></i>
+    </div>
+    <h1 class="mt-6 text-[20px] font-bold">{{ done.success_title }}</h1>
+    <p class="mt-1 text-[13px] text-zinc-400">{{ land.title or ('آگهی ' ~ land.code) }}</p>
+    <ul class="mt-6 space-y-3 text-right text-[14px] leading-6 text-zinc-200">
+      {% for step in done.next_steps %}
+      <li class="flex gap-2"><i class="fas fa-circle text-[6px] mt-2.5 text-emerald-400" aria-hidden="true"></i><span>{{ step }}</span></li>
+      {% endfor %}
+    </ul>
+    {% if details.final_price_label or details.sold_source_label or details.marketer_rating %}
+    <dl class="mt-6 divide-y divide-white/10 rounded-xl border border-white/10 bg-white/5 text-right text-[13px]">
+      {% if details.sold_source_label %}<div class="flex justify-between px-3.5 py-2.5"><dt class="text-zinc-400">از طریق</dt><dd>{{ details.sold_source_label }}</dd></div>{% endif %}
+      {% if details.final_price_label %}<div class="flex justify-between px-3.5 py-2.5"><dt class="text-zinc-400">قیمت نهایی</dt><dd>{{ details.final_price_label }}</dd></div>{% endif %}
+      {% if details.marketer_rating %}<div class="flex justify-between px-3.5 py-2.5"><dt class="text-zinc-400">رضایت از بازاریاب</dt><dd class="text-amber-300">{{ '★' * details.marketer_rating }}</dd></div>{% endif %}
+    </dl>
+    {% endif %}
+  </main>
+  <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto max-w-lg">
+      <a href="{{ url_for('express_partner.my_property', status='archived') }}"
+         class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black">بازگشت به ملک من</a>
+    </div>
+  </footer>
+</div>
+{% endblock %}
