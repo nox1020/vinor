@@ -169,6 +169,10 @@ def ensure_hold(
     if current and held_now == need:
         detail["idempotent"] = True
         return None, detail
+    if current and current.get("review_required"):
+        # بلوکهٔ در انتظار تصمیم ادمین با ویرایش آگهی کم و زیاد نمی‌شود.
+        detail["message"] = REVIEW_LOCKED_MESSAGE
+        return "review_locked", detail
     delta = need - held_now
     if delta > 0 and have < delta:
         detail["shortfall"] = delta - have
@@ -204,6 +208,11 @@ def ensure_hold(
     detail["balance"] = available_balance(commissions, withdrawals, owner)
     detail["idempotent"] = False
     return None, detail
+
+
+REVIEW_LOCKED_MESSAGE = (
+    "پورسانت این آگهی در انتظار بررسی پشتیبانی وینور است و تا پایان بررسی قابل تغییر نیست."
+)
 
 
 def listing_has_open_deal(land_code: str) -> bool:
@@ -443,4 +452,94 @@ def mark_review_deal_started(land_code: str, *, admin: str = "", visit_id: str =
         row["review_resolved_at"] = iso_z(utcnow())
         row["review_deal_visit_id"] = str(visit_id or "")
         save_express_commissions(commissions)
+        return True
+
+
+# --- پروندهٔ بازبینی بدون بلوکه (آگهی‌های قدیمی که بلوکهٔ انتشار ندارند) ---
+REVIEW_CASES_FILE_KEY = "ESCROW_REVIEW_CASES_FILE"
+REVIEW_CASES_FILE_NAME = "escrow_review_cases.json"
+
+
+def _load_review_cases() -> List[Dict[str, Any]]:
+    from app.utils.storage import _load, ensure_file
+
+    rows = _load(ensure_file(REVIEW_CASES_FILE_KEY, REVIEW_CASES_FILE_NAME, []))
+    return rows if isinstance(rows, list) else []
+
+
+def _save_review_cases(rows: List[Dict[str, Any]]) -> None:
+    from app.utils.storage import _save, ensure_file
+
+    _save(ensure_file(REVIEW_CASES_FILE_KEY, REVIEW_CASES_FILE_NAME, []), rows)
+
+
+def open_review_case(
+    land_code: str,
+    *,
+    owner_phone: str,
+    reason: str,
+    visit_ids: List[str] | None = None,
+    title: str = "",
+) -> Dict[str, Any]:
+    """پروندهٔ بازبینی برای آگهی بدون بلوکه. تکرار پروندهٔ باز تازه نمی‌سازد."""
+    from .deal_wallet import commission_store_lock
+
+    code = _code(land_code)
+    with commission_store_lock():
+        rows = _load_review_cases()
+        for row in rows:
+            if isinstance(row, dict) and _code(row.get("land_code")) == code and row.get("status") == "open":
+                return dict(row)
+        stamp = iso_z(utcnow())
+        case = {
+            "id": max([int(r.get("id") or 0) for r in rows if isinstance(r, dict)] or [0]) + 1,
+            "land_code": code,
+            "owner_phone": str(owner_phone or "").strip(),
+            "title": str(title or ""),
+            "status": "open",
+            "has_hold": False,
+            "review_reason": str(reason or "").strip() or REVIEW_OWNER_SOLD_OUTSIDE,
+            "review_requested_at": stamp,
+            "review_visit_ids": [str(v) for v in (visit_ids or []) if str(v or "").strip()],
+        }
+        rows.append(case)
+        _save_review_cases(rows)
+        return dict(case)
+
+
+def open_review_cases() -> List[Dict[str, Any]]:
+    return [dict(r) for r in _load_review_cases() if isinstance(r, dict) and r.get("status") == "open"]
+
+
+def resolve_review_case(land_code: str, *, admin: str = "", resolution: str, visit_id: str = "") -> bool:
+    from .deal_wallet import commission_store_lock
+
+    code = _code(land_code)
+    with commission_store_lock():
+        rows = _load_review_cases()
+        changed = False
+        for row in rows:
+            if isinstance(row, dict) and _code(row.get("land_code")) == code and row.get("status") == "open":
+                row["status"] = "resolved"
+                row["review_resolution"] = str(resolution or "")
+                row["review_resolved_by"] = str(admin or "").strip()
+                row["review_resolved_at"] = iso_z(utcnow())
+                if visit_id:
+                    row["review_deal_visit_id"] = str(visit_id)
+                changed = True
+        if changed:
+            _save_review_cases(rows)
+        return changed
+
+
+def listing_under_review(land_code: str) -> bool:
+    """بلوکه یا پروندهٔ باز در انتظار بازبینی ادمین."""
+    code = _code(land_code)
+    if not code:
+        return False
+    try:
+        if any(_code(r.get("land_code")) == code for r in review_rows()):
+            return True
+        return any(_code(r.get("land_code")) == code for r in open_review_cases())
+    except Exception:
         return True

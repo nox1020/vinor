@@ -267,8 +267,10 @@ def test_auto_archive_reasons_and_restore_guard(client, app):
         assert is_partner_assignment_land(sold) is False
         assert all(str(row.get("code")) != visit_code for row in load_express_lands_cached() or [])
 
+        # A sold listing never goes back to active (no new publish hold, no public listing).
         restored, err, changed = restore_listing(visit_code, phone=OWNER)
-        assert err is None and changed
+        assert err == "sold_locked" and not changed
+        assert get_listing(visit_code).get("archived") is True
         card = next(row for row in load_express_visit_requests() if row.get("id") == rec["id"])
         assert card.get("archived") is True
         restored_quiet, err, changed = restore_listing(quiet_code, phone=OWNER)

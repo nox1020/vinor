@@ -178,6 +178,7 @@ jobs:
             tests/test_probot_integration.py
             tests/test_probot_ladder.py
             tests/test_owner_mark_sold.py
+            tests/test_owner_sold_hardening.py
           )
           python -m pytest -q "${files[@]}"
 

@@ -610,7 +610,50 @@ SPECIAL_LISTING_ERRORS: Dict[str, str] = {
     "not_found": "ابتدا ملک خود را در ملک من ثبت کنید.",
     "already_published": "این ملک قبلاً برای فروش منتشر شده است.",
     "wallet_insufficient": "موجودی کیف پول برای بلوکه کردن پورسانت کافی نیست.",
+    "listing_sold": "این آگهی فروخته‌شده ثبت شده و دیگر قابل ویرایش نیست.",
+    "review_locked": "پورسانت این آگهی در انتظار بررسی پشتیبانی وینور است و تا پایان بررسی قابل تغییر نیست.",
+    "commission_locked": (
+        "بازاریاب وینور برای این ملک بازدید ثبت کرده است؛ پورسانت یا قیمتی که پورسانت را کم کند "
+        "دیگر قابل کاهش نیست. برای تغییر با پشتیبانی وینور تماس بگیرید."
+    ),
 }
+
+
+def _stored_commission_amount(land: Dict[str, Any]) -> int:
+    extras = land.get("extras") if isinstance(land.get("extras"), dict) else {}
+    try:
+        return int(float(extras.get("express_commission_amount") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def listing_update_guard(
+    target: Dict[str, Any],
+    owner: str,
+    new_amount: int,
+    *,
+    commission_given: bool = True,
+) -> Optional[str]:
+    """ویرایش آگهی موجود: فروخته‌شده قفل است؛ پورسانت زیر بازبینی ثابت است؛
+    بعد از بازدید بازاریاب پورسانت کم نمی‌شود."""
+    from app.express_partner.commission_escrow import find_hold, listing_under_review
+    from app.listings.owner_sold import is_sold, review_visits
+    from app.utils.storage import load_express_commissions
+
+    if is_sold(target):
+        return "listing_sold"
+    if not commission_given:
+        return None
+    code = _code_key(target)
+    hold = find_hold(load_express_commissions() or [], code)
+    held = int((hold or {}).get("commission_amount") or 0)
+    current = max(held, _stored_commission_amount(target))
+    new_amount = int(new_amount or 0)
+    if listing_under_review(code) and new_amount != current:
+        return "review_locked"
+    if new_amount < current and review_visits(code, owner):
+        return "commission_locked"
+    return None
 
 PUBLISH_PAYMENT_METHODS = ("نقدی", "توافقی", "معاوضه")
 
@@ -817,6 +860,19 @@ def create_special_listing_from_express_form(
             if wants_update and submitted:
                 target = _owned_unique_row(lands, owner, submitted)
                 if target is not None:
+                    commission_given = (not owner_home) or bool(
+                        (form.get("express_commission_pct") or "").strip()
+                    )
+                    guard_err = listing_update_guard(
+                        target, owner, int(express_commission_amount or 0),
+                        commission_given=commission_given,
+                    )
+                    if guard_err:
+                        return None, guard_err
+                    if not commission_given and isinstance(rec.get("extras"), dict):
+                        # فرم ملک من بدون درصد پورسانت: پورسانت اعلام‌شدهٔ قبلی دست نمی‌خورد.
+                        rec["extras"].pop("express_commission_pct", None)
+                        rec["extras"].pop("express_commission_amount", None)
                     for file in pending_docs:
                         doc_filename = _save_express_document(file, submitted)
                         if doc_filename and doc_filename not in documents:

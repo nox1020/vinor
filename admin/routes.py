@@ -5438,7 +5438,7 @@ def express_escrow_missing():
 
 _ESCROW_REVIEW_TEMPLATE = """{% autoescape true %}
 <h1>بلوکه‌های در انتظار بازبینی</h1>
-<p>مالک «فروخته شد — بیرون از وینور» زده ولی بازاریاب وینور بازدید انجام‌شده داشته است. بلوکه آزاد نشده.</p>
+<p>مالک «فروخته شد — بیرون از وینور» زده ولی بازاریاب وینور بازدید ثبت‌شده داشته است (انجام‌شده، منتظر تأیید، اعتراض‌شده، یا تأییدشده‌ای که وقتش گذشته). بلوکه آزاد نشده.</p>
 {% with messages = get_flashed_messages(with_categories=true) %}{% for c, m in messages %}<p>{{ m }}</p>{% endfor %}{% endwith %}
 <ul>
 {% for row in rows %}
@@ -5452,7 +5452,28 @@ _ESCROW_REVIEW_TEMPLATE = """{% autoescape true %}
   <form method="post" action="{{ url_for('admin.express_escrow_review_deal', code=row.land_code) }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="visit_id" value="{{ v.id }}">
-    <button type="submit" onclick="return confirm('معامله به نام این بازاریاب ثبت شود؟')">ثبت معامله برای {{ v.partner_name or v.partner_phone }} ({{ v.partner_phone }})</button>
+    <button type="submit" onclick="return confirm('معامله به نام این بازاریاب ثبت شود؟')">ثبت معامله برای {{ v.partner_name or v.partner_phone }} ({{ v.partner_phone }}) — {{ status_fa.get(v.status, v.status) }} {{ v.visit_date }}{% if v.dispute_reason %} — اعتراض: {{ v.dispute_reason }}{% endif %}</button>
+  </form>
+  {% endfor %}
+</li>
+{% else %}
+<li>موردی نیست.</li>
+{% endfor %}
+</ul>
+<h2>پرونده‌های بدون بلوکه (آگهی قدیمی)</h2>
+<ul>
+{% for row in cases %}
+<li data-review-case="{{ row.land_code }}">
+  آگهی {{ row.land_code }} {{ row.title }} — مالک {{ row.owner_phone }} — بدون بلوکهٔ انتشار — {{ row.review_requested_at }}
+  <form method="post" action="{{ url_for('admin.express_escrow_review_release', code=row.land_code) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" onclick="return confirm('پرونده بدون پورسانت بسته شود؟')">بستن پرونده بدون پورسانت</button>
+  </form>
+  {% for v in row.visits %}
+  <form method="post" action="{{ url_for('admin.express_escrow_review_deal', code=row.land_code) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="visit_id" value="{{ v.id }}">
+    <button type="submit" onclick="return confirm('معامله به نام این بازاریاب ثبت شود؟')">ثبت معامله برای {{ v.partner_name or v.partner_phone }} ({{ v.partner_phone }}) — {{ status_fa.get(v.status, v.status) }} {{ v.visit_date }}</button>
   </form>
   {% endfor %}
 </li>
@@ -5464,39 +5485,88 @@ _ESCROW_REVIEW_TEMPLATE = """{% autoescape true %}
 """
 
 
+_ESCROW_REVIEW_STATUS_FA = {
+    'completed': 'انجام‌شده',
+    'done_pending': 'منتظر تأیید مالک',
+    'disputed': 'اعتراض مالک',
+    'no_show': 'عدم حضور (با اعتراض)',
+    'approved': 'تأییدشده، وقتش گذشته',
+}
+
+
 def _escrow_review_allowed() -> bool:
+    """فقط دسترسی مالی. هر خطا یعنی «نه» (fail closed)."""
     try:
         from app.hardening.permissions import PERM_FINANCE, has_permission
         return bool(has_permission(PERM_FINANCE))
     except Exception:
-        return True
+        return False
+
+
+def _escrow_review_denied():
+    flash('دسترسی کافی برای این عملیات ندارید.', 'error')
+    try:
+        return redirect(url_for('admin.dashboard'))
+    except Exception:
+        from flask import abort
+        abort(403)
+
+
+def _escrow_review_case(code: str):
+    """(نوع، ردیف): بلوکهٔ زیر بازبینی یا پروندهٔ باز بدون بلوکه."""
+    from app.express_partner.commission_escrow import open_review_cases, review_rows
+
+    hold = next((r for r in review_rows() if str(r.get('land_code') or '') == str(code)), None)
+    if hold is not None:
+        return 'hold', hold
+    case = next((r for r in open_review_cases() if str(r.get('land_code') or '') == str(code)), None)
+    if case is not None:
+        return 'case', case
+    return None, None
 
 
 @admin_bp.get('/express/commissions/escrow-review', endpoint='express_escrow_review')
 @login_required
 def express_escrow_review():
-    """فروش اعلام‌شده توسط مالک بیرون از وینور، با بازدید انجام‌شدهٔ بازاریاب."""
+    """فروش اعلام‌شده توسط مالک بیرون از وینور، با بازدید ثبت‌شدهٔ بازاریاب."""
+    if not _escrow_review_allowed():
+        return _escrow_review_denied()
     from flask import render_template_string
-    from app.express_partner.commission_escrow import review_rows
-    from app.listings.owner_sold import completed_visits
+    from app.express_partner.commission_escrow import open_review_cases, review_rows
+    from app.listings.owner_sold import review_visits
 
     rows = []
     for row in review_rows():
         item = dict(row)
-        item['visits'] = completed_visits(str(row.get('land_code') or ''), str(row.get('partner_phone') or ''))
+        item['visits'] = review_visits(str(row.get('land_code') or ''), str(row.get('partner_phone') or ''))
         rows.append(item)
-    return render_template_string(_ESCROW_REVIEW_TEMPLATE, rows=rows)
+    cases = []
+    for row in open_review_cases():
+        item = dict(row)
+        item['visits'] = review_visits(str(row.get('land_code') or ''), str(row.get('owner_phone') or ''))
+        cases.append(item)
+    return render_template_string(_ESCROW_REVIEW_TEMPLATE, rows=rows, cases=cases,
+                                  status_fa=_ESCROW_REVIEW_STATUS_FA)
 
 
 @admin_bp.post('/express/commissions/escrow-review/<code>/release', endpoint='express_escrow_review_release')
 @login_required
 def express_escrow_review_release(code: str):
     if not _escrow_review_allowed():
-        flash('دسترسی کافی برای این عملیات ندارید.', 'error')
-        return redirect(url_for('admin.express_escrow_review'))
-    from app.express_partner.commission_escrow import resolve_review_release
+        return _escrow_review_denied()
+    from app.express_partner.commission_escrow import resolve_review_case, resolve_review_release
     from app.hardening.audit import _actor_from_session
 
+    kind, _row = _escrow_review_case(code)
+    if kind == 'case':
+        ok = resolve_review_case(code, admin=_actor_from_session(), resolution='closed_no_commission')
+        if ok:
+            _admin_audit('admin_escrow_review_case_closed', entity_type='escrow_review_case', entity_id=str(code),
+                         land_code=str(code), summary=f'Owner-sold review for {code} closed without commission (no hold)')
+            flash('پرونده بدون پورسانت بسته شد.', 'success')
+        else:
+            flash('پروندهٔ باز برای این آگهی پیدا نشد.', 'error')
+        return redirect(url_for('admin.express_escrow_review'))
     ok = resolve_review_release(code, admin=_actor_from_session())
     if ok:
         _admin_audit('admin_escrow_review_release', entity_type='escrow_hold', entity_id=str(code),
@@ -5512,19 +5582,19 @@ def express_escrow_review_release(code: str):
 def express_escrow_review_deal(code: str):
     """معامله به نام بازاریاب بازدیدکننده ثبت می‌شود؛ تأیید پورسانت همان مسیر عادی ادمین است."""
     if not _escrow_review_allowed():
-        flash('دسترسی کافی برای این عملیات ندارید.', 'error')
-        return redirect(url_for('admin.express_escrow_review'))
-    from app.express_partner.commission_escrow import mark_review_deal_started, review_rows
+        return _escrow_review_denied()
+    from app.express_partner.commission_escrow import mark_review_deal_started, resolve_review_case
     from app.express_partner.special_visit_inbox import _start_deal_for_visit, listing_deal_error_fa
     from app.hardening.audit import _actor_from_session
-    from app.listings.owner_sold import completed_visits
+    from app.listings.owner_sold import review_visits
 
     visit_id = (request.form.get('visit_id') or '').strip()
-    hold = next((r for r in review_rows() if str(r.get('land_code') or '') == str(code)), None)
+    kind, hold = _escrow_review_case(code)
     if hold is None:
         flash('بلوکهٔ در انتظار بازبینی برای این آگهی پیدا نشد.', 'error')
         return redirect(url_for('admin.express_escrow_review'))
-    rec = next((v for v in completed_visits(str(code), str(hold.get('partner_phone') or ''))
+    owner = str(hold.get('partner_phone') or hold.get('owner_phone') or '')
+    rec = next((v for v in review_visits(str(code), owner)
                 if str(v.get('id') or '') == visit_id), None)
     if rec is None:
         flash('این بازدید برای این آگهی پیدا نشد.', 'error')
@@ -5533,8 +5603,12 @@ def express_escrow_review_deal(code: str):
     if err and err != 'already_pending':
         flash(listing_deal_error_fa(err), 'error')
         return redirect(url_for('admin.express_escrow_review'))
-    mark_review_deal_started(str(code), admin=_actor_from_session(), visit_id=visit_id)
-    _admin_audit('admin_escrow_review_deal', entity_type='escrow_hold', entity_id=str(code),
+    if kind == 'case':
+        resolve_review_case(str(code), admin=_actor_from_session(), resolution='deal_started', visit_id=visit_id)
+    else:
+        mark_review_deal_started(str(code), admin=_actor_from_session(), visit_id=visit_id)
+    _admin_audit('admin_escrow_review_deal', entity_type='escrow_hold' if kind == 'hold' else 'escrow_review_case',
+                 entity_id=str(code),
                  land_code=str(code), summary=f'Deal started for visit {visit_id} after owner-sold review',
                  payload={'visit_id': visit_id, 'partner_phone': str(rec.get('partner_phone') or '')})
     flash('معامله ثبت شد. پورسانت را از فهرست پورسانت‌های در انتظار تأیید کنید.', 'success')
