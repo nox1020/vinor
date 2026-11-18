@@ -4914,8 +4914,14 @@ def apk_my_property_sold():
         return str(data.get(key) or request.form.get(key) or '').strip()
 
     code = _arg('code')
+    answers = {}
+    for key in ('sold_source', 'final_price', 'marketer_rating', 'comment', 'marketer_comment'):
+        if key in data:
+            answers[key] = data.get(key)
+        elif key in request.form:
+            answers[key] = request.form.get(key)
     body, err, detail = mark_sold(
-        session_phone(), code, channel=_arg('channel'), visit_id=_arg('visit_id'),
+        session_phone(), code, channel=_arg('channel'), visit_id=_arg('visit_id'), answers=answers,
     )
     if _browser_form_post():
         if err or body is None:
@@ -4925,11 +4931,48 @@ def apk_my_property_sold():
             if err in ('forbidden', 'not_found'):
                 return redirect(url_for('express_partner.my_property'))
             return redirect(url_for('express_partner.my_property_sold_page', code=code))
-        flash(body.get('message') or 'انجام شد.', 'success')
-        return redirect(url_for('express_partner.my_property', status='archived'))
+        if body.get('noop'):
+            flash(body.get('message') or 'تغییری ثبت نشد.', 'success')
+            return redirect(url_for('express_partner.my_property'))
+        return redirect(url_for('express_partner.my_property_sold_done', code=body.get('code') or code))
     if err or body is None:
         return _owner_sold_error(err or 'failed', detail)
     return _apk_json(body)
+
+
+@express_partner_bp.get('/my-property/<code>/sold/done', endpoint='my_property_sold_done')
+@require_partner_access(allow_pending=True)
+def my_property_sold_done(code: str):
+    """صفحهٔ موفقیت بعد از «ثبت فروش» (تیک سبز و قدم‌های بعدی)."""
+    from app.listings.owner_sold import _resolve_owned, details_from_extras, is_sold, success_payload
+    from .apk_native import session_phone
+
+    land, err = _resolve_owned(code, session_phone())
+    if err == 'forbidden':
+        from flask import abort
+        abort(403)
+    if err or land is None or not is_sold(land):
+        return redirect(url_for('express_partner.my_property'))
+    extras = land.get('extras') if isinstance(land.get('extras'), dict) else {}
+    hold_released = None
+    if extras.get('sold_channel') == 'outside' and not extras.get('sold_review_required'):
+        from .commission_escrow import HOLD_TYPE
+        from app.utils.storage import load_express_commissions
+
+        hold_released = any(
+            isinstance(r, dict) and r.get('commission_type') == HOLD_TYPE
+            and str(r.get('land_code') or '') == str(land.get('code') or code)
+            and str(r.get('status') or '') == 'released'
+            for r in load_express_commissions() or []
+        )
+    done = success_payload(land, hold_released=hold_released)
+    return render_template(
+        'express_partner/my_property_sold_done.html',
+        land=land,
+        done=done,
+        details=details_from_extras(extras),
+        hide_header=True,
+    )
 
 
 @express_partner_bp.get('/my-property/<code>/sold', endpoint='my_property_sold_page')
