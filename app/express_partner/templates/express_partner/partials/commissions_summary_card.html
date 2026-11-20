@@ -4,45 +4,46 @@
 {% set _pending_amt = s.get('pending_amount', pending_commission or 0) %}
 {% set _active_wd = s.get('in_withdrawal_amount', pending_withdrawal_total or 0) %}
 {% set _active_wd_cnt = s.get('in_withdrawal_count', 0) %}
-{% set _total = s.get('total_confirmed_amount', total_commission or 0) %}
+{% set _total = s.get('earned_commission_amount', total_commission or 0) %}
+{% set _available = (wallet_available if wallet_available is defined else _withdrawable or 0) %}
 {% set _has_active_wd = ((_active_wd or 0)|int > 0) or ((_active_wd_cnt or 0)|int > 0) %}
 {% set _min_wd = (min_withdrawal_amount or 10000000)|int %}
-{% set _can_withdraw = (_withdrawable or 0)|int >= _min_wd %}
-{% set _below_min = ((_withdrawable or 0)|int > 0) and not _can_withdraw %}
+{% set _can_withdraw = (_available or 0)|int >= _min_wd %}
+{% set _below_min = ((_available or 0)|int > 0) and not _can_withdraw %}
 
 <section data-tour="commissions-summary" class="vn-wallet-card">
   <div class="vn-wallet-hero">
-    <p class="vn-wallet-hero__label">قابل استفاده</p>
-    <p class="vn-wallet-hero__balance" data-comm-withdrawable>{{ (wallet_available if wallet_available is defined else _withdrawable or 0)|toman }}</p>
-    <p class="vn-wallet-hero__label">کل موجودی {{ (_withdrawable or 0)|toman }} · بلوکه‌شده برای پورسانت {{ (wallet_blocked if wallet_blocked is defined else 0)|toman }}</p>
+    <p class="vn-wallet-hero__label">موجودی قابل استفاده</p>
+    <p class="vn-wallet-hero__balance" data-comm-withdrawable>{{ (_available or 0)|toman }}</p>
+    <p class="vn-wallet-hero__label" data-comm-blocked-line>بلوکه برای پورسانت <span data-comm-blocked>{{ (wallet_blocked if wallet_blocked is defined else 0)|toman }}</span></p>
   </div>
 
   <div class="vn-wallet-stats" role="group" aria-label="خلاصه مالی">
     <div class="vn-wallet-stat">
       <span class="vn-wallet-stat__label">
         <span data-comm-withdraw-dot class="inline-block w-1.5 h-1.5 rounded-full bg-[#f0bf4c] align-middle me-0.5{% if _has_active_wd %} vn-comm-wd-dot--live{% endif %}" aria-hidden="true"></span>
-        در حال برداشت
+        در انتظار برداشت
       </span>
       <span data-comm-in-withdrawal class="vn-wallet-stat__value vn-wallet-stat__value--amber">{{ (_active_wd or 0)|toman }}</span>
     </div>
     <div class="vn-wallet-stat">
-      <span class="vn-wallet-stat__label">در انتظار تأیید</span>
+      <span class="vn-wallet-stat__label">پورسانت در انتظار تأیید</span>
       <span data-comm-pending class="vn-wallet-stat__value">{{ (_pending_amt or 0)|toman }}</span>
     </div>
     <div class="vn-wallet-stat">
-      <span class="vn-wallet-stat__label">کل درآمد</span>
+      <span class="vn-wallet-stat__label">پورسانت کسب‌شده</span>
       <span data-comm-total class="vn-wallet-stat__value">{{ (_total or 0)|toman }}</span>
     </div>
   </div>
 
   <div class="vn-wallet-actions">
-    <button type="button"
-            data-open-withdraw-modal
-            data-withdrawable-int="{{ (_withdrawable or 0)|int }}"
-            {% if not _can_withdraw %}aria-disabled="true"{% endif %}
-            class="vn-wallet-btn vn-wallet-btn--primary">
+    <a href="{{ url_for('express_partner.wallet_withdraw') }}"
+       data-withdraw-wizard
+       data-withdrawable-int="{{ (_available or 0)|int }}"
+       {% if not _can_withdraw %}aria-disabled="true"{% endif %}
+       class="vn-wallet-btn vn-wallet-btn--primary">
       درخواست برداشت
-    </button>
+    </a>
     <a href="{{ url_for('express_partner.wallet_charge', **{'return': 'commissions'}) }}" class="vn-wallet-btn vn-wallet-btn--ghost" data-wallet-topup>افزایش اعتبار</a>
     <a href="{{ url_for('express_partner.wallet_home') }}" class="vn-wallet-btn vn-wallet-btn--ghost" data-wallet-home>کیف پول</a>
     <a href="{{ url_for('express_partner.commissions_transactions') }}"

@@ -3,61 +3,154 @@
 
 {% block content %}
 {% include 'express_partner/partials/wallet_style.html' %}
-<div class="min-h-[100dvh] flex flex-col bg-zinc-950 text-white" data-wallet-home>
-  <header class="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur px-3.5 pt-[calc(.75rem+env(safe-area-inset-top,0px))] pb-3 border-b border-white/10">
+{# صفحهٔ اصلی کیف پول — زبان بصری جدا از ویزاردهای دیوار: کارت موجودی گرادیانی، چیپ‌های فشرده، تایم‌لاین تراکنش‌ها #}
+<style>
+  .wh{--wh-bg:#0b1020;--wh-card:#121a2e;--wh-line:rgba(148,163,184,.14);--wh-muted:#94a3b8;background:var(--wh-bg)}
+  .wh-balance{position:relative;overflow:hidden;border-radius:28px;padding:22px 20px 18px;color:#fff;
+    background:radial-gradient(120% 140% at 100% 0%,rgba(52,211,153,.55) 0%,rgba(52,211,153,0) 55%),
+               radial-gradient(120% 120% at 0% 100%,rgba(99,102,241,.55) 0%,rgba(99,102,241,0) 60%),
+               linear-gradient(135deg,#134e4a 0%,#1e1b4b 100%);
+    box-shadow:0 20px 40px -24px rgba(16,185,129,.55),inset 0 1px 0 rgba(255,255,255,.12)}
+  .wh-balance::after{content:"";position:absolute;inset:auto -40px -60px auto;width:180px;height:180px;border-radius:9999px;background:rgba(255,255,255,.06)}
+  .wh-eyebrow{font-size:12px;letter-spacing:.02em;color:rgba(255,255,255,.72)}
+  .wh-amount{font-size:34px;line-height:1.15;font-weight:800;letter-spacing:-.01em;margin-top:6px}
+  .wh-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;position:relative;z-index:1}
+  .wh-chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:9999px;font-size:12px;font-weight:600;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);color:#fff;backdrop-filter:blur(6px)}
+  .wh-chip i{font-size:11px;opacity:.85}
+  .wh-chip b{font-weight:800}
+  .wh-section{margin-top:22px}
+  .wh-h{display:flex;align-items:center;justify-content:space-between;padding:0 18px;margin-bottom:10px}
+  .wh-h h2{font-size:14px;font-weight:700;color:#e2e8f0}
+  .wh-req{display:flex;align-items:center;gap:12px;margin:0 14px 8px;padding:12px 14px;border-radius:18px;background:var(--wh-card);border:1px solid var(--wh-line)}
+  .wh-pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;font-size:11px;font-weight:700}
+  .wh-pill-amber{background:rgba(251,191,36,.14);color:#fcd34d}.wh-pill-blue{background:rgba(96,165,250,.14);color:#93c5fd}
+  .wh-pill-green{background:rgba(52,211,153,.14);color:#6ee7b7}.wh-pill-red{background:rgba(251,113,133,.14);color:#fda4af}
+  .wh-pill-gray{background:rgba(148,163,184,.14);color:#cbd5e1}
+  .wh-tl{position:relative;margin:0 14px;padding:4px 0}
+  .wh-tl::before{content:"";position:absolute;top:8px;bottom:8px;right:19px;width:2px;border-radius:2px;background:var(--wh-line)}
+  .wh-day{position:relative;display:inline-block;margin:12px 34px 6px 0;padding:2px 10px;border-radius:9999px;font-size:11px;font-weight:700;color:var(--wh-muted);background:var(--wh-card);border:1px solid var(--wh-line)}
+  .wh-row{position:relative;display:flex;align-items:center;gap:12px;padding:10px 4px 10px 0}
+  .wh-dot{position:relative;z-index:1;flex:none;width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:var(--wh-card);border:1px solid var(--wh-line);font-size:14px}
+  .wh-bar{position:fixed;inset-inline:0;bottom:0;z-index:30;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));
+    background:linear-gradient(to top,var(--wh-bg) 70%,rgba(11,16,32,0))}
+  .wh-btn{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:16px;font-size:15px;font-weight:800}
+  .wh-btn-primary{background:#34d399;color:#052e1f;box-shadow:0 10px 24px -12px rgba(52,211,153,.8)}
+  .wh-btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.14)}
+  .wh-btn[aria-disabled="true"]{opacity:.45}
+</style>
+<div class="wh min-h-[100dvh] flex flex-col text-white" data-wallet-home data-wallet-style="v2">
+  <header class="sticky top-0 z-20 px-3.5 pt-[calc(.6rem+env(safe-area-inset-top,0px))] pb-2" style="background:rgba(11,16,32,.92);backdrop-filter:blur(10px)">
     <div class="mx-auto flex max-w-lg items-center gap-2">
-      <a href="{{ url_for('express_partner.commissions') }}" class="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10" aria-label="بازگشت">
+      <a href="{{ url_for('express_partner.commissions') }}" class="grid h-10 w-10 place-items-center rounded-2xl text-white hover:bg-white/10" aria-label="بازگشت">
         <i class="fas fa-arrow-right" aria-hidden="true"></i>
       </a>
-      <p class="min-w-0 flex-1 truncate text-[15px] font-bold">{{ texts.wallet_title }}</p>
+      <p class="min-w-0 flex-1 truncate text-center text-[15px] font-bold">{{ texts.wallet_title }}</p>
+      <a href="{{ url_for('express_partner.commissions_transactions') }}" class="grid h-10 w-10 place-items-center rounded-2xl text-slate-300 hover:bg-white/10" aria-label="همه تراکنش‌ها">
+        <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
+      </a>
     </div>
   </header>
 
-  <main class="mx-auto w-full max-w-lg flex-1 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
-    <section class="px-4 pt-6 pb-5 border-b border-white/10">
-      <p class="text-[13px] text-zinc-400">{{ texts.available_label }}</p>
-      <p class="mt-1 text-[30px] font-extrabold tracking-tight" data-wallet-available>{{ wallet.available_label }}</p>
-      <p class="mt-1 text-[12px] leading-5 text-zinc-500">{{ texts.available_hint }}</p>
-      <div class="mt-4 divide-y divide-white/10 rounded-xl border border-white/10 bg-white/5">
-        {% for line in wallet.lines %}
-        <div class="px-3.5 py-3" data-wallet-line="{{ line.key }}">
-          <div class="flex items-center justify-between text-[14px]"><span class="text-zinc-300">{{ line.label }}</span><span class="font-semibold">{{ line.value }}</span></div>
-          <p class="mt-0.5 text-[12px] leading-5 text-zinc-500">{{ line.hint }}</p>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mx-auto w-full max-w-lg px-3.5 pt-2 space-y-2">
+      {% for category, message in messages %}
+      <div class="rounded-2xl px-4 py-3 text-[13px] {% if category in ['error', 'danger'] %}bg-rose-500/10 text-rose-200{% else %}bg-emerald-500/10 text-emerald-200{% endif %}" role="alert">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="mx-auto w-full max-w-lg flex-1 pb-[calc(7rem+env(safe-area-inset-bottom,0px))]">
+    <section class="px-3.5 pt-3">
+      <div class="wh-balance">
+        <p class="wh-eyebrow">{{ texts.available_label }}</p>
+        <p class="wh-amount" data-wallet-available>{{ wallet.available_label }}</p>
+        <p class="mt-1 text-[12px] leading-5 text-white/65">{{ texts.available_hint }}</p>
+        <div class="wh-chips">
+          {% for line in wallet.lines %}
+          {% if line.key == 'blocked' or (line.key == 'pending_withdrawal' and wallet.pending_withdrawal) %}
+          <span class="wh-chip" data-wallet-line="{{ line.key }}" title="{{ line.hint }}">
+            <i class="fas {{ 'fa-lock' if line.key == 'blocked' else 'fa-hourglass-half' }}" aria-hidden="true"></i>
+            {{ line.label }} <b>{{ line.value }}</b>
+          </span>
+          {% endif %}
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
+      {% if wallet.blocked %}
+      <p class="mt-2.5 px-2 text-[11.5px] leading-5 text-slate-400">{{ texts.blocked_hint }}</p>
+      {% endif %}
     </section>
 
-    <section class="pt-4">
-      <h2 class="px-4 text-[15px] font-bold">{{ texts.transactions_title }}</h2>
-      {% if not groups %}
-      <p class="px-4 py-10 text-center text-[13px] text-zinc-500" data-wallet-empty>{{ texts.transactions_empty }}</p>
-      {% endif %}
-      {% for g in groups %}
-      <div data-wallet-group="{{ g.key }}">
-        <p class="sticky top-[64px] bg-zinc-950 px-4 pt-4 pb-2 text-[12px] font-semibold text-zinc-500">{{ g.label }}</p>
-        {% for it in g.entries %}
-        <div class="flex items-center gap-3 px-4 py-3 border-b border-white/5" data-wallet-txn="{{ it.kind }}">
-          <span class="wc-ic wc-ic-{{ it.kind }}"><i class="fas {{ it.icon }}" aria-hidden="true"></i></span>
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-[14px] font-medium">{{ it.title }}</p>
-            <p class="truncate text-[12px] text-zinc-500">{% if it.time_label %}{{ it.time_label }}{% endif %}{% if it.subtitle %} · {{ it.subtitle }}{% endif %}</p>
-          </div>
-          <div class="text-left">
-            <p class="text-[14px] font-bold wc-tone-{{ it.tone }}" dir="ltr">{{ it.amount_label }}</p>
-            {% if it.chip %}<span class="wc-st wc-st-{{ it.chip.tone }}">{{ it.chip.label }}</span>{% endif %}
-          </div>
+    {% if requests %}
+    <section class="wh-section" data-wallet-requests>
+      <div class="wh-h"><h2>{{ texts.requests_title }}</h2></div>
+      {% for r in requests %}
+      <div class="wh-req" data-wallet-request="{{ r.status }}">
+        <div class="wh-dot" style="color:#fda4af"><i class="fas fa-arrow-up" aria-hidden="true"></i></div>
+        <div class="min-w-0 flex-1">
+          <p class="text-[14px] font-bold">{{ r.amount_label }}</p>
+          <p class="truncate text-[11.5px] text-slate-400" dir="rtl">{{ r.date_label }} · <span dir="ltr">{{ r.tracking_code }}</span></p>
+          {% if r.admin_note %}<p class="mt-0.5 text-[11.5px] text-rose-300">{{ r.admin_note }}</p>{% endif %}
         </div>
-        {% endfor %}
+        <div class="flex flex-col items-end gap-1.5">
+          <span class="wh-pill wh-pill-{{ r.tone }}">{{ r.status_label }}</span>
+          {% if r.cancellable %}
+          <form method="post" action="{{ url_for('express_partner.wallet_withdraw_cancel', wid=r.id) }}" onsubmit="return confirm('درخواست برداشت لغو شود؟')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-[11.5px] font-semibold text-slate-300 underline underline-offset-4" data-wallet-request-cancel>{{ texts.cancel_request }}</button>
+          </form>
+          {% endif %}
+        </div>
       </div>
       {% endfor %}
     </section>
+    {% endif %}
+
+    <section class="wh-section">
+      <div class="wh-h"><h2>{{ texts.transactions_title }}</h2></div>
+      {% if not groups %}
+      <p class="px-4 py-10 text-center text-[13px] text-slate-500" data-wallet-empty>{{ texts.transactions_empty }}</p>
+      {% else %}
+      <div class="wh-tl">
+        {% for g in groups %}
+        <div data-wallet-group="{{ g.key }}">
+          <span class="wh-day">{{ g.label }}</span>
+          {% for it in g.entries %}
+          <div class="wh-row" data-wallet-txn="{{ it.kind }}">
+            <span class="wh-dot wc-ic-{{ it.kind }}"><i class="fas {{ it.icon }}" aria-hidden="true"></i></span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[14px] font-semibold">{{ it.title }}</p>
+              <p class="truncate text-[11.5px] text-slate-400">{% if it.time_label %}{{ it.time_label }}{% endif %}{% if it.subtitle %} · {{ it.subtitle }}{% endif %}</p>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+              <p class="text-[14px] font-extrabold wc-tone-{{ it.tone }}" dir="ltr">{{ it.amount_label }}</p>
+              {% if it.chip %}<span class="wh-pill wh-pill-{{ it.chip.tone }}">{{ it.chip.label }}</span>{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
   </main>
 
-  <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
-    <div class="mx-auto max-w-lg">
-      <a href="{{ url_for('express_partner.wallet_charge', **{'return': 'wallet'}) }}" data-wallet-topup
-         class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black">{{ texts.topup_button }}</a>
+  <footer class="wh-bar">
+    <div class="mx-auto grid max-w-lg grid-cols-2 gap-2.5">
+      <a href="{{ url_for('express_partner.wallet_charge', **{'return': 'wallet'}) }}" data-wallet-topup class="wh-btn wh-btn-primary">
+        <i class="fas fa-plus" aria-hidden="true"></i>{{ texts.topup_button }}
+      </a>
+      {% if withdraw_enabled %}
+      <a href="{{ url_for('express_partner.wallet_withdraw') }}" data-wallet-withdraw class="wh-btn wh-btn-ghost"
+         {% if not can_withdraw %}aria-disabled="true" title="کمترین مبلغ برداشت {{ min_withdrawal_label }} است."{% endif %}>
+        <i class="fas fa-arrow-up" aria-hidden="true"></i>{{ texts.withdraw_button }}
+      </a>
+      {% else %}
+      <span class="wh-btn wh-btn-ghost" aria-disabled="true" data-wallet-withdraw>{{ texts.withdraw_button }}</span>
+      {% endif %}
     </div>
   </footer>
 </div>

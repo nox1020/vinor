@@ -6230,15 +6230,34 @@ def _partner_name_lookup() -> Dict[str, str]:
 @admin_bp.route('/financial/withdrawals', endpoint='financial_withdrawals')
 @login_required
 def financial_withdrawals():
+    # شبا و نام صاحب حساب داده‌ی مالی است: فقط ادمین مالی، و اگر بررسی دسترسی خطا داد، بسته.
+    try:
+        from app.hardening.permissions import PERM_FINANCE, has_permission
+        if not has_permission(PERM_FINANCE):
+            flash('دسترسی کافی برای این بخش ندارید.', 'error')
+            return redirect(url_for('admin.dashboard'))
+    except Exception:
+        current_app.logger.exception('finance permission check failed')
+        abort(403)
     items_raw = load_partner_withdrawals() or []
     if not isinstance(items_raw, list):
         items_raw = []
     name_map = _partner_name_lookup()
+    sheba_by_account: Dict[str, str] = {}
+    try:
+        from app.utils.storage import load_partner_bank_accounts as _load_banks
+        for acc in _load_banks() or []:
+            if isinstance(acc, dict) and acc.get('id') and acc.get('sheba'):
+                sheba_by_account[str(acc.get('id'))] = str(acc.get('sheba'))
+    except Exception:
+        current_app.logger.exception('withdrawals: bank account lookup failed')
     items = []
     for row in items_raw:
         if not isinstance(row, dict):
             continue
         r = dict(row)
+        if not r.get('sheba'):
+            r['sheba'] = sheba_by_account.get(str(r.get('bank_account_id') or ''), '')
         ph = str(r.get('phone') or '').strip()
         if not (r.get('partner_name') or '').strip() and ph in name_map:
             r['partner_name'] = name_map[ph]

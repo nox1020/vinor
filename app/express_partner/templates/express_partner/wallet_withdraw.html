@@ -1,0 +1,297 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}برداشت از کیف پول | وینور{% endblock %}
+
+{% block content %}
+{% set t = options.texts %}
+{% include 'express_partner/partials/wallet_style.html' %}
+<style>
+  .ww-opt{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:transparent;color:#fff;text-align:right;cursor:pointer}
+  .ww-opt[aria-pressed="true"]{border-color:#10b981;background:rgba(16,185,129,.10)}
+  .ww-radio{flex:none;width:22px;height:22px;border-radius:9999px;border:2px solid rgba(255,255,255,.35);display:grid;place-items:center}
+  .ww-opt[aria-pressed="true"] .ww-radio{border-color:#10b981}
+  .ww-opt[aria-pressed="true"] .ww-radio::after{content:"";width:10px;height:10px;border-radius:9999px;background:#10b981}
+  .ww-field-sm input{font-size:17px;direction:ltr;text-align:left;letter-spacing:.04em}
+  .ww-field-name input{font-size:17px;font-weight:600}
+  .wc-chip-all{flex-direction:column;line-height:1.2;padding:.4rem 1rem}
+</style>
+<form method="post" action="{{ url_for('express_partner.wallet_withdraw_submit') }}"
+      class="min-h-[100dvh] flex flex-col bg-zinc-950 text-white"
+      data-wallet-withdraw
+      data-min="{{ options.min_amount }}"
+      data-available="{{ options.available }}"
+      data-can="{{ 1 if options.can_withdraw else 0 }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="client_request_id" value="{{ client_request_id }}">
+  <input type="hidden" name="amount" value="" data-ww-amount-raw>
+  <input type="hidden" name="all" value="" data-ww-all>
+  <input type="hidden" name="account_id" value="" data-ww-account>
+
+  <header class="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur px-3.5 pt-[calc(.75rem+env(safe-area-inset-top,0px))] pb-3 border-b border-white/10">
+    <div class="mx-auto flex max-w-lg items-center gap-2">
+      <button type="button" data-ww-back data-href="{{ url_for('express_partner.wallet_home') }}"
+              class="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10" aria-label="بازگشت">
+        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+      </button>
+      <p class="min-w-0 flex-1 truncate text-[15px] font-bold">{{ t.title }}</p>
+      {% if options.can_withdraw %}<span class="text-[12px] text-zinc-400" data-ww-progress-label aria-live="polite">مرحلهٔ ۱ از ۳</span>{% endif %}
+    </div>
+    {% if options.can_withdraw %}
+    <div class="mx-auto mt-3 flex max-w-lg gap-1.5" aria-hidden="true">
+      <span class="wc-seg is-on"></span><span class="wc-seg" data-ww-seg="2"></span><span class="wc-seg" data-ww-seg="3"></span>
+    </div>
+    {% endif %}
+  </header>
+
+  {% if error_text %}
+  <div class="mx-auto w-full max-w-lg px-3.5 pt-3">
+    <div class="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200" role="alert" data-ww-server-error>{{ error_text }}</div>
+  </div>
+  {% endif %}
+
+  <main class="mx-auto w-full max-w-lg flex-1 px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
+    {% if not options.can_withdraw %}
+    <section class="pt-14 text-center" data-ww-step="below_min">
+      <div class="mx-auto grid h-20 w-20 place-items-center rounded-full bg-amber-400/15 text-[32px] text-amber-300"><i class="fas fa-wallet" aria-hidden="true"></i></div>
+      <h1 class="mt-5 text-[20px] font-bold leading-8">{{ t.below_min_title }}</h1>
+      <p class="mt-2 text-[14px] leading-7 text-zinc-400">{{ t.below_min_body }}</p>
+      {% for n in options.notes %}<p class="mt-2 text-[13px] leading-6 text-zinc-500" data-ww-note="{{ n.key }}">{{ n.text }}</p>{% endfor %}
+    </section>
+    {% else %}
+    {# ---------------------------------------------------------------- 1. مبلغ #}
+    <section data-ww-step="amount" class="pt-5">
+      <h1 class="text-[20px] font-bold leading-8">{{ t.amount_question }}</h1>
+      <p class="mt-1 text-[13px] text-zinc-400" data-ww-available>{{ t.amount_available }}</p>
+      <div class="mt-5 flex flex-wrap gap-2" role="group" aria-label="مبلغ‌های پیشنهادی">
+        {% for c in options.chips %}
+        <button type="button" class="wc-chip{% if c.all %} wc-chip-all{% endif %}" aria-pressed="false"
+                data-ww-chip="{{ c.key }}" data-amount="{{ c.amount }}" data-all="{{ 1 if c.all else 0 }}">
+          <span>{{ c.label }}</span>{% if c.sub %}<span class="text-[11px] font-medium text-zinc-400">{{ c.sub }}</span>{% endif %}
+        </button>
+        {% endfor %}
+      </div>
+      <label class="mt-4 wc-field" data-ww-field>
+        <input type="text" inputmode="numeric" autocomplete="off" dir="rtl" maxlength="20"
+               placeholder="{{ t.amount_placeholder }}" aria-label="{{ t.amount_placeholder }}" data-ww-input>
+        <span class="text-[14px] text-zinc-400">{{ t.amount_suffix }}</span>
+      </label>
+      <p class="mt-2 min-h-[1.25rem] text-[13px] text-emerald-300" data-ww-words aria-live="polite"></p>
+      <p class="text-[13px] text-zinc-500" data-ww-hint>{{ t.amount_min }}</p>
+      <p class="mt-1 hidden text-[13px] text-rose-300" data-ww-error role="alert"></p>
+      {% for n in options.notes %}
+      <p class="mt-4 rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 text-[12.5px] leading-6 text-zinc-300" data-ww-note="{{ n.key }}">
+        <i class="fas {{ 'fa-lock' if n.key == 'blocked' else 'fa-hourglass-half' }} me-1.5 text-amber-300" aria-hidden="true"></i>{{ n.text }}
+      </p>
+      {% endfor %}
+    </section>
+
+    {# ---------------------------------------------------------------- 2. مقصد #}
+    <section data-ww-step="dest" class="pt-5" hidden>
+      <h1 class="text-[20px] font-bold leading-8">{{ t.dest_question }}</h1>
+      <div class="mt-5 space-y-2.5" role="radiogroup" aria-label="{{ t.dest_question }}">
+        {% for d in options.destinations %}
+        <button type="button" class="ww-opt" role="radio" aria-pressed="false" data-ww-dest="{{ d.id }}"
+                data-label="{{ d.bank_name }} · {{ d.sheba_masked }}" data-holder="{{ d.holder_name }}"{% if d.is_default %} data-default="1"{% endif %}>
+          <span class="ww-radio" aria-hidden="true"></span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-[15px] font-bold">{{ d.bank_name or 'حساب بانکی' }}</span>
+            <span class="block truncate text-[12.5px] text-zinc-400"><span dir="ltr">{{ d.sheba_masked }}</span> · {{ d.holder_name }}</span>
+          </span>
+        </button>
+        {% endfor %}
+        <button type="button" class="ww-opt" role="radio" aria-pressed="false" data-ww-dest="new">
+          <span class="ww-radio" aria-hidden="true"></span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-[15px] font-bold">{{ t.dest_new }}</span>
+            <span class="block text-[12.5px] text-zinc-400">{{ t.dest_new_hint }}</span>
+          </span>
+        </button>
+      </div>
+      <div class="mt-4 space-y-3" data-ww-new hidden>
+        <label class="wc-field ww-field-sm" data-ww-sheba-field>
+          <span class="text-[15px] font-bold text-zinc-400" dir="ltr">IR</span>
+          <input type="text" inputmode="numeric" autocomplete="off" name="sheba" maxlength="32" dir="ltr"
+                 placeholder="{{ t.sheba_placeholder }}" aria-label="شماره شبا" data-ww-sheba>
+        </label>
+        <p class="hidden text-[13px] text-rose-300" data-ww-sheba-error role="alert"></p>
+        <div>
+          <p class="mb-1.5 text-[13px] text-zinc-400">{{ t.holder_label }}</p>
+          <label class="wc-field ww-field-name" data-ww-holder-field>
+            <input type="text" autocomplete="name" name="holder_name" maxlength="80" dir="rtl"
+                   placeholder="{{ t.holder_placeholder }}" aria-label="{{ t.holder_label }}" data-ww-holder>
+          </label>
+          <p class="mt-1.5 text-[12px] text-zinc-500">{{ t.holder_hint }}</p>
+          <p class="hidden text-[13px] text-rose-300" data-ww-holder-error role="alert"></p>
+        </div>
+      </div>
+    </section>
+
+    {# ---------------------------------------------------------------- 3. تأیید #}
+    <section data-ww-step="summary" class="pt-5" hidden>
+      <h1 class="text-[20px] font-bold leading-8">{{ t.summary_question }}</h1>
+      <div class="mt-5 divide-y divide-white/10 rounded-xl border border-white/10 bg-white/5 text-[14px]">
+        <div class="flex items-center justify-between px-3.5 py-3.5"><span class="text-zinc-400">{{ t.summary_amount }}</span><span class="text-[17px] font-extrabold" data-ww-sum-amount></span></div>
+        <div class="flex items-center justify-between gap-3 px-3.5 py-3.5"><span class="text-zinc-400">{{ t.summary_dest }}</span><span class="truncate font-semibold" dir="ltr" data-ww-sum-dest></span></div>
+        <div class="flex items-center justify-between px-3.5 py-3.5"><span class="text-zinc-400">{{ t.summary_holder }}</span><span class="font-semibold" data-ww-sum-holder></span></div>
+        <div class="flex items-center justify-between px-3.5 py-3.5"><span class="text-zinc-400">{{ t.summary_after }}</span><span class="font-semibold" data-ww-sum-after></span></div>
+      </div>
+      <p class="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3.5 py-3 text-[13px] leading-6 text-emerald-200">{{ t.summary_note }}</p>
+    </section>
+    {% endif %}
+  </main>
+
+  <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto max-w-lg">
+      {% if options.can_withdraw %}
+      <button type="button" data-ww-next disabled
+              class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black disabled:opacity-40">{{ t.next }}</button>
+      {% else %}
+      <a href="{{ url_for('express_partner.wallet_home') }}" class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black">{{ t.back_to_wallet }}</a>
+      {% endif %}
+    </div>
+  </footer>
+</form>
+{% endblock %}
+
+{% block scripts %}
+{% if options.can_withdraw %}
+<script>
+(function () {
+  var form = document.querySelector('[data-wallet-withdraw]');
+  if (!form) return;
+  var T = {{ options.texts|tojson }};
+  var E = {{ options.errors|tojson }};
+  var MIN = parseInt(form.dataset.min, 10) || 0;
+  var AVAIL = parseInt(form.dataset.available, 10) || 0;
+  var steps = ['amount', 'dest', 'summary'];
+  var st = { i: 0, amount: 0, all: false, dest: '', destLabel: '', holder: '' };
+  var $ = function (s) { return form.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(form.querySelectorAll(s)); };
+  var FA = '۰۱۲۳۴۵۶۷۸۹';
+  function fa(s) { return String(s).replace(/\d/g, function (d) { return FA[d]; }); }
+  function ascii(s) { return String(s || '').replace(/[۰-۹]/g, function (d) { return FA.indexOf(d); }).replace(/[٠-٩]/g, function (d) { return d.charCodeAt(0) - 1632; }); }
+  function toman(n) { return fa(String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '٬')) + ' تومان'; }
+  function words(n) {
+    if (!n) return '';
+    var sc = ['', 'هزار', 'میلیون', 'میلیارد'], parts = [], i = 0;
+    while (n > 0 && i < sc.length) { var c = n % 1000; n = Math.floor(n / 1000); if (c) parts.push(fa(c) + (sc[i] ? ' ' + sc[i] : '')); i++; }
+    return n > 0 ? '' : parts.reverse().join(' و ') + ' تومان';
+  }
+  function shebaOk(digits) {
+    if (!/^\d{24}$/.test(digits)) return 'sheba_format';
+    var r = digits.slice(2) + '1827' + digits.slice(0, 2), m = 0;
+    for (var k = 0; k < r.length; k++) m = (m * 10 + (r.charCodeAt(k) - 48)) % 97;
+    return m === 1 ? '' : 'sheba_checksum';
+  }
+  function amountError() {
+    if (st.all) return '';
+    if (!st.amount) return null;
+    if (st.amount < MIN) return E.min_amount;
+    if (st.amount > AVAIL) return E.insufficient_balance;
+    return '';
+  }
+  function destError() {
+    if (!st.dest) return null;
+    if (st.dest !== 'new') return '';
+    var s = ascii($('[data-ww-sheba]').value).replace(/[^0-9]/g, '');
+    var h = ($('[data-ww-holder]').value || '').trim();
+    var se = s ? shebaOk(s) : null;
+    var he = h.length >= 2 && !/[0-9۰-۹<>{}]/.test(h) ? '' : (h ? 'invalid_holder' : null);
+    return { sheba: se, holder: he };
+  }
+  function canNext() {
+    if (steps[st.i] === 'amount') return amountError() === '';
+    if (steps[st.i] === 'dest') { var d = destError(); return d === '' || (d && d.sheba === '' && d.holder === ''); }
+    return true;
+  }
+  function render() {
+    steps.forEach(function (s, k) { var el = $('[data-ww-step="' + s + '"]'); if (el) el.hidden = k !== st.i; });
+    $$('[data-ww-seg]').forEach(function (el) { el.classList.toggle('is-on', parseInt(el.dataset.wwSeg, 10) <= st.i + 1); });
+    var pl = $('[data-ww-progress-label]'); if (pl) pl.textContent = 'مرحلهٔ ' + fa(st.i + 1) + ' از ۳';
+    var btn = $('[data-ww-next]');
+    btn.textContent = steps[st.i] === 'summary' ? T.submit : T.next;
+    btn.disabled = !canNext();
+    var ae = amountError(), err = $('[data-ww-error]');
+    err.textContent = ae || ''; err.classList.toggle('hidden', !ae);
+    $('[data-ww-field]').classList.toggle('is-bad', !!ae);
+    var shown = st.all ? AVAIL : st.amount;
+    $('[data-ww-words]').textContent = words(shown);
+    var d = destError();
+    var shErr = $('[data-ww-sheba-error]'), hoErr = $('[data-ww-holder-error]');
+    var sMsg = d && d.sheba ? E[d.sheba] : '', hMsg = d && d.holder ? E[d.holder] : '';
+    var sVal = ascii($('[data-ww-sheba]').value).replace(/[^0-9]/g, '');
+    if (sVal.length < 24 && d && d.sheba === 'sheba_format') sMsg = '';
+    shErr.textContent = sMsg; shErr.classList.toggle('hidden', !sMsg);
+    hoErr.textContent = hMsg; hoErr.classList.toggle('hidden', !hMsg);
+    $('[data-ww-sheba-field]').classList.toggle('is-bad', !!sMsg);
+    if (steps[st.i] === 'summary') {
+      $('[data-ww-sum-amount]').textContent = toman(shown);
+      $('[data-ww-sum-dest]').textContent = st.destLabel;
+      $('[data-ww-sum-holder]').textContent = st.holder;
+      $('[data-ww-sum-after]').textContent = toman(Math.max(0, AVAIL - shown));
+    }
+  }
+  $$('[data-ww-chip]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      $$('[data-ww-chip]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      st.all = b.dataset.all === '1';
+      st.amount = parseInt(b.dataset.amount, 10) || 0;
+      $('[data-ww-input]').value = st.all ? '' : fa(String(st.amount).replace(/\B(?=(\d{3})+(?!\d))/g, '٬'));
+      render();
+    });
+  });
+  $('[data-ww-input]').addEventListener('input', function (e) {
+    var raw = ascii(e.target.value).replace(/[^0-9]/g, '').slice(0, 13);
+    st.amount = raw ? parseInt(raw, 10) : 0; st.all = false;
+    $$('[data-ww-chip]').forEach(function (x) { x.setAttribute('aria-pressed', (!x.dataset.all || x.dataset.all === '0') && parseInt(x.dataset.amount, 10) === st.amount ? 'true' : 'false'); });
+    e.target.value = raw ? fa(raw.replace(/\B(?=(\d{3})+(?!\d))/g, '٬')) : '';
+    render();
+  });
+  $$('[data-ww-dest]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      $$('[data-ww-dest]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      st.dest = b.dataset.wwDest;
+      $('[data-ww-new]').hidden = st.dest !== 'new';
+      if (st.dest === 'new') { $('[data-ww-sheba]').focus(); }
+      render();
+    });
+  });
+  ['[data-ww-sheba]', '[data-ww-holder]'].forEach(function (s) { $(s).addEventListener('input', render); });
+  function back() {
+    if (st.i === 0) { location.href = $('[data-ww-back]').dataset.href; return; }
+    st.i -= 1; render(); window.scrollTo(0, 0);
+  }
+  $('[data-ww-back]').addEventListener('click', back);
+  var sent = false;
+  $('[data-ww-next]').addEventListener('click', function () {
+    if (!canNext() || sent) return;
+    if (steps[st.i] === 'dest') {
+      if (st.dest === 'new') {
+        var s = ascii($('[data-ww-sheba]').value).replace(/[^0-9]/g, '');
+        st.destLabel = 'IR' + s.slice(0, 2) + ' •••• •••• ' + s.slice(-4);
+        st.holder = $('[data-ww-holder]').value.trim();
+        $('[data-ww-account]').value = '';
+      } else {
+        var b = $('[data-ww-dest="' + st.dest + '"]');
+        st.destLabel = b.dataset.label; st.holder = b.dataset.holder;
+        $('[data-ww-account]').value = st.dest;
+      }
+    }
+    if (steps[st.i] === 'summary') {
+      sent = true;
+      $('[data-ww-amount-raw]').value = st.all ? '' : String(st.amount);
+      $('[data-ww-all]').value = st.all ? '1' : '';
+      if (st.dest !== 'new') { $('[data-ww-sheba]').disabled = true; $('[data-ww-holder]').disabled = true; }
+      var btn = $('[data-ww-next]'); btn.disabled = true; btn.textContent = T.submitting;
+      form.submit();
+      return;
+    }
+    st.i += 1; render(); window.scrollTo(0, 0);
+  });
+  form.addEventListener('submit', function (e) { if (steps[st.i] !== 'summary' || !sent) e.preventDefault(); });
+  var def = $('[data-ww-dest][data-default="1"]');
+  if (def) { def.setAttribute('aria-pressed', 'true'); st.dest = def.dataset.wwDest; }
+  render();
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -5971,9 +5971,14 @@ def dashboard_data():
     if len(assigned_lands) > DASHBOARD_INITIAL_CARD_LIMIT:
         assigned_lands, _ = _truncate_dashboard_lands(assigned_lands, DASHBOARD_INITIAL_CARD_LIMIT)
     my_comms = _commissions_for_phone(me_phone)
-    total_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
-    pending_commission = sum(int(c.get('commission_amount') or 0) for c in my_comms if (c.get('status') or 'pending').strip() == 'pending')
-    sold_count = sum(1 for c in my_comms if (c.get('status') or '').strip() in ('approved', 'paid'))
+    from .withdraw_flow import earned_commission_stats as _earned_stats
+    # «درآمد» = فقط پورسانت فروش؛ شارژ کیف پول، تعدیل، بلوکه و پرداخت به مشاور درآمد نیستند.
+    total_commission, sold_count = _earned_stats(my_comms, me_phone)
+    pending_commission = sum(
+        int(c.get('commission_amount') or 0) for c in my_comms
+        if (c.get('status') or 'pending').strip() == 'pending'
+        and str(c.get('commission_type') or '') not in ('manual_adjustment', 'escrow_hold')
+    )
     payload = _dashboard_data_payload(me_phone, profile, has_pending_app, assigned_lands, total_commission, pending_commission, sold_count, expired_count, is_approved)
     # همیشه لیست عمومی را بفرست تا اپ در صورت خالی بودن assigned_lands هم کارت‌ها را نشان دهد
     try:
@@ -7863,6 +7868,8 @@ def commissions_page():
     financial_snapshot = _commission_financial_snapshot(
         comm_stats,
         min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
+        wallet_available=wallet_available,
+        wallet_blocked=wallet_blocked,
     )
 
     _attach_commission_txn_labels(my_comms)
@@ -7884,7 +7891,7 @@ def commissions_page():
         "express_partner/commissions.html",
         items=txn_items,
         comm_stats=comm_stats,
-        total_commission=comm_stats["total_confirmed_amount"],
+        total_commission=comm_stats["earned_commission_amount"],
         pending_commission=comm_stats["pending_amount"],
         paid_commission=comm_stats["received_amount"],
         sold_count=comm_stats["total_confirmed_count"],
@@ -7950,7 +7957,7 @@ def commissions_transactions_page():
         items=txn_items,
         txn_summary=txn_summary,
         comm_stats=comm_stats,
-        total_commission=comm_stats["total_confirmed_amount"],
+        total_commission=comm_stats["earned_commission_amount"],
         paid_commission=comm_stats.get("paid_withdrawal_amount", comm_stats.get("received_amount", 0)),
         sold_count=comm_stats["total_confirmed_count"],
         paid_count=comm_stats.get("paid_withdrawal_count", comm_stats.get("received_count", 0)),
@@ -7972,6 +7979,7 @@ def _wallet_header(phone: str) -> Dict[str, int]:
         'total': int(stats.get('withdrawable_balance') or 0),
         'blocked': int(_partner_blocked_balance(phone) or 0),
         'available': int(_partner_requestable_balance(phone) or 0),
+        'pending_withdrawal': int(stats.get('in_withdrawal_amount') or 0),
     }
 
 
@@ -8018,11 +8026,20 @@ def wallet_home():
     """کیف پول به سبک دیوار: موجودی بزرگ، بلوکه و کل، «افزایش اعتبار»، و تراکنش‌ها بر اساس روز."""
     from .wallet_charge_flow import TEXTS, header_payload
 
+    from .withdraw_flow import request_rows, toman as toman_fa_label
+
     me_phone = (session.get('user_phone') or '').strip()
+    profile = getattr(g, 'express_partner_profile', None)
+    wallet = header_payload(_wallet_header(me_phone))
     return render_template(
         'express_partner/wallet_home.html',
-        wallet=header_payload(_wallet_header(me_phone)),
+        wallet=wallet,
         groups=_wallet_feed(me_phone),
+        requests=[r for r in request_rows(_partner_withdrawals_raw(), me_phone, limit=10)
+                  if r['status'] in ('pending', 'approved', 'processing', 'rejected')][:5],
+        can_withdraw=_is_partner_approved(profile) and wallet['available'] >= MIN_WITHDRAWAL_AMOUNT,
+        withdraw_enabled=_is_partner_approved(profile),
+        min_withdrawal_label=toman_fa_label(MIN_WITHDRAWAL_AMOUNT),
         texts=TEXTS,
         hide_header=True,
     )
@@ -8039,6 +8056,18 @@ def apk_wallet():
     ctx = context_from_request(request.args, me_phone)
     body = charge_options(header, ctx)
     body.update({'ok': True, 'groups': _wallet_feed(me_phone)})
+    try:
+        from .withdraw_flow import request_rows
+        approved = _is_partner_approved(getattr(g, 'express_partner_profile', None))
+        body['withdraw'] = {
+            'enabled': approved,
+            'can_withdraw': approved and int(header.get('available') or 0) >= MIN_WITHDRAWAL_AMOUNT,
+            'min_amount': MIN_WITHDRAWAL_AMOUNT,
+            'requests': [r for r in request_rows(_partner_withdrawals_raw(), me_phone, limit=10)
+                         if r['status'] in ('pending', 'approved', 'processing', 'rejected')][:5],
+        }
+    except Exception:
+        current_app.logger.exception('apk_wallet: withdraw block failed')
     try:
         from flask_wtf.csrf import generate_csrf
         body['csrf_token'] = generate_csrf()
@@ -8221,10 +8250,13 @@ def commissions_data():
         })
     return jsonify({
         'success': True,
-        'total_commission': comm_stats['total_confirmed_amount'],
+        # total_commission = پورسانت کسب‌شده (بدون شارژ/تعدیل)؛ total_confirmed_amount خام جدا می‌ماند.
+        'total_commission': comm_stats['earned_commission_amount'],
+        'earned_commission': comm_stats['earned_commission_amount'],
+        'total_confirmed_amount': comm_stats['total_confirmed_amount'],
         'pending_commission': comm_stats['pending_amount'],
         'paid_commission': comm_stats['received_amount'],
-        'sold_count': comm_stats['total_confirmed_count'],
+        'sold_count': comm_stats['earned_commission_count'],
         'withdrawable_balance': comm_stats['withdrawable_balance'],
         'requestable_balance': _partner_requestable_balance(me_phone),
         'wallet_total': comm_stats['withdrawable_balance'],
@@ -8259,6 +8291,8 @@ def _commission_financial_snapshot(
     comm_stats: Dict[str, Any],
     *,
     min_withdrawal_amount: int = MIN_WITHDRAWAL_AMOUNT,
+    wallet_available: Optional[int] = None,
+    wallet_blocked: int = 0,
 ) -> Dict[str, Any]:
     """خلاصه مالی یکپارچه برای UI وب — منبع حقیقت همان partner_commission_dashboard است."""
     s = comm_stats if isinstance(comm_stats, dict) else {}
@@ -8275,6 +8309,10 @@ def _commission_financial_snapshot(
         'pending_count': int(s.get('pending_count') or 0),
         'total_confirmed_amount': int(s.get('total_confirmed_amount') or 0),
         'total_confirmed_count': int(s.get('total_confirmed_count') or 0),
+        'earned_commission_amount': int(s.get('earned_commission_amount') or 0),
+        'earned_commission_count': int(s.get('earned_commission_count') or 0),
+        'wallet_available': int(wallet_available if wallet_available is not None else req),
+        'wallet_blocked': int(wallet_blocked or 0),
         'paid_withdrawal_amount': int(
             s.get('paid_withdrawal_amount') or s.get('received_amount') or 0
         ),
@@ -8282,7 +8320,8 @@ def _commission_financial_snapshot(
             s.get('paid_withdrawal_count') or s.get('received_count') or 0
         ),
         'min_withdrawal_amount': min_wd,
-        'can_withdraw': wd >= min_wd,
+        # برداشت فقط از موجودی قابل استفاده (بلوکهٔ پورسانت آگهی‌ها قابل برداشت نیست)
+        'can_withdraw': int(wallet_available if wallet_available is not None else req) >= min_wd,
         'generated_at': datetime.utcnow().isoformat() + 'Z',
     }
 
@@ -8296,6 +8335,8 @@ def commissions_summary():
     snapshot = _commission_financial_snapshot(
         comm_stats,
         min_withdrawal_amount=MIN_WITHDRAWAL_AMOUNT,
+        wallet_available=_partner_requestable_balance(me_phone),
+        wallet_blocked=_partner_blocked_balance(me_phone),
     )
     return jsonify({'success': True, 'snapshot': snapshot})
 
@@ -8351,7 +8392,8 @@ def bank_accounts_data():
         'accounts': [public_account_dict(r) for r in mine],
         'banks': catalog_public(),
         'withdrawable_balance': w_balance,
-        'requestable_balance': w_balance,
+        # قابل درخواست = بدون بلوکهٔ پورسانت آگهی‌ها (قبلاً همان withdrawable بود و بلوکه را هم نشان می‌داد)
+        'requestable_balance': _partner_requestable_balance(me_phone),
         'min_withdrawal_amount': MIN_WITHDRAWAL_AMOUNT,
         'default_account_id': (default_acc or {}).get('id') or '',
     })
@@ -8563,6 +8605,7 @@ def _after_wallet_lock(job):
 
 def _withdrawals_request_locked():
     """ثبت درخواست برداشت پورسانت توسط همکار."""
+    from .partner_withdrawals import partner_phones_match
     me_phone = (session.get("user_phone") or "").strip()
     data = request.get_json(silent=True) or {}
     amount = data.get('amount')
@@ -8583,7 +8626,7 @@ def _withdrawals_request_locked():
         for prior in all_wd:
             if (isinstance(prior, dict)
                     and str(prior.get('client_request_id') or '') == client_request_id
-                    and str(prior.get('phone') or '') == me_phone):
+                    and partner_phones_match(prior.get('phone'), me_phone)):
                 return jsonify({'success': True, 'duplicate': True, 'request': {
                     'id': prior.get('id'), 'amount': prior.get('amount'),
                     'status': prior.get('status'),
@@ -8718,6 +8761,273 @@ def _withdrawals_cancel_locked(wid: str):
         'withdrawable_balance': _partner_withdrawable_balance(me_phone),
         'requestable_balance': _partner_requestable_balance(me_phone),
     })
+
+
+# ---------------------------------------------------------------------------
+# برداشت به سبک دیوار: مبلغ → مقصد (شبا) → تأیید → ثبت. واریز دستی و با تأیید ادمین مالی.
+# ---------------------------------------------------------------------------
+
+def _withdraw_options(me_phone: str) -> Dict[str, Any]:
+    from .withdraw_flow import options_payload
+
+    _reconcile_partner_commissions(me_phone)
+    banks = load_partner_bank_accounts() or []
+    return options_payload(
+        commissions=_express_commissions_cached() or [],
+        withdrawals=_partner_withdrawals_raw(),
+        bank_rows=banks if isinstance(banks, list) else [],
+        phone=me_phone,
+        min_amount=MIN_WITHDRAWAL_AMOUNT,
+    )
+
+
+def _withdraw_submit_locked(data: Dict[str, Any]):
+    """ثبت درخواست برداشت از ویزارد. همیشه زیر commission_store_lock صدا زده می‌شود.
+
+    خروجی: (body, http_status). مبلغ «همهٔ موجودی» را سرور حساب می‌کند؛ مقصد یا حساب
+    خود همکار با شبای معتبر است یا شبای جدید که بعد از اعتبارسنجی مبلغ ذخیره می‌شود.
+    """
+    from .partner_withdrawals import partner_phones_match
+    from .withdraw_flow import (
+        error_message,
+        new_account_record,
+        request_row,
+        resolve_amount,
+        sheba_checksum_ok,
+        toman,
+        validate_holder,
+        validate_sheba,
+    )
+
+    me_phone = (session.get('user_phone') or '').strip()
+
+    def _fail(code: str, status: int = 400, **extra):
+        body = {'success': False, 'ok': False, 'error': code,
+                'message': error_message(code, min_amount=MIN_WITHDRAWAL_AMOUNT)}
+        body.update(extra)
+        return body, status
+
+    client_request_id = str(data.get('client_request_id') or '').strip()
+    if len(client_request_id) > 128:
+        return _fail('invalid_request_id')
+
+    all_wd = load_partner_withdrawals() or []
+    if not isinstance(all_wd, list):
+        all_wd = []
+    if client_request_id:
+        for prior in all_wd:
+            if (isinstance(prior, dict)
+                    and str(prior.get('client_request_id') or '') == client_request_id
+                    and partner_phones_match(prior.get('phone'), me_phone)):
+                row = request_row(prior)
+                return {'success': True, 'ok': True, 'duplicate': True, 'request': row,
+                        'available': _partner_requestable_balance(me_phone)}, 200
+
+    _reconcile_partner_commissions(me_phone)
+    comms = _commissions_for_phone(me_phone)
+    available = available_for_new_withdrawal(comms, all_wd, me_phone)
+    amount, err = resolve_amount(data.get('amount'), data.get('all'), available, MIN_WITHDRAWAL_AMOUNT)
+    if err:
+        return _fail(err, available=available)
+
+    all_banks = load_partner_bank_accounts() or []
+    if not isinstance(all_banks, list):
+        all_banks = []
+    mine = accounts_for_phone(all_banks, me_phone)
+    account_id = str(data.get('account_id') or data.get('bank_account_id') or '').strip()
+    new_account = None
+    if account_id:
+        target = next((r for r in mine if str(r.get('id') or '').strip() == account_id), None)
+        if target is None:
+            return _fail('invalid_bank')
+        if not sheba_checksum_ok(str(target.get('sheba') or '').upper()):
+            return _fail('sheba_required')
+    else:
+        if not str(data.get('sheba') or '').strip():
+            return _fail('missing_bank')
+        sheba, s_err = validate_sheba(data.get('sheba'))
+        if s_err:
+            return _fail(s_err)
+        holder, h_err = validate_holder(data.get('holder_name'))
+        if h_err:
+            return _fail(h_err)
+        same = next((r for r in mine if str(r.get('sheba') or '').upper() == sheba), None)
+        if same is not None:
+            account_id = str(same.get('id') or '')
+        else:
+            new_account = new_account_record(
+                sheba, holder, me_phone, datetime.utcnow().isoformat() + 'Z', is_default=not mine,
+            )
+            account_id = new_account['id']
+
+    bank_rows_for_check = mine + ([new_account] if new_account else [])
+    rec, v_err = validate_new_request(amount, account_id, me_phone, bank_rows_for_check, comms, all_wd)
+    if v_err or not rec:
+        return _fail(v_err or 'invalid')
+
+    if new_account is not None:
+        all_banks.append(new_account)
+        try:
+            save_partner_bank_accounts(all_banks)
+        except Exception:
+            current_app.logger.exception('withdraw wizard: save bank account failed')
+            return _fail('save_failed', 500)
+
+    partner_name = _partner_display_name(me_phone)
+    rec['partner_name'] = partner_name
+    rec['source'] = 'withdraw_wizard'
+    if client_request_id:
+        rec['client_request_id'] = client_request_id
+    rec['created_at'] = datetime.utcnow().isoformat() + 'Z'
+    rec['updated_at'] = rec['created_at']
+    all_wd.append(rec)
+    try:
+        save_partner_withdrawals(all_wd)
+    except Exception:
+        current_app.logger.exception('withdraw wizard: save_partner_withdrawals failed')
+        return _fail('save_failed', 500)
+
+    _sms_amount = int(rec.get('amount') or 0)
+    _sms_bank = str(rec.get('bank_summary') or '')
+    _sms_ref = str(rec.get('id') or '')
+
+    def _notify():
+        try:
+            _send_withdrawal_admin_sms(partner_phone=me_phone, partner_name=partner_name,
+                                       amount=_sms_amount, bank_summary=_sms_bank)
+        except Exception:
+            current_app.logger.exception('withdrawal admin SMS failed')
+        try:
+            from .commission_sms import notify_partner_commission_txn
+            notify_partner_commission_txn(partner_phone=me_phone, event='withdrawal_requested',
+                                          amount=_sms_amount, bank_summary=_sms_bank, reference_id=_sms_ref)
+        except Exception:
+            current_app.logger.exception('withdrawal_requested partner SMS failed')
+
+    _after_wallet_lock(_notify)
+    after = max(0, int(available) - int(amount))
+    return {
+        'success': True,
+        'ok': True,
+        'request': request_row(rec),
+        'available': after,
+        'available_label': toman(after),
+    }, 200
+
+
+def _withdraw_submit(data: Dict[str, Any]):
+    from app.express_partner.deal_wallet import commission_store_lock
+
+    g._wallet_after_lock = []
+    with commission_store_lock():
+        body, status = _withdraw_submit_locked(data)
+    _run_wallet_after_lock()
+    return body, status
+
+
+@express_partner_bp.get('/wallet/withdraw', endpoint='wallet_withdraw')
+@require_partner_access()
+def wallet_withdraw():
+    """ویزارد برداشت (وب). هر مرحله یک سؤال؛ ثبت نهایی با فرم و توکن CSRF."""
+    import uuid as _uuid
+    from .withdraw_flow import error_message
+
+    me_phone = (session.get('user_phone') or '').strip()
+    options = _withdraw_options(me_phone)
+    err = (request.args.get('error') or '').strip()
+    return render_template(
+        'express_partner/wallet_withdraw.html',
+        options=options,
+        client_request_id=_uuid.uuid4().hex,
+        error_text=error_message(err, min_amount=MIN_WITHDRAWAL_AMOUNT) if err else '',
+        hide_header=True,
+    )
+
+
+@express_partner_bp.post('/wallet/withdraw', endpoint='wallet_withdraw_submit')
+@require_partner_access()
+def wallet_withdraw_submit():
+    """ثبت فرم ویزارد. CSRF را CSRFProtect بررسی می‌کند؛ دوبار ارسال با client_request_id یکی می‌شود."""
+    data = request.form.to_dict()
+    body, status = _withdraw_submit(data)
+    if status == 200 and body.get('request'):
+        return redirect(url_for('express_partner.wallet_withdraw_done', wid=body['request']['id']))
+    return redirect(url_for('express_partner.wallet_withdraw', error=body.get('error') or 'invalid'))
+
+
+@express_partner_bp.get('/wallet/withdraw/done/<wid>', endpoint='wallet_withdraw_done')
+@require_partner_access()
+def wallet_withdraw_done(wid: str):
+    """صفحهٔ موفقیت: کد پیگیری و «در انتظار بررسی». فقط صاحب درخواست می‌بیند."""
+    from .partner_withdrawals import partner_phones_match
+    from .withdraw_flow import TEXTS, request_row
+
+    me_phone = (session.get('user_phone') or '').strip()
+    row = next((w for w in _partner_withdrawals_raw()
+                if isinstance(w, dict) and str(w.get('id') or '') == str(wid)
+                and partner_phones_match(w.get('phone'), me_phone)), None)
+    if row is None:
+        abort(404)
+    return render_template(
+        'express_partner/wallet_withdraw_done.html',
+        req=request_row(row),
+        texts=TEXTS,
+        hide_header=True,
+    )
+
+
+@express_partner_bp.post('/wallet/withdraw/<wid>/cancel', endpoint='wallet_withdraw_cancel')
+@require_partner_access()
+def wallet_withdraw_cancel(wid: str):
+    """لغو از صفحهٔ کیف پول (فرم با CSRF). همان منطق /withdrawals/<wid>/cancel."""
+    from app.express_partner.deal_wallet import commission_store_lock
+
+    g._wallet_after_lock = []
+    with commission_store_lock():
+        resp = _withdrawals_cancel_locked(wid)
+    _run_wallet_after_lock()
+    resp_obj = resp[0] if isinstance(resp, tuple) else resp
+    ok = bool((resp_obj.get_json(silent=True) or {}).get('success'))
+    flash('درخواست برداشت لغو شد و مبلغ به موجودی برگشت.' if ok else 'این درخواست دیگر قابل لغو نیست.',
+          'success' if ok else 'error')
+    return redirect(url_for('express_partner.wallet_home'))
+
+
+@express_partner_bp.route('/api/wallet/withdraw', methods=['GET', 'POST'], endpoint='apk_wallet_withdraw')
+@require_partner_access(json_response=True)
+def apk_wallet_withdraw():
+    """GET: گزینه‌های ویزارد برداشت. POST (JSON + X-CSRFToken): ثبت درخواست."""
+    me_phone = (session.get('user_phone') or '').strip()
+    if request.method == 'GET':
+        body = _withdraw_options(me_phone)
+        body['ok'] = True
+        try:
+            from flask_wtf.csrf import generate_csrf
+            body['csrf_token'] = generate_csrf()
+        except Exception:
+            pass
+        return _apk_json(body)
+    # مسیرهای /api پرتال سراسری از CSRF معاف‌اند؛ این مسیر پولی است، پس اینجا سخت‌تر می‌گیریم:
+    # فقط JSON واقعی (فرم/‌text-plain بین‌سایتی رد می‌شود) و توکن X-CSRFToken معتبر.
+    if not request.is_json:
+        return _apk_json({'success': False, 'ok': False, 'error': 'json_required'}, 415)
+    if current_app.config.get('WTF_CSRF_ENABLED', True):
+        try:
+            from flask_wtf.csrf import generate_csrf, validate_csrf
+            validate_csrf(request.headers.get('X-CSRFToken') or request.headers.get('X-CSRF-Token') or '')
+        except Exception:
+            fresh = ''
+            try:
+                fresh = generate_csrf()
+            except Exception:
+                pass
+            return _apk_json({'success': False, 'ok': False, 'error': 'csrf_expired', 'csrf_token': fresh,
+                              'message': 'نشست منقضی شده؛ دوباره تلاش کنید.'}, 400)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    body, status = _withdraw_submit(data)
+    return _apk_json(body, status)
 
 
 @express_partner_bp.get('/api/notes')

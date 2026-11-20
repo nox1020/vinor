@@ -442,8 +442,14 @@ def partner_commission_dashboard(
     locked_available = approved_amount
     confirmed_amount = approved_gross_amount + paid_amount
     confirmed_count = approved_gross_count + paid_count
+    from .withdraw_flow import earned_commission_stats
+
+    earned_amount, earned_count = earned_commission_stats(commissions, phone)
 
     return {
+        # «پورسانت کسب‌شده»: فقط پورسانت فروش؛ شارژ کیف پول، تعدیل و پرداخت پورسانت به مشاور جدا هستند.
+        "earned_commission_amount": earned_amount,
+        "earned_commission_count": earned_count,
         "total_confirmed_amount": confirmed_amount,
         "total_confirmed_count": confirmed_count,
         "pending_amount": pending_amount,
@@ -1064,6 +1070,11 @@ def build_partner_txn_feed(
     return rows
 
 
+def _tracking_code(wid: Any) -> str:
+    s = re.sub(r"[^A-Za-z0-9]", "", str(wid or "")).upper()
+    return ("W-" + s[:8]) if s else ""
+
+
 def partner_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     amt = _amount_int(row.get("amount"))
     st = (str(row.get("status") or "pending")).strip()
@@ -1073,6 +1084,7 @@ def partner_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "status": st,
         "status_label": status_label(st),
         "bank_summary": row.get("bank_summary") or "",
+        "tracking_code": _tracking_code(row.get("id")),
         "created_at": row.get("created_at") or "",
         "updated_at": row.get("updated_at") or "",
     }
@@ -1091,6 +1103,8 @@ def admin_row_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "bank_name": row.get("bank_name") or "",
         "masked_pan": row.get("masked_pan") or "",
         "holder_name": row.get("holder_name") or "",
+        "sheba": str(row.get("sheba") or ""),
+        "tracking_code": _tracking_code(row.get("id")),
         "status": st,
         "status_label": status_label(st),
         "filter_bucket": withdrawal_filter_bucket(st),
@@ -1140,20 +1154,32 @@ def validate_new_request(
     if amount > available:
         return None, "insufficient_balance"
 
+    pfx = str(bank_rec.get("pan_prefix4") or "")[:4]
+    lst = str(bank_rec.get("pan_last4") or "")[-4:]
+    sheba = str(bank_rec.get("sheba") or "").strip().upper()
+    bank_name = str(bank_rec.get("bank_name") or "")
+    if pfx and lst:
+        masked_pan = f"{pfx} **** **** {lst}"
+    else:
+        masked_pan = ""
+    if masked_pan:
+        summary = (bank_name + " · " + masked_pan).strip(" ·")
+    elif sheba:
+        # حساب فقط‌شبا (ثبت‌شده از مرحلهٔ مقصد برداشت)
+        summary = (bank_name + " · " + f"{sheba[:4]} •••• •••• {sheba[-4:]}").strip(" ·")
+    else:
+        summary = bank_name or "حساب بانکی"
     rec: Dict[str, Any] = {
         "id": uuid.uuid4().hex[:16],
         "phone": ph,
         "amount": amount,
         "bank_account_id": acc_id,
-        "bank_summary": str(bank_rec.get("bank_name") or "") + " · " + (
-            f"{bank_rec.get('pan_prefix4', '')[:4]} **** **** {str(bank_rec.get('pan_last4') or '')[-4:]}"
-        ).strip(" ·"),
-        "bank_name": bank_rec.get("bank_name") or "",
-        "masked_pan": (
-            f"{str(bank_rec.get('pan_prefix4') or '')[:4]} **** **** "
-            f"{str(bank_rec.get('pan_last4') or '')[-4:]}"
-        ),
+        "bank_summary": summary,
+        "bank_name": bank_name,
+        "masked_pan": masked_pan,
         "holder_name": bank_rec.get("holder_name") or "",
+        # شبای کامل فقط برای واریز دستی ادمین؛ در پاسخ‌های همکار ماسک می‌شود.
+        "sheba": sheba,
         "status": "pending",
         "created_at": None,
         "updated_at": None,

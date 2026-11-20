@@ -1,13 +1,13 @@
 {# خلاصه درآمد — دو کارت فشرده سبک GPT #}
 {% set s = comm_stats if comm_stats is defined else {} %}
-{% set _total = s.get('total_confirmed_amount', total_commission or 0) %}
-{% set _total_cnt = s.get('total_confirmed_count', sold_count or 0) %}
+{% set _total = s.get('earned_commission_amount', total_commission or 0) %}
+{% set _total_cnt = s.get('earned_commission_count', sold_count or 0) %}
 {% set _wd_paid_amt = s.get('paid_withdrawal_amount', s.get('received_amount', paid_commission or 0)) %}
 {% set _wd_paid_cnt = s.get('paid_withdrawal_count', s.get('received_count', paid_count or 0)) %}
 
 <div class="vn-txn-summary" role="group" aria-label="خلاصه تراکنش‌ها">
   <div class="vn-txn-summary__card">
-    <p class="vn-txn-summary__label">کل درآمد</p>
+    <p class="vn-txn-summary__label">پورسانت کسب‌شده</p>
     <p data-comm-total class="vn-txn-summary__value">{{ (_total or 0)|toman }}</p>
     <p data-comm-total-count class="vn-txn-summary__hint">{{ (_total_cnt or 0)|fa_digits }} پورسانت</p>
   </div>

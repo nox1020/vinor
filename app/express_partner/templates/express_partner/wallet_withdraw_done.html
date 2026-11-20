@@ -1,0 +1,26 @@
+{% extends 'express_partner/base.html' %}
+{% block title %}{{ texts.success_title }} | وینور{% endblock %}
+
+{% block content %}
+{% include 'express_partner/partials/wallet_style.html' %}
+<div class="min-h-[100dvh] flex flex-col bg-zinc-950 text-white" data-withdraw-done="{{ req.status }}">
+  <main class="mx-auto w-full max-w-lg flex-1 px-5 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] pb-[calc(7rem+env(safe-area-inset-bottom,0px))] text-center">
+    <div class="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-500/15 ring-8 ring-emerald-500/10">
+      <i class="fas fa-check text-[34px] text-emerald-400" aria-hidden="true"></i>
+    </div>
+    <h1 class="mt-6 text-[20px] font-bold">{{ texts.success_title }}</h1>
+    <p class="mt-2 text-[26px] font-extrabold text-emerald-300">{{ req.amount_label }}</p>
+    <p class="mt-3 text-[14px] leading-7 text-zinc-300">{{ texts.success_body }}</p>
+    <dl class="mt-6 divide-y divide-white/10 rounded-xl border border-white/10 bg-white/5 text-right text-[14px]">
+      <div class="flex justify-between px-3.5 py-3"><dt class="text-zinc-400">{{ texts.success_tracking }}</dt><dd class="font-mono font-bold" dir="ltr" data-withdraw-tracking>{{ req.tracking_code }}</dd></div>
+      <div class="flex justify-between px-3.5 py-3"><dt class="text-zinc-400">{{ texts.success_status }}</dt><dd><span class="wc-st wc-st-amber" data-withdraw-status>{{ req.status_label }}</span></dd></div>
+      <div class="flex justify-between gap-3 px-3.5 py-3"><dt class="text-zinc-400">{{ texts.summary_dest }}</dt><dd class="truncate" dir="ltr">{{ req.destination }}</dd></div>
+    </dl>
+  </main>
+  <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
+    <div class="mx-auto max-w-lg">
+      <a href="{{ url_for('express_partner.wallet_home') }}" class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black" data-withdraw-back>{{ texts.back_to_wallet }}</a>
+    </div>
+  </footer>
+</div>
+{% endblock %}

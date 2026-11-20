@@ -51,9 +51,12 @@ TEXTS: Dict[str, str] = {
     "available_hint": "برای انتشار آگهی، پرداخت پورسانت و برداشت در دسترس است.",
     "blocked_label": "بلوکه برای پورسانت",
     "blocked_hint": "پورسانت آگهی‌های منتشرشده کنار گذاشته شده و با فروش یا لغو آگهی تکلیفش روشن می‌شود.",
-    "total_label": "کل موجودی",
-    "total_hint": "جمع موجودی قابل استفاده و بلوکه‌شده.",
+    "pending_withdrawal_label": "در انتظار برداشت",
+    "pending_withdrawal_hint": "درخواست‌های برداشتی که هنوز واریز نشده‌اند.",
     "topup_button": "افزایش اعتبار",
+    "withdraw_button": "برداشت",
+    "requests_title": "درخواست‌های برداشت",
+    "cancel_request": "لغو",
     "amount_title": "افزایش اعتبار",
     "amount_question": "چقدر می‌خواهید کیف پولتان را شارژ کنید؟",
     "amount_placeholder": "مبلغ دلخواه",
@@ -286,19 +289,28 @@ def charge_options(header: Dict[str, int], ctx: Dict[str, Any]) -> Dict[str, Any
 
 
 def header_payload(header: Dict[str, int]) -> Dict[str, Any]:
+    """هر مفهوم موجودی یک بار: قابل استفاده (بزرگ)، بلوکه، در انتظار برداشت.
+
+    «کل موجودی» (قابل استفاده + بلوکه) دیگر نمایش داده نمی‌شود چون تکرار همان دو عدد بود؛
+    کلید ``total`` فقط برای سازگاری نسخه‌های قدیمی اپ در JSON می‌ماند.
+    """
     available = _int(header.get("available"))
     blocked = _int(header.get("blocked"))
+    pending_wd = _int(header.get("pending_withdrawal"))
     total = _int(header.get("total")) or available + blocked
     return {
         "available": available,
         "blocked": blocked,
+        "pending_withdrawal": pending_wd,
         "total": total,
         "available_label": toman(available),
         "blocked_label": toman(blocked),
+        "pending_withdrawal_label": toman(pending_wd),
         "total_label": toman(total),
         "lines": [
             {"key": "blocked", "label": TEXTS["blocked_label"], "value": toman(blocked), "hint": TEXTS["blocked_hint"]},
-            {"key": "total", "label": TEXTS["total_label"], "value": toman(total), "hint": TEXTS["total_hint"]},
+            {"key": "pending_withdrawal", "label": TEXTS["pending_withdrawal_label"], "value": toman(pending_wd),
+             "hint": TEXTS["pending_withdrawal_hint"]},
         ],
     }
 
