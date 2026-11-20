@@ -362,8 +362,10 @@ def test_commissions_labels_and_earned_excludes_topups(client):
     assert data["wallet_available"] == 40_000_000  # 40 + 3 − 1 − 2 بلوکه
     html = client.get("/express/partner/commissions").get_data(as_text=True)
     assert "کل موجودی" not in html and "کل درآمد" not in html
-    assert "موجودی قابل استفاده" in html and "پورسانت کسب‌شده" in html and "در انتظار برداشت" in html
+    assert 'data-wallet-style="v2"' in html and html.count("موجودی قابل استفاده") == 1
     assert 'href="/express/partner/wallet/withdraw"' in html
+    strip = client.get("/express/partner/commissions/transactions").get_data(as_text=True)
+    assert "پورسانت کسب‌شده" in strip and "کل درآمد" not in strip
     snap = client.get("/express/partner/commissions/summary").get_json()["snapshot"]
     assert snap["wallet_available"] == 40_000_000 and snap["wallet_blocked"] == 2_000_000
     assert snap["earned_commission_amount"] == 3_000_000 and snap["can_withdraw"] is True

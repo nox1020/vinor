@@ -1026,7 +1026,7 @@
   {% endif %}
 
   {% if me_phone %}
-  {% set _drawer_wallet = withdrawable_balance|default(0) %}
+  {% set _drawer_wallet = wallet_available|default(withdrawable_balance|default(0)) %}
   {% set _drawer_name = (me_name or partner_name or 'همکار وینور')|trim %}
   {% if is_special|default(false) %}
     {% set _drawer_role_key = 'plus' %}

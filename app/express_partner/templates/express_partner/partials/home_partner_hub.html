@@ -198,8 +198,8 @@
   {% if is_approved %}
   <a class="vn-hub__wallet" href="{{ url_for('express_partner.commissions') }}" data-vinor-express-nav>
     <div class="vn-hub__wallet-main">
-      <p class="vn-hub__wallet-k">پورسانت‌های قابل دریافت</p>
-      <p class="vn-hub__wallet-amt">{{ (withdrawable_balance|default(0))|toman }}</p>
+      <p class="vn-hub__wallet-k">موجودی قابل استفاده</p>
+      <p class="vn-hub__wallet-amt" data-wallet-available>{{ (wallet_available|default(0))|toman }}</p>
     </div>
     {% if _growth is number %}
     {% set g = _growth|int %}

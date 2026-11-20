@@ -38,15 +38,20 @@
   .wh-btn-primary{background:#34d399;color:#052e1f;box-shadow:0 10px 24px -12px rgba(52,211,153,.8)}
   .wh-btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.14)}
   .wh-btn[aria-disabled="true"]{opacity:.45}
+  /* ورودی اصلی کیف پول است: نوار پایین (تب‌ها) زیر دکمه‌های چسبان می‌ماند */
+  @media (max-width:1023px){
+    .wh .wh-bar{bottom:calc(3.6rem + env(safe-area-inset-bottom,0px));padding-bottom:12px}
+    .wh main{padding-bottom:calc(11rem + env(safe-area-inset-bottom,0px))}
+  }
 </style>
 <div class="wh min-h-[100dvh] flex flex-col text-white" data-wallet-home data-wallet-style="v2">
   <header class="sticky top-0 z-20 px-3.5 pt-[calc(.6rem+env(safe-area-inset-top,0px))] pb-2" style="background:rgba(11,16,32,.92);backdrop-filter:blur(10px)">
     <div class="mx-auto flex max-w-lg items-center gap-2">
-      <a href="{{ url_for('express_partner.commissions') }}" class="grid h-10 w-10 place-items-center rounded-2xl text-white hover:bg-white/10" aria-label="بازگشت">
+      <a href="{{ url_for('express_partner.home') }}" data-vinor-express-nav class="grid h-10 w-10 place-items-center rounded-2xl text-white hover:bg-white/10" aria-label="بازگشت">
         <i class="fas fa-arrow-right" aria-hidden="true"></i>
       </a>
       <p class="min-w-0 flex-1 truncate text-center text-[15px] font-bold">{{ texts.wallet_title }}</p>
-      <a href="{{ url_for('express_partner.commissions_transactions') }}" class="grid h-10 w-10 place-items-center rounded-2xl text-slate-300 hover:bg-white/10" aria-label="همه تراکنش‌ها">
+      <a href="{{ url_for('express_partner.commissions_transactions') }}" data-vinor-express-nav class="grid h-10 w-10 place-items-center rounded-2xl text-slate-300 hover:bg-white/10" aria-label="همه تراکنش‌ها">
         <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
       </a>
     </div>
@@ -154,4 +159,5 @@
     </div>
   </footer>
 </div>
+{% include 'express_partner/partials/partner_tab_footer.html' %}
 {% endblock %}

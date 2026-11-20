@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.69-offline-outbox';
+const VERSION = 'v1.0.70-wallet-v2';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -341,7 +341,15 @@ function isSessionPartnerPath(pathname) {
     p === '/express/partner/profile' ||
     p === '/express/partner/profile/edit' ||
     p === '/express/partner/commissions' ||
-    p.startsWith('/express/partner/commissions/');
+    p.startsWith('/express/partner/commissions/') ||
+    p === '/express/partner/wallet' ||
+    p.startsWith('/express/partner/wallet/');
+}
+
+function isWalletPath(pathname) {
+  const p = (pathname || '').replace(/\/+$/, '') || '/';
+  return p === '/express/partner/commissions' || p.startsWith('/express/partner/commissions/') ||
+    p === '/express/partner/wallet' || p.startsWith('/express/partner/wallet/');
 }
 
 function isNoStoreResponse(response) {
@@ -386,6 +394,8 @@ async function cachePartnerNavigation(request, response) {
     if (response.redirected && isAuthPartnerPath(new URL(response.url).pathname)) return;
   } catch (_) {}
   if (!isExpressPartnerRoute(url)) return;
+  // کیف پول/پورسانت: موجودی زنده است؛ نسخهٔ کهنه (یا طرح قدیمی) نباید از کش آفلاین برگردد.
+  if (isWalletPath(url.pathname)) return;
   const ct = (response.headers.get('content-type') || '').toLowerCase();
   if (!ct.includes('text/html')) return;
   /*

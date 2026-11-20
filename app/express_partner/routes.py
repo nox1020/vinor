@@ -3935,6 +3935,12 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
     my_comms = _commissions_for_phone(ph) if ph else []
     comm_stats = _partner_commission_stats(ph, my_comms) if ph else {}
     withdrawable = int(comm_stats.get('withdrawable_balance') or 0) if ph else 0
+    wallet_available = 0
+    if ph and is_approved:
+        try:
+            wallet_available = int(_partner_requestable_balance(ph) or 0)
+        except Exception:
+            wallet_available = 0
     follow_up_count = _home_follow_up_count(ph, visit_rows) if ph else 0
     has_completed_deal = _partner_has_completed_deal(ph, my_comms) if ph and is_approved else False
 
@@ -3998,6 +4004,8 @@ def _build_home_dashboard_payload(me_phone: str, profile) -> Dict[str, Any]:
         'journey_card': None,
         'mission': None,
         'withdrawable_balance': withdrawable,
+        # «موجودی قابل استفاده» = همان عدد کارت کیف پول (بدون بلوکه و برداشت در انتظار)
+        'wallet_available': wallet_available,
         'home_requests_pipeline_count': home_requests_pipeline_count,
         'me_name': me_display,
         'home_deals_done': hub_stats['home_deals_done'],
@@ -4571,6 +4579,7 @@ def home_page():
         suggested_files=payload.get('suggested_files') or [],
         journey_card=payload.get('journey_card'),
         withdrawable_balance=int(payload.get('withdrawable_balance') or 0),
+        wallet_available=int(payload.get('wallet_available') or 0),
         home_requests_pipeline_count=int(payload.get('home_requests_pipeline_count') or 0),
         home_deals_done=int(payload.get('home_deals_done') or 0),
         home_visits_done=int(payload.get('home_visits_done') or 0),
@@ -7858,6 +7867,10 @@ def commissions_page():
     me_phone = (session.get("user_phone") or "").strip()
     profile = getattr(g, 'express_partner_profile', None)
     is_approved = _is_partner_approved(profile)
+    if is_approved:
+        # ورودی اصلی کیف پول (منو، خانه، پروفایل، کشوی کناری) — همان طرح v2 صفحهٔ /wallet.
+        # طرح قدیمی (کارت «کل موجودی»/شیت برداشت) دیگر رندر نمی‌شود؛ /commissions/data و /summary برای سازگاری می‌مانند.
+        return _render_wallet_v2(me_phone, profile)
     my_comms = _commissions_for_phone(me_phone)
 
     comm_stats = _partner_commission_stats(me_phone, my_comms)
@@ -8020,29 +8033,39 @@ def _charge_context_fields(phone: str, shortfall: int, reason: str, code: str = 
     }
 
 
-@express_partner_bp.get('/wallet', endpoint='wallet_home')
-@require_partner_access(allow_pending=True)
-def wallet_home():
-    """کیف پول به سبک دیوار: موجودی بزرگ، بلوکه و کل، «افزایش اعتبار»، و تراکنش‌ها بر اساس روز."""
+def _render_wallet_v2(me_phone: str, profile: Any):
+    """کیف پول v2: کارت گرادیانی «موجودی قابل استفاده»، چیپ بلوکه و در انتظار برداشت، دکمه‌های چسبان
+    «افزایش اعتبار» + «برداشت» و تایم‌لاین روزبه‌روز. هر مفهوم موجودی فقط یک بار و با یک برچسب."""
     from .wallet_charge_flow import TEXTS, header_payload
 
     from .withdraw_flow import request_rows, toman as toman_fa_label
 
-    me_phone = (session.get('user_phone') or '').strip()
-    profile = getattr(g, 'express_partner_profile', None)
     wallet = header_payload(_wallet_header(me_phone))
-    return render_template(
+    approved = _is_partner_approved(profile)
+    resp = make_response(render_template(
         'express_partner/wallet_home.html',
         wallet=wallet,
         groups=_wallet_feed(me_phone),
         requests=[r for r in request_rows(_partner_withdrawals_raw(), me_phone, limit=10)
                   if r['status'] in ('pending', 'approved', 'processing', 'rejected')][:5],
-        can_withdraw=_is_partner_approved(profile) and wallet['available'] >= MIN_WITHDRAWAL_AMOUNT,
-        withdraw_enabled=_is_partner_approved(profile),
+        can_withdraw=approved and wallet['available'] >= MIN_WITHDRAWAL_AMOUNT,
+        withdraw_enabled=approved,
         min_withdrawal_label=toman_fa_label(MIN_WITHDRAWAL_AMOUNT),
         texts=TEXTS,
         hide_header=True,
-    )
+        bottom_nav_active='profile',
+    ))
+    # موجودی زنده است: نه مرورگر، نه پراکسی و نه service worker نسخهٔ قدیمی صفحه را نگه ندارند.
+    resp.headers['Cache-Control'] = 'no-store, private'
+    return resp
+
+
+@express_partner_bp.get('/wallet', endpoint='wallet_home')
+@require_partner_access(allow_pending=True)
+def wallet_home():
+    """کیف پول v2 (همان صفحهٔ /commissions برای همکار تأییدشده)."""
+    me_phone = (session.get('user_phone') or '').strip()
+    return _render_wallet_v2(me_phone, getattr(g, 'express_partner_profile', None))
 
 
 @express_partner_bp.get('/api/wallet', endpoint='apk_wallet')
@@ -11581,6 +11604,13 @@ def profile_page():
             except Exception:
                 withdrawable = 0
         ctx['withdrawable_balance'] = withdrawable
+        available = 0
+        if is_approved:
+            try:
+                available = int(_partner_requestable_balance(me_phone) or 0)
+            except Exception:
+                available = 0
+        ctx['wallet_available'] = available
         try:
             from app.crm.config import crm_ui_enabled as _crm_ui_enabled
 

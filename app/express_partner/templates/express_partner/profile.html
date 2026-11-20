@@ -84,7 +84,7 @@
     {% if crm_ui_enabled|default(false) %}
     {{ profile_menu_row(url_for('express_partner.customers'), 'fa-users', 'مشتریان') }}
     {% endif %}
-    {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', subtitle=withdrawable_balance|default(0)|toman) }}
+    {{ profile_menu_row(url_for('express_partner.commissions'), 'fa-wallet', 'کیف پول', subtitle=wallet_available|default(0)|toman) }}
     {{ profile_menu_row(url_for('express_partner.invite_colleagues'), 'fa-user-plus', 'دعوت همکار') }}
     {% endif %}
     {% if _logged and not _approved %}
