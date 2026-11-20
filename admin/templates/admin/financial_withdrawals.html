@@ -85,7 +85,9 @@
 
       <div class="rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 px-3 py-2.5 text-xs space-y-1 mb-3">
         <div class="flex justify-between gap-2"><span class="text-gray-500">بانک</span><span class="text-gray-900 dark:text-white font-medium">{{ w.bank_name or '—' }}</span></div>
-        <div class="flex justify-between gap-2"><span class="text-gray-500">کارت</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr">{{ w.masked_pan or '—' }}</span></div>
+        {% if w.tracking_code %}<div class="flex justify-between gap-2"><span class="text-gray-500">کد پیگیری</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr" data-admin-wd-tracking>{{ w.tracking_code }}</span></div>{% endif %}
+        {% if w.sheba %}<div class="flex justify-between gap-2"><span class="text-gray-500">شبا</span><span class="text-gray-900 dark:text-white font-mono select-all" dir="ltr" data-admin-wd-sheba>{{ w.sheba }}</span></div>{% endif %}
+        {% if w.masked_pan %}<div class="flex justify-between gap-2"><span class="text-gray-500">کارت</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr">{{ w.masked_pan }}</span></div>{% endif %}
         <div class="flex justify-between gap-2"><span class="text-gray-500">صاحب حساب</span><span class="text-gray-900 dark:text-white">{{ w.holder_name or '—' }}</span></div>
         {% if st == 'paid' and w.commission_allocated_amount %}
         <div class="flex justify-between gap-2"><span class="text-gray-500">تخصیص پورسانت</span><span class="text-gray-900 dark:text-white tabular-nums">{{ w.commission_allocated_amount|int|toman }}</span></div>

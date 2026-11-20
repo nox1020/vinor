@@ -47,14 +47,21 @@ def luhn_ok(num: str) -> bool:
     return s % 10 == 0
 
 
+_FA_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
 def normalize_sheba(raw: str) -> str:
-    s = (raw or "").strip().upper().replace(" ", "")
+    s = (raw or "").translate(_FA_DIGITS).strip().upper().replace(" ", "")
     if not s:
         return ""
     if not s.startswith("IR"):
         s = "IR" + s
-    body = "IR" + re.sub(r"\D+", "", s[2:])
+    body = "IR" + re.sub(r"[^0-9]+", "", s[2:])
     if len(body) != 26:
+        return ""
+    # چک‌سام ISO 13616 (mod 97)؛ شبای اشتباه تایپی ذخیره نمی‌شود.
+    rearranged = body[4:] + "1827" + body[2:4]
+    if int(rearranged) % 97 != 1:
         return ""
     return body
 

@@ -390,7 +390,8 @@ def test_wallet_page_header_and_grouped_feed(client, gateway):
     _start(client, amount=250_000)
     _callback(client, _rows()[0]["authority"], "NOK")
     html = client.get("/express/partner/wallet").get_data(as_text=True)
-    assert "موجودی قابل استفاده" in html and "بلوکه برای پورسانت" in html and "کل موجودی" in html
+    # هر مفهوم موجودی یک بار: «کل موجودی» (قابل استفاده + بلوکه) دیگر تکرار نمی‌شود
+    assert html.count("موجودی قابل استفاده") == 1 and "بلوکه برای پورسانت" in html and "کل موجودی" not in html
     assert "۳٬۵۰۰٬۰۰۰ تومان" in html  # 5M − 1.5M held
     assert "افزایش اعتبار" in html
     for kind in ("hold", "release", "topup"):

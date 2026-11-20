@@ -48,6 +48,10 @@
       ),
       min_withdrawal_amount: minWd,
       can_withdraw: canWithdraw,
+      wallet_available: raw.wallet_available != null ? toInt(raw.wallet_available) : undefined,
+      wallet_blocked: raw.wallet_blocked != null ? toInt(raw.wallet_blocked) : undefined,
+      earned_commission_amount: raw.earned_commission_amount != null ? toInt(raw.earned_commission_amount) : undefined,
+      earned_commission_count: raw.earned_commission_count != null ? toInt(raw.earned_commission_count) : undefined,
       generated_at: raw.generated_at || ''
     };
   }
@@ -87,7 +91,9 @@
     lastGoodSnapshot = s;
     updateSnapshotScriptEl(s);
 
-    var wdText = formatToman(s.withdrawable_balance);
+    /* «موجودی قابل استفاده» = بدون بلوکهٔ پورسانت آگهی‌ها (wallet_available)؛ نسخهٔ قدیمی snapshot → withdrawable */
+    var availInt = (typeof s.wallet_available === 'number') ? s.wallet_available : s.withdrawable_balance;
+    var wdText = formatToman(availInt);
 
     var mount = document.getElementById('commissionsRefreshMount');
     var scope = mount || document;
@@ -104,10 +110,15 @@
       dotEl.classList.toggle('vn-comm-wd-dot--live', hasActive);
     }
 
-    setTextIfChanged(scope.querySelector('[data-comm-total]'), formatToman(s.total_confirmed_amount));
+    if (typeof s.wallet_blocked === 'number') {
+      setTextIfChanged(scope.querySelector('[data-comm-blocked]'), formatToman(s.wallet_blocked));
+    }
+    var earnedAmt = (typeof s.earned_commission_amount === 'number') ? s.earned_commission_amount : s.total_confirmed_amount;
+    var earnedCnt = (typeof s.earned_commission_count === 'number') ? s.earned_commission_count : s.total_confirmed_count;
+    setTextIfChanged(scope.querySelector('[data-comm-total]'), formatToman(earnedAmt));
     var totalCntEl = scope.querySelector('[data-comm-total-count]');
     if (totalCntEl) {
-      setTextIfChanged(totalCntEl, toFaDigits(String(s.total_confirmed_count || 0)) + ' پورسانت تأیید شده');
+      setTextIfChanged(totalCntEl, toFaDigits(String(earnedCnt || 0)) + ' پورسانت تأیید شده');
     }
 
     setTextIfChanged(scope.querySelector('[data-comm-wd-paid]'), formatToman(s.paid_withdrawal_amount));
@@ -119,9 +130,9 @@
       setTextIfChanged(paidCntEl, paidCntText);
     }
 
-    var wdBtn = scope.querySelector('[data-open-withdraw-modal]');
+    var wdBtn = scope.querySelector('[data-withdraw-wizard]') || scope.querySelector('[data-open-withdraw-modal]');
     if (wdBtn) {
-      wdBtn.setAttribute('data-withdrawable-int', String(s.withdrawable_balance));
+      wdBtn.setAttribute('data-withdrawable-int', String(availInt));
       var can = !!s.can_withdraw;
       /* HTML disabled کلیک را قطع می‌کند — فقط aria-disabled برای ظاهر و منطق */
       wdBtn.disabled = false;
@@ -138,7 +149,7 @@
 
     var belowMinEl = scope.querySelector('[data-comm-below-min-note]');
     if (belowMinEl) {
-      var showBelow = s.withdrawable_balance > 0 && !s.can_withdraw;
+      var showBelow = availInt > 0 && !s.can_withdraw;
       belowMinEl.classList.toggle('hidden', !showBelow);
       if (showBelow) {
         belowMinEl.textContent = 'کف برداشت ' + formatToman(s.min_withdrawal_amount) + ' است.';
