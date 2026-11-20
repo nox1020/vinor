@@ -1,18 +1,12 @@
 {% extends 'express_partner/base.html' %}
 {% block title %}کیف پول | همکار اکسپرس{% endblock %}
 {% block content %}
-
-{# همان الگوی داشبورد: هدر fixed + main مستقیم در شِل پرتال (بدون wrapper اضافه) + نوار پایین #}
+{# همکار تأییدشده کیف پول v2 (wallet_home.html) را می‌بیند؛ این قالب فقط توضیح پیش از تأیید است. #}
 {% include 'express_partner/partials/commissions_styles.html' %}
 {% include 'express_partner/partials/commissions_header.html' %}
-{% include 'express_partner/partials/commissions_body.html' %}
+<main id="commissionsPageMain" class="max-w-lg lg:max-w-4xl mx-auto w-full px-4 pb-28 text-slate-100 bg-[#030712]"
+      style="padding-top:max(0.35rem, env(safe-area-inset-top, 0px))">
+  {% include 'express_partner/partials/commissions_guest.html' %}
+</main>
 {% include 'express_partner/partials/partner_tab_footer.html' %}
-{% endblock %}
-
-{% block scripts %}
-{% if is_approved %}
-  <script src="{{ url_for('static', filename='express-partner/commissions-financial.js') }}?v=4"></script>
-  {% include 'express_partner/partials/commissions_scripts.html' %}
-  {% include 'express_partner/partials/commissions_txn_detail_script.html' %}
-{% endif %}
 {% endblock %}
