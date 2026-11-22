@@ -30,6 +30,7 @@
     .legal a { color: #6ee7b7; text-decoration: underline; text-underline-offset: 2px; }
     .legal strong { color: #e4e4e7; font-weight: 600; }
   </style>
+  <link rel="stylesheet" href="{{ 'css/vinor-hide-scrollbars.css'|static_version }}">
 </head>
 <body class="bg-[#050810] text-zinc-100 antialiased">
 {% set _back = safe_internal_path(request.args.get('next')) or url_for('main.index') %}

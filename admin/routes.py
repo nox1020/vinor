@@ -5413,6 +5413,7 @@ def express_commission_new():
     return redirect(_express_commissions_redirect('pending'))
 
 _ESCROW_MISSING_TEMPLATE = """{% autoescape true %}
+<style>html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>
 <h1>آگهی بدون بلوکه پورسانت</h1>
 <p>این‌ها منتشر می‌مانند تا ویرایش یا انتشار بعدی بلوکه بخواهد.</p>
 <ul>
@@ -5437,6 +5438,7 @@ def express_escrow_missing():
 
 
 _ESCROW_REVIEW_TEMPLATE = """{% autoescape true %}
+<style>html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>
 <h1>بلوکه‌های در انتظار بازبینی</h1>
 <p>مالک «فروخته شد — بیرون از وینور» زده ولی بازاریاب وینور بازدید ثبت‌شده داشته است (انجام‌شده، منتظر تأیید، اعتراض‌شده، یا تأییدشده‌ای که وقتش گذشته). بلوکه آزاد نشده.</p>
 {% with messages = get_flashed_messages(with_categories=true) %}{% for c, m in messages %}<p>{{ m }}</p>{% endfor %}{% endwith %}
@@ -5662,6 +5664,7 @@ def express_escrow_review_deal(code: str):
 
 
 _DEAL_INTEGRITY_TEMPLATE = """{% autoescape true %}
+<style>html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>
 <h1>{{ title }}</h1>
 <p>{{ intro }}</p>
 <ul>

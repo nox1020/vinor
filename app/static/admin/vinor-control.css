@@ -685,3 +685,26 @@ details.adm-collapse > summary::-webkit-details-marker { display: none; }
   opacity: 1;
 }
 .dark .ai-tab.is-active { color: #5eead4; }
+
+/* Hide scrollbars visually; scrolling stays available. See css/vinor-hide-scrollbars.css. */
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar,
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+*::-webkit-scrollbar-corner {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}

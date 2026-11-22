@@ -154,7 +154,8 @@
     background: #000;
   }
 
-  .ai-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
+  .ai-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ai-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
   #aiMessages .ai-msg-cards .ai-land-cards { width: 100%; max-width: 100%; }
   #aiMessages .ai-msg-cards .vn-lcd { width: 100%; max-width: 100%; }
   #aiSidePanel.ai-side-panel,

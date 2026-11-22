@@ -26,8 +26,14 @@
     .notify-chat-shell { max-height: calc(100dvh - 11rem); }
   }
   .notify-bubble-scroll {
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     scroll-behavior: smooth;
+  }
+  .notify-bubble-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 </style>
 {% endblock %}

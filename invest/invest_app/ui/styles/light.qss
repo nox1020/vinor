@@ -530,26 +530,48 @@ QScrollArea {
 }
 
 QScrollBar:vertical {
-    background: #EEF3F0;
-    width: 10px;
+    background: transparent;
+    width: 0px;
     margin: 0;
+    border: none;
 }
 
 QScrollBar::handle:vertical {
-    background: #B8C9BF;
-    border-radius: 5px;
-    min-height: 24px;
+    background: transparent;
+    border-radius: 0;
+    min-height: 0px;
+    width: 0px;
 }
 
 QScrollBar:horizontal {
-    background: #EEF3F0;
-    height: 10px;
+    background: transparent;
+    height: 0px;
+    border: none;
 }
 
 QScrollBar::handle:horizontal {
-    background: #B8C9BF;
-    border-radius: 5px;
-    min-width: 24px;
+    background: transparent;
+    border-radius: 0;
+    min-width: 0px;
+    height: 0px;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical,
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal,
+QScrollBar::up-arrow,
+QScrollBar::down-arrow,
+QScrollBar::left-arrow,
+QScrollBar::right-arrow {
+    width: 0px;
+    height: 0px;
+    background: none;
+    border: none;
 }
 
 QMessageBox, QMessageBox QLabel {
