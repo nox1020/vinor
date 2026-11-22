@@ -32,6 +32,7 @@
     '/express/partner/profile/edit': { tab: 'home', depth: 2, bottomNav: true, prefetch: false },
     '/express/partner/favorites': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/requests': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
+    '/express/partner/customers': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
     '/express/partner/listings/new': { tab: 'profile', depth: 2, bottomNav: false, prefetch: false },
     '/express/partner/my-property': { tab: 'profile', depth: 1, bottomNav: true, prefetch: true },
@@ -75,6 +76,7 @@
     '/express/partner/commissions',
     '/express/partner/favorites',
     '/express/partner/requests',
+    '/express/partner/customers',
     '/express/partner/training',
     '/express/partner/invite',
     '/express/partner/listings',
@@ -542,6 +544,7 @@
     return p === '/express/partner/favorites' ||
       p === '/express/partner/ai' ||
       p === '/express/partner/requests' ||
+      p === '/express/partner/customers' ||
       p === '/express/partner/listings' ||
       p.indexOf('/express/partner/listings/') === 0 ||
       p === '/express/partner/my-property' ||

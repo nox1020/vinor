@@ -6554,6 +6554,30 @@ def customers_page():
     )
 
 
+@express_partner_bp.get('/api/customers/data', endpoint='apk_customers_data')
+@require_partner_access(allow_guest=True, json_response=True)
+def apk_customers_data():
+    """تب «مشتریان» اپ: JSON سبک (همان دادهٔ صفحهٔ وب) با CSRF؛ بدون HTML کامل و بدون درخواست دوم."""
+    me_phone = (session.get('user_phone') or '').strip()
+    if not me_phone:
+        return _apk_json({'ok': False, 'error': 'unauthorized', 'auth_required': True}, 401)
+    try:
+        from app.crm.config import crm_ui_enabled
+        if not crm_ui_enabled():
+            return _apk_json({'ok': False, 'error': 'not_found'}, 404)
+    except Exception:
+        return _apk_json({'ok': False, 'error': 'not_found'}, 404)
+    from flask_wtf.csrf import generate_csrf
+    from app.crm.config import VISIT_CALL_TARGET
+    from .customers import customers_payload
+
+    return _apk_json(customers_payload(
+        me_phone,
+        csrf_token=generate_csrf(),
+        visit_call_target=VISIT_CALL_TARGET,
+    ))
+
+
 @express_partner_bp.post('/customers', endpoint='customers_create')
 @require_partner_access()
 def customers_create():
