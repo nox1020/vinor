@@ -84,10 +84,6 @@
       }
     }
 
-    var PULL_TRIGGER_PX = 72;
-    var TOP_EPS = 10;
-    var startY = null;
-    var maxPull = 0;
     var busy = false;
     var refreshPromise = null;
 
@@ -177,42 +173,19 @@
       try { return window.matchMedia('(max-width: 1023px)').matches; } catch (_) { return true; }
     }
 
-    /* لم روی محتوای main تا با لمس هدر fixed تداخل نکند */
-    main.addEventListener('touchstart', function(e){
-      if (!pullEnabled() || busy || !e.touches || e.touches.length !== 1) return;
-      if (!main.contains(e.target)) return;
-      if (commissionsPullScrollTop() > TOP_EPS) return;
-      startY = e.touches[0].clientY;
-      maxPull = 0;
-    }, { passive: true, signal: pullSignal });
-
-    main.addEventListener('touchmove', function(e){
-      if (!pullEnabled() || startY == null || !e.touches || e.touches.length !== 1) return;
-      if (commissionsPullScrollTop() > TOP_EPS) { startY = null; maxPull = 0; setHint(false); return; }
-      var dy = e.touches[0].clientY - startY;
-      /* حرکت به سمت بالا = اسکرول محتوا به سمت بالا؛ حالت pull را رها کن تا با اسکرول سند تداخل نکند */
-      if (dy < -12) { startY = null; maxPull = 0; setHint(false); return; }
-      if (dy > 0) {
-        maxPull = Math.max(maxPull, dy);
-        setHint(maxPull > 48);
-      }
-    }, { passive: true, signal: pullSignal });
-
-    main.addEventListener('touchend', function(){
-      if (!pullEnabled() || startY == null) return;
-      var ok = maxPull >= PULL_TRIGGER_PX && commissionsPullScrollTop() <= TOP_EPS;
-      startY = null;
-      maxPull = 0;
-      setHint(false);
-      if (!ok || busy) return;
-      busy = true;
-      performCommissionsRefresh().finally(function(){ busy = false; });
-    }, { passive: true, signal: pullSignal });
-
-    main.addEventListener('touchcancel', function(){
-      if (!pullEnabled()) return;
-      startY = null; maxPull = 0; setHint(false);
-    }, { passive: true, signal: pullSignal });
+    /* ژست مشترک express-ptr-core.js: قفل محور، اسکرول داخلی، فاصلهٔ فعلی */
+    if (window.VinorPtr && pullEnabled()) {
+      if (window.__vinorCommPullHandle) { try { window.__vinorCommPullHandle.detach(); } catch (_) {} }
+      window.__vinorCommPullHandle = window.VinorPtr.attach({
+        target: main,
+        atTop: function () { return commissionsPullScrollTop() <= window.VinorPtr.TOP_EPS; },
+        setHint: function (v) { if (!busy) setHint(v); },
+        onRefresh: function () {
+          busy = true;
+          return performCommissionsRefresh().finally(function () { busy = false; });
+        }
+      });
+    }
   })();
 </script>
 

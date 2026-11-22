@@ -36,8 +36,11 @@
   
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
   <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
+  <script src="{{ 'express-partner/express-ptr-core.js'|static_version }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}" />
   <style>
+    /* PTR سفارشی؛ رفرش بومی مرورگر خاموش تا دوبار رفرش/پرش نشود */
+    html,body{overscroll-behavior-y:contain}
     body { font-family: 'Vazirmatn', sans-serif; }
     .safe-area-bottom {
       padding-bottom: env(safe-area-inset-bottom, 0);
@@ -339,97 +342,24 @@
       } catch (_) {}
     })();
 
-    // Pull to Refresh - مینیمال و سریع (بدون آیکون، فقط اسکرول grid)
+    // Pull to Refresh — هستهٔ مشترک express-ptr-core.js (passive، قفل محور، بدون preventDefault)
     (function() {
       const container = document.getElementById('exploreContainer');
       const grid = document.getElementById('instagramGrid');
-      
-      if (!container || !grid) return;
-      try {
-        document.documentElement.style.overscrollBehaviorY = 'contain';
-        document.body.style.overscrollBehaviorY = 'contain';
-      } catch (_) {}
+      if (!container || !grid || !window.VinorPtr) return;
 
-      let startY = null;
-      let currentY = null;
-      let isPulling = false;
-      let isRefreshing = false;
-      const PULL_THRESHOLD = 60; // حداقل فاصله برای رفرش
-      const MAX_PULL = 80; // حداکثر فاصله کشیدن
-
-      function resetPullState() {
-        isPulling = false;
-        startY = null;
-        currentY = null;
-        grid.style.transition = 'transform 0.3s ease-out';
-        grid.style.transform = 'translateY(0)';
+      function setHint(visible, refreshing) {
+        grid.style.transition = visible && !refreshing ? 'transform 0.12s ease-out' : 'transform 0.3s ease-out';
+        grid.style.transform = visible && !refreshing ? 'translateY(24px)' : 'translateY(0)';
       }
 
-      function handleTouchStart(e) {
-        // فقط اگر در بالای صفحه هستیم
-        if (window.scrollY > 5 || isRefreshing || !e.touches || e.touches.length !== 1) return;
-        
-        startY = e.touches[0].clientY;
-        currentY = startY;
-        isPulling = false;
-      }
-
-      function handleTouchMove(e) {
-        if (startY === null || window.scrollY > 5 || isRefreshing || !e.touches || e.touches.length !== 1) return;
-        
-        currentY = e.touches[0].clientY;
-        const pullDistance = currentY - startY;
-
-        if (pullDistance > 0) {
-          isPulling = true;
-          e.preventDefault();
-          
-          // اسکرول grid به پایین
-          grid.style.transform = `translateY(${Math.min(pullDistance * 0.3, 30)}px)`;
-          grid.style.transition = 'none';
-        } else if (isPulling) {
-          resetPullState();
+      window.VinorPtr.attach({
+        target: document,
+        setHint: setHint,
+        onRefresh: function () {
+          return window.performRefresh ? window.performRefresh() : Promise.resolve();
         }
-      }
-
-      function handleTouchEnd(e) {
-        if (!isPulling || isRefreshing) return;
-        
-        const pullDistance = (currentY || 0) - (startY || 0);
-        
-        if (pullDistance >= PULL_THRESHOLD) {
-          // شروع رفرش بدون reload صفحه
-          isRefreshing = true;
-          
-          // انیمیشن smooth برای grid
-          grid.style.transition = 'transform 0.3s ease-out';
-          grid.style.transform = 'translateY(0)';
-          
-          // رفرش محتوا بدون reload صفحه - استفاده از تابع performRefresh
-          if (window.performRefresh) {
-            window.performRefresh().then(() => {
-              isRefreshing = false;
-            }).catch(() => {
-              isRefreshing = false;
-            });
-          } else {
-            isRefreshing = false;
-          }
-        } else {
-          // بازگشت به حالت اولیه با انیمیشن
-          grid.style.transition = 'transform 0.3s ease-out';
-          grid.style.transform = 'translateY(0)';
-        }
-        
-        isPulling = false;
-        startY = null;
-        currentY = null;
-      }
-
-      // Event listeners
-      document.addEventListener('touchstart', handleTouchStart, { passive: true });
-      document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleTouchEnd, { passive: true });
+      });
     })();
 
     // Infinite Scroll - سبک اینستاگرام

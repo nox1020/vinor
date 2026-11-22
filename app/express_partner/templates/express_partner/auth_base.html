@@ -26,6 +26,7 @@
   <link rel="preload" as="script" href="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}">
   {% block head %}{% endblock %}
   <link rel="stylesheet" href="{{ 'css/vinor-hide-scrollbars.css'|static_version }}">
+  <script src="{{ 'express-partner/express-ptr-core.js'|static_version }}"></script>
 </head>
 <body>
   {% include 'express_partner/partials/partner_header_chrome.html' %}
