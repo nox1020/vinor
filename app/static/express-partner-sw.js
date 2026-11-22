@@ -4,7 +4,7 @@
   این Service Worker کاملاً مجزا از PWA اصلی وینور است
 */
 
-const VERSION = 'v1.0.70-wallet-v2';
+const VERSION = 'v1.0.71-hide-scrollbars';
 const PRECACHE = `express-partner-precache-${VERSION}`;
 const RUNTIME = `express-partner-runtime-${VERSION}`;
 const API_CACHE = `express-partner-api-${VERSION}`;
@@ -198,6 +198,7 @@ const LOCAL_ASSETS = [
   '/static/express-partner/dashboard-chrome.js',
   '/static/express-partner/express-nav.js',
   '/static/express-partner/land-detail.js',
+  '/static/css/vinor-hide-scrollbars.css',
   '/static/favicon.ico',
   '/static/favicon-32x32.png',
   '/static/icons/icon-192.png',

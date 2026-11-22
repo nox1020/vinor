@@ -56,8 +56,13 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     padding: 0.85rem 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .postchi-messages::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
   .postchi-scroll-anchor {
     height: 1px;

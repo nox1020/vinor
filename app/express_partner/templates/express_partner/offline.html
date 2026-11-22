@@ -7,6 +7,8 @@
   <meta name="theme-color" content="#2563eb">
   <style>
     :root { color-scheme: light; }
+    html, body, * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+    html::-webkit-scrollbar, body::-webkit-scrollbar, *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -130,6 +132,7 @@
       h1 { font-size: 18px; }
     }
   </style>
+  <link rel="stylesheet" href="{{ 'css/vinor-hide-scrollbars.css'|static_version }}">
 </head>
 <body>
   <div class="page">

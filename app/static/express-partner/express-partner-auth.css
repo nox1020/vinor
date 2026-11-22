@@ -376,3 +376,26 @@ html.tg-nav-transitioning #bottomNavMenu { pointer-events: none; }
   html[class*="tg-page-leave-"] #tg-page-shell,
   html[class*="tg-page-enter-"] #tg-page-shell { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
+
+/* Hide scrollbars visually; scrolling stays available. See css/vinor-hide-scrollbars.css. */
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar,
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+*::-webkit-scrollbar-corner {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}

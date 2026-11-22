@@ -65,7 +65,8 @@ def _clear_probot_session():
 
 
 _DISABLED_HTML = """<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>ربات غیرفعال است</title></head>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>ربات غیرفعال است</title>
+<style>html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style></head>
 <body style="font-family:Tahoma,sans-serif;background:#020617;color:#e5e7eb;padding:24px">
 <h2>🤖 پنل ربات هنوز فعال نشده است</h2>
 <p>توکن ربات بله و شناسهٔ ادمین تنظیم نشده‌اند. راهنما: probot/README.md</p></body></html>"""
@@ -316,6 +317,8 @@ def login():
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
       <title>ورود پنل وب</title>
       <style>
+        /* hide scrollbars; scrolling stays available */
+        html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
         :root { color-scheme: dark; }
         *, *::before, *::after { box-sizing: border-box; }
         html { -webkit-text-size-adjust: 100%; }
@@ -425,6 +428,8 @@ def panel():
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
       <title>پنل ادمین ربات</title>
       <style>
+        /* hide scrollbars; scrolling stays available */
+        html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
         :root { color-scheme: dark; }
         *, *::before, *::after { box-sizing: border-box; }
         html { -webkit-text-size-adjust: 100%; }
