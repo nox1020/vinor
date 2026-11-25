@@ -495,7 +495,11 @@ def _attach_annual_withdrawal_pct(ctx, payload: dict) -> None:
 
 # کلیدهایی که فقط اپ موبایل می‌فرستد و قبلاً سرور دور می‌ریخت. افزودنی در جدول settings
 # با پیشوند جدا ذخیره می‌شوند و در GET/PUT برگردانده می‌شوند.
-_CLIENT_LIST_KEYS = ("client_withdrawals", "price_alerts", "profit_alerts", "year_nav_history")
+_CLIENT_LIST_KEYS = (
+    "client_withdrawals", "price_alerts", "profit_alerts", "year_nav_history",
+    # دفتر نقد «صندوق طلا» (واریز/برداشت/تنظیم مانده) در اپ موبایل.
+    "gold_fund_ledger",
+)
 _CLIENT_BOOL_KEYS = ("notify_background", "app_lock_biometric")
 _CLIENT_TEXT_KEYS = ("app_lock_hash",)
 # مبنای سقف برداشت سالانه؛ نبودنش یعنی پیش‌فرض قبلی (inflows).

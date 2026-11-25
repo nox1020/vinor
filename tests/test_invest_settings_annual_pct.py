@@ -2,6 +2,7 @@
 """Invest settings: annual_withdrawal_pct persistence."""
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -95,7 +96,29 @@ def test_client_extras_persist_and_echo(client):
     assert "client_withdrawals" not in client.get(S).get_json()["settings"]
 
 
+def test_gold_fund_ledger_persists_and_is_scoped(client):
+    _login(client, OWNER)
+    ledger = [
+        {"id": "gc_a", "kind": "opening", "amount": 150000000, "date": "2026-08-01"},
+        {"id": "gc_b", "kind": "withdraw", "amount": 4000000, "date": "2026-11-20",
+         "note": "قسط", "op": "a1", "mirrored": True},
+    ]
+    r = client.put(S, json={"gold_fund_ledger": ledger})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["settings"]["gold_fund_ledger"] == ledger
+    # an unrelated save keeps it; the JSON-string form (local settings) works too
+    client.put(S, json={"theme": "dark"})
+    assert client.get(S).get_json()["settings"]["gold_fund_ledger"] == ledger
+    client.put(S, json={"gold_fund_ledger": json.dumps(ledger[:1])})
+    assert client.get(S).get_json()["settings"]["gold_fund_ledger"] == ledger[:1]
+    client.put(S, json={"gold_fund_ledger": []})
+    assert client.get(S).get_json()["settings"]["gold_fund_ledger"] == []
+    _login(client, OTHER)
+    assert "gold_fund_ledger" not in client.get(S).get_json()["settings"]
+
+
 @pytest.mark.parametrize("bad", [
+    {"gold_fund_ledger": "nope"}, {"gold_fund_ledger": {"id": "x"}}, {"gold_fund_ledger": [1]},
     {"client_withdrawals": "nope"}, {"price_alerts": {"a": 1}}, {"price_alerts": [1, 2]},
     {"notify_background": "maybe"}, {"app_lock_hash": 5},
     {"withdrawal_cap_base": "salary"},
