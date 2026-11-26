@@ -13034,9 +13034,26 @@ def delete_sale(sid: int):
 @express_partner_bp.get('/notifications', endpoint='notifications')
 @require_partner_access(allow_pending=True)
 def notifications_page():
-    from app.services.postchi import POSTCHI_THREAD_ID
+    """صفحهٔ «اعلان‌ها» به سبک دیوار: فهرست تخت با گروه روز، فیلتر همه/خوانده‌نشده و «خواندن همه».
 
-    return redirect(url_for('express_partner.home', ai=1, thread=POSTCHI_THREAD_ID))
+    پیام‌های رسمی همچنان در گفتگوی پستچی هستند (ردیف پین‌شده بالای فهرست، /postchi).
+    """
+    from app.services.notifications import get_user_notifications, _normalize_user_id
+    from app.services.postchi import POSTCHI_THREAD_ID
+    from .notifications_feed import build_feed
+
+    me_phone = _normalize_user_id((session.get('user_phone') or '').strip())
+    items = get_user_notifications(me_phone, limit=50) if me_phone else []
+    feed = build_feed(items)
+    tab = 'unread' if (request.args.get('tab') or '').strip().lower() == 'unread' else 'all'
+    return render_template(
+        'express_partner/notifications.html',
+        feed=feed,
+        tab=tab,
+        notifications=items,
+        unread_count=feed['unread'],
+        postchi_url=url_for('express_partner.home', ai=1, thread=POSTCHI_THREAD_ID),
+    )
 
 
 @express_partner_bp.get('/postchi', endpoint='postchi')
