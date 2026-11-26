@@ -22,8 +22,8 @@ def test_unified_search_pill_contains_divider_and_city():
         'id="vinorSearchInput"', 'id="vinorSearchClear"', 'class="vn-search-divider"', 'id="searchCityTrigger"',
     )]
     assert field_at < order[0] and order == sorted(order)
-    # city chip sits inside the same pill (closes before the bell)
-    pill = head[field_at:head.index("{% if session.get('user_phone') %}")]
+    # city chip sits inside the same pill
+    pill = head[field_at:]
     assert 'id="searchCityTrigger"' in pill and 'id="searchCityLabel"' in pill
     assert 'data-city-picker-open="searchCityPicker"' in pill
 
@@ -103,12 +103,19 @@ def _client(phone=None):
     return client
 
 
-def test_bell_only_for_signed_in_users():
+def test_no_bell_in_home_header_for_anyone():
+    markup = FEED.read_text(encoding="utf-8")
+    assert "vn-search-bell" not in markup and "data-home-bell" not in markup
+    assert "express_partner.notifications" not in _head(markup)
+    head_css = re.search(r"#vinorSearchPage \.vn-search-head \{(.*?)\}", markup, re.S).group(1)
+    assert "padding: 0 12px;" in head_css  # pill spans the full bar, symmetric gutters
+    field = re.search(r"#vinorSearchPage \.vn-search-field \{(.*?)\}", markup, re.S).group(1)
+    assert "flex: 1;" in field
+
     guest = _client().get("/express/partner/search")
     assert guest.status_code == 200
-    html = guest.get_data(as_text=True)
-    assert "data-vn-home-header" in html
-    assert "data-home-bell" not in html
+    assert "data-vn-home-header" in guest.get_data(as_text=True)
+    assert "vn-search-bell" not in guest.get_data(as_text=True)
 
     phone = "09121111111"
     with mock.patch("app.express_partner.partner_roles.partner_is_approved", return_value=True), \
@@ -116,27 +123,6 @@ def test_bell_only_for_signed_in_users():
         resp = _client(phone).get("/express/partner/search")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    bell = re.search(r'<a class="vn-search-bell"[^>]*>', html).group(0)
-    assert 'href="/express/partner/notifications"' in bell
-    assert 'aria-label="اعلان‌ها"' in bell
-
-
-def test_rendered_strip_inactive_vs_active():
-    html = _client().get("/express/partner/search").get_data(as_text=True)
-    strip = html[html.index("data-filter-strip"):html.index('id="vinorSearchSkeleton"')]
-    assert "is-reset" not in strip and "data-clear-filter=" not in strip
-    assert strip.count('class="vn-search-chip__caret"') == 4
-    assert strip.count('class="vn-search-chip__icon"') == 4
-
-    q = "/express/partner/search?sort=price_asc&price_min=1000000000&district=%D9%88%D9%86%DA%A9"
-    html = _client().get(q).get_data(as_text=True)
-    strip = html[html.index("data-filter-strip"):html.index('id="vinorSearchSkeleton"')]
-    assert strip.count("vn-search-chip is-active") == 3
-    for key in ("sort", "district", "price"):
-        assert f'data-clear-filter="{key}"' in strip
-    assert 'data-clear-filter="area"' not in strip
-    assert strip.count('class="vn-search-chip__caret"') == 1  # only the inactive area chip
-    reset = re.search(r'<a class="vn-search-chip is-reset"[^>]*>', strip).group(0)
-    assert 'data-active-count="3"' in reset and "data-clear-filters" in reset
-    assert '<span class="vn-search-chip__badge" aria-hidden="true">۳</span>' in strip
-    assert "پاک کردن" in strip
+    head = html[html.index("data-vn-home-header"):html.index("data-filter-strip")]
+    assert "vn-search-bell" not in head and "data-home-bell" not in head
+    assert 'aria-label="اعلان‌ها"' not in head
