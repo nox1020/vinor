@@ -2,99 +2,230 @@
 {% block title %}اعلان‌ها | وینور اکسپرس{% endblock %}
 
 {% block content %}
-<script>window.__VINOR_NOTIFY_SEED__={{ {
-  'notifications': notifications,
-  'unread': unread_count|default(0),
-  'postchi': postchi|default({'preview': 'پیام‌های رسمی وینور', 'subtitle': 'پستچی وینور'}),
-  'postchiUrl': postchi_url|default(url_for('express_partner.postchi'))
-}|tojson }};</script>
-
-{% from 'express_partner/partials/vinor_official_identity.html' import vinor_official_name, vinor_official_subtitle, vinor_official_avatar %}
+{# «اعلان‌ها» به سبک دیوار — هم‌تراز با NotificationsFragment / fragment_notifications.xml اپ.
+   هدر همان «مشتریان» / «پیگیری» / «وینور من»؛ نوار «همه / خوانده‌نشده» با زبان چیپ فعال هدر خانه؛
+   فهرست تخت با خط مویی و گروه روز. مدل نمایشی: app/express_partner/notifications_feed.py #}
+{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
+{% from 'express_partner/partials/vinor_official_identity.html' import vinor_official_avatar %}
 {% include 'express_partner/partials/vinor_official_identity.html' %}
+{% set _tab = tab|default('all') %}
+{% set _unread = feed.unread %}
+<script>window.__VINOR_NOTIFY_SEED__={{ {'notifications': notifications, 'unread': unread_count|default(0)}|tojson }};</script>
+
+{{ ep_header_start(id='partnerNotificationsHeader') }}
+{% call ep_header_row('اعلان‌ها', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{{ ep_header_end() }}
 
 <style>
-  .vinor-notify-row {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+  #vinorNotifyPage {
+    --vn-n-bg: #050a0e;
+    --vn-n-text: #ECECEC;
+    --vn-n-muted: #8E8E93;
+    --vn-n-line: rgba(255,255,255,.06);
+    --vn-chip-line: rgba(255,255,255,.12);
+    --vn-chip-on-bg: rgba(16,185,129,.14);
+    --vn-chip-on-line: #10B981;
+    --vn-chip-on-text: #34D399;
+    background: var(--vn-n-bg);
+    color: var(--vn-n-text);
+    min-height: 100dvh;
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   }
+  html:has(#vinorNotifyPage), body:has(#vinorNotifyPage) { background: #050a0e !important; }
+  /* اسکرول‌بار پنهان (مثل «پیگیری»)؛ اسکرول لمسی/چرخ باقی است */
+  html:has(#vinorNotifyPage), body:has(#vinorNotifyPage), html:has(#vinorNotifyPage) * { scrollbar-width: none; -ms-overflow-style: none; }
+  html:has(#vinorNotifyPage)::-webkit-scrollbar, body:has(#vinorNotifyPage)::-webkit-scrollbar,
+  html:has(#vinorNotifyPage) *::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  #vinorNotifyPage .vn-n-shell { max-width: 32rem; margin-inline: auto; }
+
+  /* نوار فیلتر: همان چیپ ۳۲px خط مویی / فعال «ته‌رنگ + خط سبز» هدر خانه */
+  #vinorNotifyPage .vn-n-filters {
+    display: flex; align-items: center; gap: 8px;
+    height: 48px; padding: 0 16px;
+  }
+  #vinorNotifyPage .vn-n-tab {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+    height: 32px; padding: 0 14px; position: relative;
+    border-radius: 999px; border: 1px solid var(--vn-chip-line);
+    background: transparent; color: var(--vn-n-text);
+    font: inherit; font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+  }
+  #vinorNotifyPage .vn-n-tab::before { content: ""; position: absolute; inset: -6px 0; }
+  #vinorNotifyPage .vn-n-tab:not(.is-active):active { background: rgba(255,255,255,.06); }
+  #vinorNotifyPage .vn-n-tab.is-active { background: var(--vn-chip-on-bg); border-color: var(--vn-chip-on-line); color: var(--vn-chip-on-text); }
+  #vinorNotifyPage .vn-n-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+    background: var(--vn-chip-on-bg); color: var(--vn-chip-on-text);
+    font-size: 11px; font-weight: 700;
+  }
+  #vinorNotifyPage .vn-n-badge[hidden] { display: none; }
+  #vinorNotifyPage .vn-n-readall {
+    margin-inline-start: auto; position: relative;
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 32px; padding: 0 4px; border: 0; background: transparent;
+    color: var(--vn-chip-on-text); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  #vinorNotifyPage .vn-n-readall::before { content: ""; position: absolute; inset: -6px -6px; }
+  #vinorNotifyPage .vn-n-readall svg { width: 16px; height: 16px; }
+  #vinorNotifyPage .vn-n-readall[hidden] { display: none; }
+  #vinorNotifyPage .vn-n-readall:disabled { opacity: .5; }
+
+  /* ردیف‌ها: تخت، خط مویی، آیکون دایره‌ای ته‌رنگ‌دار، نقطهٔ سبز خوانده‌نشده */
+  #vinorNotifyPage .vn-n-day {
+    margin: 0; padding: 14px 16px 6px;
+    font-size: 12px; font-weight: 600; color: var(--vn-n-muted);
+  }
+  #vinorNotifyPage .vn-n-day[hidden], #vinorNotifyPage .vn-n-row[hidden] { display: none; }
+  #vinorNotifyPage .vn-n-list { list-style: none; margin: 0; padding: 0; }
+  #vinorNotifyPage .vn-n-row {
+    position: relative; display: flex; align-items: flex-start; gap: 12px;
+    width: 100%; padding: 14px 16px; border: 0; margin: 0;
+    background: transparent; color: inherit; font: inherit; text-align: start; text-decoration: none;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #vinorNotifyPage li + li .vn-n-row::after,
+  #vinorNotifyPage .vn-n-sep::after {
+    content: ""; position: absolute; top: 0; inset-inline: 68px 16px; height: 1px; background: var(--vn-n-line);
+  }
+  #vinorNotifyPage .vn-n-row.is-unread { background: rgba(16,185,129,.05); }
+  #vinorNotifyPage .vn-n-row:active { background: rgba(255,255,255,.04); }
+  #vinorNotifyPage .vn-n-ico {
+    flex-shrink: 0; display: grid; place-items: center;
+    width: 40px; height: 40px; border-radius: 999px;
+  }
+  #vinorNotifyPage .vn-n-ico svg { width: 20px; height: 20px; }
+  #vinorNotifyPage .vn-n-ico--visit { background: rgba(16,185,129,.14); color: #34D399; }
+  #vinorNotifyPage .vn-n-ico--wallet { background: rgba(245,158,11,.14); color: #FBBF24; }
+  #vinorNotifyPage .vn-n-ico--listing { background: rgba(56,189,248,.14); color: #7DD3FC; }
+  #vinorNotifyPage .vn-n-ico--general { background: rgba(255,255,255,.08); color: #C7C7CC; }
+  #vinorNotifyPage .vn-n-main { flex: 1; min-width: 0; }
+  #vinorNotifyPage .vn-n-top { display: flex; align-items: center; gap: 8px; }
+  #vinorNotifyPage .vn-n-title {
+    flex: 1; min-width: 0; margin: 0;
+    font-size: 14px; font-weight: 500; line-height: 1.5; color: #C7C7CC;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #vinorNotifyPage .is-unread .vn-n-title { font-weight: 700; color: var(--vn-n-text); }
+  #vinorNotifyPage .vn-n-time { flex-shrink: 0; font-size: 11px; color: var(--vn-n-muted); white-space: nowrap; }
+  #vinorNotifyPage .vn-n-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 999px; background: #10B981; }
+  #vinorNotifyPage .vn-n-row:not(.is-unread) .vn-n-dot { display: none; }
+  #vinorNotifyPage .vn-n-body {
+    margin: 2px 0 0; font-size: 13px; line-height: 1.7; color: var(--vn-n-muted);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  #vinorNotifyPage .is-unread .vn-n-body { color: #AEAEB2; }
+  #vinorNotifyPage .vn-n-chev { flex-shrink: 0; align-self: center; width: 16px; height: 16px; color: #5A5A5E; }
+  #vinorNotifyPage .vn-n-postchi { align-items: center; }
+  #vinorNotifyPage .vn-n-postchi .vn-n-title { color: var(--vn-n-text); font-weight: 600; }
+  #vinorNotifyPage .vn-n-postchi-wrap { border-bottom: 1px solid var(--vn-n-line); }
+
+  /* حالت خالی */
+  #vinorNotifyPage .vn-n-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 64px 32px; }
+  #vinorNotifyPage .vn-n-empty[hidden] { display: none; }
+  #vinorNotifyPage .vn-n-empty__ico {
+    display: grid; place-items: center; width: 64px; height: 64px; border-radius: 999px;
+    background: rgba(255,255,255,.06); color: var(--vn-n-muted); margin-bottom: 16px;
+  }
+  #vinorNotifyPage .vn-n-empty__ico svg { width: 28px; height: 28px; }
+  #vinorNotifyPage .vn-n-empty__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--vn-n-text); }
+  #vinorNotifyPage .vn-n-empty__sub { margin: 6px 0 0; font-size: 13px; line-height: 1.8; color: var(--vn-n-muted); }
 </style>
 
-<div x-data="vinorNotificationsPage(
-       window.__VINOR_NOTIFY_SEED__.notifications,
-       window.__VINOR_NOTIFY_SEED__.unread,
-       { postchi: window.__VINOR_NOTIFY_SEED__.postchi, postchiUrl: window.__VINOR_NOTIFY_SEED__.postchiUrl }
-     )"
-     x-init="init()">
+{% macro kind_icon(kind) -%}
+  {%- if kind == 'visit' -%}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9.5 15l1.8 1.8 3.5-3.6"/></svg>
+  {%- elif kind == 'wallet' -%}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3"/><rect x="4" y="8" width="16.5" height="11" rx="2.5"/><path d="M16 13.5h1.5"/></svg>
+  {%- elif kind == 'listing' -%}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19z"/><path d="M9.5 20.5V14h5v6.5"/></svg>
+  {%- else -%}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+  {%- endif -%}
+{%- endmacro %}
+{% set _chev %}<svg class="vn-n-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>{% endset %}
 
-{% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
-  {{ ep_header_start(id='profileNotificationsHeader') }}
-  {% call ep_header_row('اعلان‌ها', url_for('express_partner.home')) %}{% endcall %}
-  {{ ep_header_end() }}
-
-<div class="partner-page-scroll-pad min-h-[100dvh] bg-[#030712] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] text-zinc-100 lg:pb-16">
-
-  <div class="mx-auto max-w-lg">
-
-    <!-- بنر push — فشرده -->
-    <div x-data="pushPromptComponent()" x-init="deferCheck()" class="px-4 sm:px-6">
-      <div x-show="showPrompt"
-           x-cloak
-           class="mt-2 flex items-center gap-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5">
+<main id="vinorNotifyPage" class="partner-page-scroll-pad" data-notify-page data-tab="{{ _tab }}"
+      data-mark-one="{{ url_for('express_partner.mark_notification_read', notif_id='__ID__') }}"
+      data-mark-all="{{ url_for('express_partner.mark_all_notifications_read') }}">
+  <div class="vn-n-shell">
+    {# بنر فعال‌سازی push مرورگر (فقط وب) — فشرده #}
+    <div x-data="pushPromptComponent()" x-init="deferCheck()" class="px-4">
+      <div x-show="showPrompt" x-cloak class="mt-2 flex items-center gap-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5">
         <i class="fas fa-bell shrink-0 text-sm text-emerald-400" aria-hidden="true"></i>
         <p class="min-w-0 flex-1 text-[11px] leading-relaxed text-zinc-400">اعلان فوری مرورگر را فعال کنید</p>
-        <button type="button"
-                @click="enablePush()"
-                :disabled="loading"
-                class="shrink-0 rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">
-          فعال‌سازی
-        </button>
-        <button type="button" @click="dismiss()" class="shrink-0 p-1 text-zinc-500 hover:text-zinc-300" aria-label="بستن">
-          <i class="fas fa-times text-[10px]"></i>
-        </button>
+        <button type="button" @click="enablePush()" :disabled="loading" class="shrink-0 rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">فعال‌سازی</button>
+        <button type="button" @click="dismiss()" class="shrink-0 p-1 text-zinc-500 hover:text-zinc-300" aria-label="بستن"><i class="fas fa-times text-[10px]"></i></button>
       </div>
     </div>
 
-    <!-- پستچی وینور — ردیف پین‌شده مثل دیوار -->
-    <div class="divide-y divide-white/10 border-b border-white/10">
-      <button type="button"
-              class="vinor-notify-row flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors sm:px-6 sm:py-4"
-              :class="unreadCount > 0 ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'hover:bg-white/[0.02]'"
-              @click="openPostchi()">
-        <div class="relative shrink-0">
-          {{ vinor_official_avatar('md') }}
-          <span x-show="unreadCount > 0"
-                class="absolute top-0.5 end-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#030712]"
-                aria-hidden="true"></span>
-        </div>
-
-        <div class="min-w-0 flex-1">
-          <div class="mb-0.5 flex items-baseline justify-between gap-2">
-            <span class="min-w-0 text-[15px] font-bold leading-tight text-white">
-              {{ vinor_official_name('پستچی وینور', 'text-[15px] font-bold leading-tight text-white', 'vinor-official-verified--sm') }}
-            </span>
-            <span class="shrink-0 text-[11px] leading-none text-zinc-500 tabular-nums"
-                  x-show="postchiTime"
-                  x-text="formatRelativeDate(postchiTime)"></span>
-          </div>
-          {{ vinor_official_subtitle('mb-0.5') }}
-          <p class="truncate text-[13px] leading-snug"
-             :class="unreadCount > 0 ? 'font-medium text-zinc-200' : 'text-zinc-400'"
-             x-text="postchi.preview || 'پیام‌های رسمی وینور'"></p>
-        </div>
-
-        <i class="fas fa-chevron-left shrink-0 text-[10px] text-zinc-600" aria-hidden="true"></i>
+    <div class="vn-n-filters" role="tablist" aria-label="فیلتر اعلان‌ها" data-notify-filters>
+      <button type="button" role="tab" class="vn-n-tab{% if _tab == 'all' %} is-active{% endif %}" data-notify-tab="all" aria-selected="{{ 'true' if _tab == 'all' else 'false' }}">همه</button>
+      <button type="button" role="tab" class="vn-n-tab{% if _tab == 'unread' %} is-active{% endif %}" data-notify-tab="unread" aria-selected="{{ 'true' if _tab == 'unread' else 'false' }}">
+        خوانده‌نشده
+        <span class="vn-n-badge" data-notify-unread-badge{% if not _unread %} hidden{% endif %}>{{ feed.unread_fa }}</span>
+      </button>
+      <button type="button" class="vn-n-readall" data-notify-read-all{% if not _unread %} hidden{% endif %} aria-label="خواندن همهٔ اعلان‌ها">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12.5l4 4L15 8"/><path d="M11.5 15.5l1 1L21 8"/></svg>
+        خواندن همه
       </button>
     </div>
 
-    <p class="px-4 py-10 text-center text-xs leading-relaxed text-zinc-600 sm:px-6">
-      پیام‌های رسمی، وضعیت همکاری و اعلان‌های مهم در گفتگوی پستچی وینور نمایش داده می‌شوند.
-    </p>
+    {# پستچی وینور — پیام‌های رسمی (همان مقصد قبلی این صفحه) #}
+    <div class="vn-n-postchi-wrap">
+      <a class="vn-n-row vn-n-postchi" href="{{ postchi_url }}" data-vinor-express-nav data-notify-postchi>
+        <span class="shrink-0">{{ vinor_official_avatar('md') }}</span>
+        <span class="vn-n-main">
+          <span class="vn-n-top"><span class="vn-n-title">پستچی وینور</span></span>
+          <span class="vn-n-body" style="-webkit-line-clamp:1">پیام‌های رسمی و وضعیت همکاری</span>
+        </span>
+        {{ _chev|safe }}
+      </a>
+    </div>
+
+    <div data-notify-feed>
+    {% for sec in feed.sections %}
+      <h2 class="vn-n-day" data-notify-day="{{ sec.key }}">{{ sec.label }}</h2>
+      <ul class="vn-n-list" data-notify-section="{{ sec.key }}">
+        {% for r in sec.rows %}
+        <li data-notify-item data-unread="{{ '1' if r.unread else '0' }}"{% if _tab == 'unread' and not r.unread %} hidden{% endif %}>
+          <button type="button" class="vn-n-row{% if r.unread %} is-unread{% endif %}" data-notify-row data-id="{{ r.id }}"{% if r.link %} data-link="{{ r.link }}"{% endif %} data-kind="{{ r.kind }}"
+                  aria-label="{{ r.kind_label }}: {{ r.title }}{% if r.unread %}، خوانده‌نشده{% endif %}{% if r.time %}، {{ r.time }}{% endif %}">
+            <span class="vn-n-ico vn-n-ico--{{ r.kind }}">{{ kind_icon(r.kind) }}</span>
+            <span class="vn-n-main">
+              <span class="vn-n-top">
+                <span class="vn-n-title">{{ r.title }}</span>
+                <span class="vn-n-time">{{ r.time }}</span>
+                <span class="vn-n-dot" aria-hidden="true"></span>
+              </span>
+              {% if r.body %}<span class="vn-n-body">{{ r.body }}</span>{% endif %}
+            </span>
+            {% if r.link %}{{ _chev|safe }}{% endif %}
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+    </div>
+
+    <section class="vn-n-empty" data-notify-empty="all"{% if feed.total %} hidden{% endif %}>
+      <span class="vn-n-empty__ico">{{ kind_icon('general') }}</span>
+      <p class="vn-n-empty__title">هیچ اعلانی نداری</p>
+      <p class="vn-n-empty__sub">اعلان‌های بازدید، کیف پول و آگهی‌هایت اینجا نشان داده می‌شوند.</p>
+    </section>
+    <section class="vn-n-empty" data-notify-empty="unread"{% if not (feed.total and _tab == 'unread' and not _unread) %} hidden{% endif %}>
+      <span class="vn-n-empty__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12.5l4 4L15 8"/><path d="M11.5 15.5l1 1L21 8"/></svg></span>
+      <p class="vn-n-empty__title">همه‌ی اعلان‌ها خوانده شدن</p>
+      <p class="vn-n-empty__sub">اعلان تازه‌ای نداری.</p>
+    </section>
   </div>
 
   {% set bottom_nav_active = 'profile' %}
   {% include 'express_partner/partials/partner_tab_footer.html' %}
-</div>
-</div>
+</main>
 {% endblock %}
 
 {% block scripts %}
@@ -304,6 +435,118 @@
 
     document.addEventListener('alpine:init', definePushPromptComponent);
     if (typeof Alpine !== 'undefined') definePushPromptComponent();
+  })();
+  </script>
+
+  <script>
+  /* «اعلان‌ها»: فیلتر همه/خوانده‌نشده بدون بارگذاری مجدد، لمس ردیف = خوانده‌شده + رفتن به لینک، «خواندن همه». */
+  (function () {
+    var root = document.querySelector('[data-notify-page]');
+    if (!root) return;
+    var fa = '۰۱۲۳۴۵۶۷۸۹';
+    function faDigits(n) { return String(n).replace(/\d/g, function (d) { return fa.charAt(+d); }); }
+    function headers() {
+      return typeof window.vinorCsrfFetchHeaders === 'function'
+        ? window.vinorCsrfFetchHeaders({ 'Content-Type': 'application/json' })
+        : { 'Content-Type': 'application/json', Accept: 'application/json' };
+    }
+    function post(url) {
+      return fetch(url, { method: 'POST', headers: headers(), credentials: 'same-origin', body: '{}' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+    }
+    var tab = root.getAttribute('data-tab') === 'unread' ? 'unread' : 'all';
+    var items = Array.prototype.slice.call(root.querySelectorAll('[data-notify-item]'));
+    var badge = root.querySelector('[data-notify-unread-badge]');
+    var readAll = root.querySelector('[data-notify-read-all]');
+    function unreadCount() { return items.filter(function (li) { return li.getAttribute('data-unread') === '1'; }).length; }
+
+    function paint() {
+      var unread = unreadCount();
+      if (badge) { badge.textContent = faDigits(unread); badge.hidden = !unread; }
+      if (readAll) readAll.hidden = !unread;
+      items.forEach(function (li) { li.hidden = tab === 'unread' && li.getAttribute('data-unread') !== '1'; });
+      root.querySelectorAll('[data-notify-section]').forEach(function (ul) {
+        var any = Array.prototype.some.call(ul.children, function (li) { return !li.hidden; });
+        var day = root.querySelector('[data-notify-day="' + ul.getAttribute('data-notify-section') + '"]');
+        if (day) day.hidden = !any;
+      });
+      var emptyAll = root.querySelector('[data-notify-empty="all"]');
+      var emptyUnread = root.querySelector('[data-notify-empty="unread"]');
+      if (emptyAll) emptyAll.hidden = items.length > 0;
+      if (emptyUnread) emptyUnread.hidden = !(items.length > 0 && tab === 'unread' && !unread);
+      root.querySelectorAll('[data-notify-tab]').forEach(function (b) {
+        var on = b.getAttribute('data-notify-tab') === tab;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+    }
+    function markLocal(li) {
+      li.setAttribute('data-unread', '0');
+      var row = li.querySelector('[data-notify-row]');
+      if (row) {
+        row.classList.remove('is-unread');
+        row.setAttribute('aria-label', (row.getAttribute('aria-label') || '').replace('، خوانده‌نشده', ''));
+      }
+    }
+    function syncCenter(unread) {
+      if (typeof window.__vinorNotifySeedFromPage === 'function') {
+        try { window.__vinorNotifySeedFromPage((window.__VINOR_NOTIFY_SEED__ || {}).notifications || [], unread); } catch (_) {}
+      }
+    }
+
+    root.querySelectorAll('[data-notify-tab]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        tab = b.getAttribute('data-notify-tab') === 'unread' ? 'unread' : 'all';
+        root.setAttribute('data-tab', tab);
+        try {
+          var u = new URL(window.location.href);
+          if (tab === 'unread') u.searchParams.set('tab', 'unread'); else u.searchParams.delete('tab');
+          history.replaceState(history.state, '', u.pathname + u.search);
+        } catch (_) {}
+        paint();
+      });
+    });
+
+    root.querySelectorAll('[data-notify-row]').forEach(function (row) {
+      row.addEventListener('click', function () {
+        var li = row.closest('[data-notify-item]');
+        var id = row.getAttribute('data-id') || '';
+        var link = row.getAttribute('data-link') || '';
+        var wasUnread = li && li.getAttribute('data-unread') === '1';
+        var req = null;
+        if (wasUnread && id) {
+          markLocal(li);
+          paint();
+          req = post(root.getAttribute('data-mark-one').replace('__ID__', encodeURIComponent(id)))
+            .then(function (d) { if (d && typeof d.unread_count === 'number') syncCenter(d.unread_count); });
+        }
+        if (!link) return;
+        var go = function () {
+          if (typeof window.vinorExpressNavigate === 'function' && link.indexOf('/express/partner/') === 0) {
+            window.vinorExpressNavigate(link, { forward: true });
+          } else {
+            window.location.href = link;
+          }
+        };
+        /* خواندن قبل از رفتن ثبت شود؛ حداکثر ۶۰۰ms صبر */
+        if (req) Promise.race([req, new Promise(function (r) { setTimeout(r, 600); })]).then(go); else go();
+      });
+    });
+
+    if (readAll) {
+      readAll.addEventListener('click', function () {
+        readAll.disabled = true;
+        post(root.getAttribute('data-mark-all')).then(function (d) {
+          readAll.disabled = false;
+          if (!d || !d.success) return;
+          items.forEach(markLocal);
+          paint();
+          syncCenter(Number(d.unread_count || 0));
+        });
+      });
+    }
+    paint();
   })();
   </script>
 {% endblock %}
