@@ -61,7 +61,7 @@
     align-items: center;
     gap: 8px;
     height: 56px;
-    padding: 0 12px 0 8px;
+    padding: 0 12px;
   }
   #vinorSearchPage .vn-search-field {
     flex: 1;
@@ -136,19 +136,6 @@
   #vinorSearchPage .vn-search-city.is-active,
   #vinorSearchPage .vn-search-city.is-active svg { color: var(--vn-search-accent); }
   #vinorSearchPage .vn-search-city:active { background: rgba(255,255,255,.06); }
-  #vinorSearchPage .vn-search-bell {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 999px;
-    color: var(--vn-search-text);
-    text-decoration: none;
-  }
-  #vinorSearchPage .vn-search-bell:active { background: var(--vn-search-raised); }
-  #vinorSearchPage .vn-search-bell svg { width: 22px; height: 22px; }
   /* ردیف فیلتر به سبک دیوار: چیپ‌های ۳۲px با خط مویی، آیکون معنادار، حالت فعال «خط سبز + ته‌رنگ»
      (نه سبز تند)، × برای پاک کردن همان فیلتر، و چیپ شمارنده/پاک‌کردن در ابتدای ردیف.
      هم‌تراز با fragment_search.xml + HomeHeader.kt اپ. */
@@ -571,11 +558,6 @@
             <span id="searchCityLabel">{{ search_query.city or 'همه استان‌ها' }}</span>
           </button>
         </div>
-        {% if session.get('user_phone') %}
-        <a class="vn-search-bell" href="{{ url_for('express_partner.notifications') }}" data-vinor-express-nav aria-label="اعلان‌ها" data-home-bell>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
-        </a>
-        {% endif %}
       </div>
       {% set _fa = '۰۱۲۳۴۵۶۷۸۹' %}
       {% set _active_count = [search_query.q, search_query.sort_on, search_query.district_on, search_query.price_on, search_query.area_on]|select|list|length %}
