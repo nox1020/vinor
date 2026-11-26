@@ -149,6 +149,15 @@
   }
   #vinorSearchPage .vn-search-bell:active { background: var(--vn-search-raised); }
   #vinorSearchPage .vn-search-bell svg { width: 22px; height: 22px; }
+  /* ردیف فیلتر به سبک دیوار: چیپ‌های ۳۲px با خط مویی، آیکون معنادار، حالت فعال «خط سبز + ته‌رنگ»
+     (نه سبز تند)، × برای پاک کردن همان فیلتر، و چیپ شمارنده/پاک‌کردن در ابتدای ردیف.
+     هم‌تراز با fragment_search.xml + HomeHeader.kt اپ. */
+  #vinorSearchPage {
+    --vn-chip-line: rgba(255,255,255,.12);
+    --vn-chip-on-bg: rgba(16,185,129,.14);
+    --vn-chip-on-line: #10B981;
+    --vn-chip-on-text: #34D399;
+  }
   #vinorSearchPage .vn-search-chips {
     display: flex;
     align-items: center;
@@ -159,48 +168,100 @@
     padding: 0 12px 4px;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    overscroll-behavior-x: contain;
+    --vn-fade-start: 0px;
+    --vn-fade-end: 0px;
+    -webkit-mask-image: linear-gradient(to left, transparent 0, #000 var(--vn-fade-start), #000 calc(100% - var(--vn-fade-end)), transparent 100%);
+            mask-image: linear-gradient(to left, transparent 0, #000 var(--vn-fade-start), #000 calc(100% - var(--vn-fade-end)), transparent 100%);
   }
+  /* RTL: ابتدای ردیف سمت راست است؛ محوشدن فقط سمتی که هنوز محتوا دارد */
+  #vinorSearchPage .vn-search-chips.has-more-end { --vn-fade-end: 28px; }
+  #vinorSearchPage .vn-search-chips.has-more-start { --vn-fade-start: 28px; }
   #vinorSearchPage .vn-search-chips::-webkit-scrollbar { display: none; width: 0; height: 0; }
   #vinorSearchPage .vn-search-chip {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
-    min-height: 44px;
-    padding: 6px 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-decoration: none;
-    cursor: pointer;
-  }
-  #vinorSearchPage .vn-search-chip__face {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
     height: 32px;
-    padding: 0 12px;
+    max-width: 190px;
     border-radius: 999px;
-    border: 1px solid rgba(255,255,255,.14);
+    border: 1px solid var(--vn-chip-line);
     background: transparent;
     color: var(--vn-search-text);
     font-size: 13px;
     font-weight: 500;
+    line-height: 1;
+    text-decoration: none;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+  }
+  #vinorSearchPage .vn-search-chip__open,
+  #vinorSearchPage .vn-search-chip__x {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* ناحیهٔ لمس ۴۴px بدون بزرگ کردن ظاهر چیپ */
+  #vinorSearchPage .vn-search-chip__open { position: relative; gap: 6px; min-width: 0; padding: 0 12px; }
+  #vinorSearchPage .vn-search-chip__open::before { content: ""; position: absolute; inset: -6px 0; }
+  #vinorSearchPage .vn-search-chip.is-active .vn-search-chip__open { padding-inline-end: 4px; }
+  #vinorSearchPage .vn-search-chip__label {
+    min-width: 0;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    padding-block: 2px;
   }
-  #vinorSearchPage .vn-search-chip__face svg { width: 14px; height: 14px; color: var(--vn-search-muted); }
-  #vinorSearchPage .vn-search-chip.is-active .vn-search-chip__face svg { color: currentColor; }
-  #vinorSearchPage .vn-search-chip.is-active .vn-search-chip__face {
-    background: var(--vn-search-accent);
-    border-color: var(--vn-search-accent);
-    color: var(--vn-search-on);
+  #vinorSearchPage .vn-search-chip__icon { width: 15px; height: 15px; flex-shrink: 0; color: var(--vn-search-muted); }
+  #vinorSearchPage .vn-search-chip__caret { width: 14px; height: 14px; flex-shrink: 0; color: var(--vn-search-muted); }
+  #vinorSearchPage .vn-search-chip__x {
+    position: relative;
+    justify-content: center;
+    width: 28px;
+    padding: 0;
+    margin-inline-end: 2px;
+    border-radius: 999px;
   }
-  #vinorSearchPage .vn-search-chip.is-active:active .vn-search-chip__face {
-    background: #059669;
-    border-color: #059669;
-    color: var(--vn-search-on);
+  #vinorSearchPage .vn-search-chip__x::before { content: ""; position: absolute; inset: -6px -4px; }
+  #vinorSearchPage .vn-search-chip__x svg { width: 14px; height: 14px; }
+  #vinorSearchPage .vn-search-chip__x:active { background: rgba(16,185,129,.22); }
+  #vinorSearchPage .vn-search-chip:not(.is-active):active { background: rgba(255,255,255,.06); }
+  #vinorSearchPage .vn-search-chip.is-active {
+    background: var(--vn-chip-on-bg);
+    border-color: var(--vn-chip-on-line);
+    color: var(--vn-chip-on-text);
   }
-  #vinorSearchPage .vn-search-chip.is-clear .vn-search-chip__face { background: var(--vn-search-raised-2); border-color: transparent; }
+  #vinorSearchPage .vn-search-chip.is-active .vn-search-chip__icon { color: currentColor; }
+  /* شمارنده + پاک کردن همه (ابتدای ردیف) */
+  #vinorSearchPage .vn-search-chip.is-reset {
+    gap: 6px;
+    padding: 0 10px 0 12px;
+    background: rgba(255,255,255,.06);
+    border-color: transparent;
+    color: var(--vn-search-text);
+    cursor: pointer;
+  }
+  #vinorSearchPage .vn-search-chip.is-reset:active { background: rgba(255,255,255,.1); }
+  #vinorSearchPage .vn-search-chip__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--vn-chip-on-bg);
+    color: var(--vn-chip-on-text);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  #vinorSearchPage .vn-search-chip.is-reset .vn-search-chip__x-ico { width: 13px; height: 13px; color: var(--vn-search-muted); }
   #vinorSearchPage .vn-search-list { display: flex; flex-direction: column; }
   #vinorSearchPage .vn-search-list[hidden] { display: none; }
   #vinorSearchPage .vn-search-row {
@@ -516,24 +577,72 @@
         </a>
         {% endif %}
       </div>
-      <div class="vn-search-chips" role="group" aria-label="فیلترها">
+      {% set _fa = '۰۱۲۳۴۵۶۷۸۹' %}
+      {% set _active_count = [search_query.q, search_query.sort_on, search_query.district_on, search_query.price_on, search_query.area_on]|select|list|length %}
+      <div class="vn-search-chips" role="group" aria-label="فیلترها" data-filter-strip>
         {% if search_query.has_filters %}
-        <a class="vn-search-chip is-clear" href="{{ search_query.clear_href }}" data-clear-filters>
-          <span class="vn-search-chip__face">حذف فیلترها ✕</span>
+        <a class="vn-search-chip is-reset" href="{{ search_query.clear_href }}" data-clear-filters data-active-count="{{ _active_count }}" aria-label="پاک کردن همهٔ فیلترها ({{ _active_count }} فعال)">
+          <svg class="vn-search-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+          <span class="vn-search-chip__badge" aria-hidden="true">{{ _fa[_active_count] if _active_count < 10 else _active_count }}</span>
+          <span class="vn-search-chip__label">پاک کردن</span>
         </a>
         {% endif %}
-        <button type="button" class="vn-search-chip{% if search_query.sort_on %} is-active{% endif %}" data-open-sheet="sort" aria-pressed="{{ 'true' if search_query.sort_on else 'false' }}" aria-label="مرتب‌سازی: {{ search_query.sort_label }}">
-          <span class="vn-search-chip__face">{{ search_query.sort_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
-        </button>
-        <button type="button" class="vn-search-chip{% if search_query.district_on %} is-active{% endif %}" data-open-sheet="district" aria-pressed="{{ 'true' if search_query.district_on else 'false' }}">
-          <span class="vn-search-chip__face">{{ search_query.district_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
-        </button>
-        <button type="button" class="vn-search-chip{% if search_query.price_on %} is-active{% endif %}" data-open-sheet="price" aria-pressed="{{ 'true' if search_query.price_on else 'false' }}" aria-label="{{ search_query.price_aria }}">
-          <span class="vn-search-chip__face">{{ search_query.price_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
-        </button>
-        <button type="button" class="vn-search-chip{% if search_query.area_on %} is-active{% endif %}" data-open-sheet="area" aria-pressed="{{ 'true' if search_query.area_on else 'false' }}" aria-label="{{ search_query.area_aria }}">
-          <span class="vn-search-chip__face">{{ search_query.area_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
-        </button>
+        <div class="vn-search-chip{% if search_query.sort_on %} is-active{% endif %}" data-filter-chip="sort">
+          <button type="button" class="vn-search-chip__open" data-open-sheet="sort" aria-pressed="{{ 'true' if search_query.sort_on else 'false' }}" aria-label="مرتب‌سازی: {{ search_query.sort_label }}">
+            <svg class="vn-search-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
+            <span class="vn-search-chip__label">{{ search_query.sort_label }}</span>
+            {%- if not search_query.sort_on %}
+            <svg class="vn-search-chip__caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            {%- endif %}
+          </button>
+          {%- if search_query.sort_on %}
+          <button type="button" class="vn-search-chip__x" data-clear-filter="sort" aria-label="حذف فیلتر {{ search_query.sort_label }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+          </button>
+          {%- endif %}
+        </div>
+        <div class="vn-search-chip{% if search_query.district_on %} is-active{% endif %}" data-filter-chip="district">
+          <button type="button" class="vn-search-chip__open" data-open-sheet="district" aria-pressed="{{ 'true' if search_query.district_on else 'false' }}" aria-label="{{ ('محله: ' ~ search_query.district_label) if search_query.district_on else 'فیلتر محله' }}">
+            <svg class="vn-search-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+            <span class="vn-search-chip__label">{{ search_query.district_label }}</span>
+            {%- if not search_query.district_on %}
+            <svg class="vn-search-chip__caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            {%- endif %}
+          </button>
+          {%- if search_query.district_on %}
+          <button type="button" class="vn-search-chip__x" data-clear-filter="district" aria-label="حذف فیلتر {{ search_query.district_label }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+          </button>
+          {%- endif %}
+        </div>
+        <div class="vn-search-chip{% if search_query.price_on %} is-active{% endif %}" data-filter-chip="price">
+          <button type="button" class="vn-search-chip__open" data-open-sheet="price" aria-pressed="{{ 'true' if search_query.price_on else 'false' }}" aria-label="{{ search_query.price_aria }}">
+            <svg class="vn-search-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12.5V5a1.5 1.5 0 0 1 1.5-1.5h7.5l8 8a1.5 1.5 0 0 1 0 2.1l-6.4 6.4a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.4"/></svg>
+            <span class="vn-search-chip__label">{{ search_query.price_label }}</span>
+            {%- if not search_query.price_on %}
+            <svg class="vn-search-chip__caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            {%- endif %}
+          </button>
+          {%- if search_query.price_on %}
+          <button type="button" class="vn-search-chip__x" data-clear-filter="price" aria-label="حذف فیلتر {{ search_query.price_label }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+          </button>
+          {%- endif %}
+        </div>
+        <div class="vn-search-chip{% if search_query.area_on %} is-active{% endif %}" data-filter-chip="area">
+          <button type="button" class="vn-search-chip__open" data-open-sheet="area" aria-pressed="{{ 'true' if search_query.area_on else 'false' }}" aria-label="{{ search_query.area_aria }}">
+            <svg class="vn-search-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 16.5 16.5 3 21 7.5 7.5 21z"/><path d="M7 12.5l1.8 1.8M10 9.5l1.8 1.8M13 6.5l1.8 1.8"/></svg>
+            <span class="vn-search-chip__label">{{ search_query.area_label }}</span>
+            {%- if not search_query.area_on %}
+            <svg class="vn-search-chip__caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            {%- endif %}
+          </button>
+          {%- if search_query.area_on %}
+          <button type="button" class="vn-search-chip__x" data-clear-filter="area" aria-label="حذف فیلتر {{ search_query.area_label }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+          </button>
+          {%- endif %}
+        </div>
       </div>
     </div>
 

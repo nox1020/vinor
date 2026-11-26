@@ -104,6 +104,37 @@
     });
   });
 
+  /* × داخل چیپ فعال: فقط همان فیلتر پاک شود (بقیهٔ فیلترها و شهر می‌مانند) */
+  root.querySelectorAll('[data-clear-filter]').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      switch (el.getAttribute('data-clear-filter')) {
+        case 'sort': state.sort = 'newest'; break;
+        case 'district': state.districts = []; break;
+        case 'price': state.price_min = null; state.price_max = null; break;
+        case 'area': state.area_min = null; state.area_max = null; break;
+        default: return;
+      }
+      go();
+    });
+  });
+
+  /* محوشدن لبهٔ ردیف فیلتر فقط سمتی که هنوز چیپ پنهان دارد (RTL: scrollLeft منفی/صفر) */
+  var strip = root.querySelector('[data-filter-strip]');
+  function syncStripFade() {
+    if (!strip) return;
+    var max = strip.scrollWidth - strip.clientWidth;
+    var pos = Math.abs(strip.scrollLeft || 0);
+    strip.classList.toggle('has-more-start', max > 1 && pos > 1);
+    strip.classList.toggle('has-more-end', max > 1 && pos < max - 1);
+  }
+  if (strip) {
+    strip.addEventListener('scroll', syncStripFade, { passive: true });
+    window.addEventListener('resize', syncStripFade, { passive: true });
+    syncStripFade();
+  }
+
   /* عکس خراب: مثل اپ، placeholder زیر عکس دیده شود */
   Array.prototype.forEach.call(root.querySelectorAll('img[data-search-thumb]'), function (img) {
     function drop() { if (img.parentNode) img.parentNode.removeChild(img); }
