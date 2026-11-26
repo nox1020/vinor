@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title_suffix": "Vinor Control",
-    "app_name": "Vinor Control",
+    "title_suffix": "پنل وینور",
+    "app_name": "پنل وینور",
     "app_tagline": "مرکز فرمان هوش مصنوعی",
     "description": "مرکز فرمان سازمانی هوش مصنوعی برای سیستم املاک وینور"
   },
@@ -153,14 +153,14 @@
     "users": "کاربران"
   },
   "sms_notifications": {
-    "browser_title": "پیامک و نوتیفیکیشن | Vinor Control"
+    "browser_title": "پیامک و نوتیفیکیشن | پنل وینور"
   },
   "dashboard": {
     "title": "داشبورد",
     "kicker": "مرکز عملیات",
     "subtitle": "صف کار امروز و میانبر ماژول‌ها.",
     "page_title": "داشبورد",
-    "browser_title": "داشبورد | Vinor Control",
+    "browser_title": "داشبورد | پنل وینور",
     "queue_hint": "اول صف‌هایی را ببین که نیاز به تأیید دارند.",
     "waiting_count": "مورد در صف",
     "review": "بررسی",
@@ -261,7 +261,7 @@
     "crm_title": "ارتباط با مشتری",
     "crm_subtitle": "لید، تماس، پیگیری و مشتری — مسیرهای موجود + ابزارهای AI CRM.",
     "more_title": "بیشتر",
-    "more_subtitle": "میانبرهای موبایل به بقیهٔ Vinor Control.",
+    "more_subtitle": "میانبرهای موبایل به بقیهٔ پنل وینور.",
     "properties": "املاک",
     "visits": "بازدیدها",
     "deals_commissions": "معاملات و پورسانت",
@@ -355,9 +355,9 @@
     "chip_eval": "ارزیابی"
   },
   "login": {
-    "browser_title": "ورود ادمین | Vinor Control",
-    "title": "Vinor Control",
-    "tagline": "مرکز فرمان هوش مصنوعی",
+    "browser_title": "ورود مدیر | پنل وینور",
+    "title": "پنل وینور",
+    "tagline": "ورود مدیر با کد پیامکی",
     "otp_label": "کد ورود پیامکی",
     "otp_placeholder": "مثلاً ۱۲۳۴۵",
     "verify": "تأیید کد و ورود",

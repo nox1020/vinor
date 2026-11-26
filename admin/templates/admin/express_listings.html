@@ -1,6 +1,6 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}آگهی‌ها{% endblock %}
-{% block page_title %}آگهی‌ها{% endblock %}
+{% block title %}فایل‌های همکاران پلاس | پنل وینور{% endblock %}
+{% block page_title %}فایل‌های همکاران پلاس{% endblock %}
 
 {% block head %}
   {{ super() }}
@@ -59,31 +59,16 @@
 {% endblock %}
 
 {% block content %}
-<div id="adminExpressListings" class="space-y-5">
-
-  <!-- فیلتر -->
-  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-    <div class="flex flex-wrap gap-2 text-xs">
-      {% set tabs = [
-        ('all', 'همه', stats.total),
-        ('plus', 'پلاس', stats.plus),
-        ('divar', 'دیوار', stats.divar),
-        ('sold', 'فروخته‌شده', stats.sold),
-      ] %}
-      {% for key, label, count in tabs %}
-        <a href="{{ url_for('admin.express_listings', filter=key) }}"
-           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition
-                  {% if (filter_kind or 'all') == key %}
-                    border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300
-                  {% else %}
-                    border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300
-                  {% endif %}">
-          {{ label }}
-          <span class="font-semibold tabular-nums">{{ count or 0 }}</span>
-        </a>
-      {% endfor %}
-    </div>
-  </div>
+{% from 'admin/partials/ui.html' import page_header, tab %}
+<div id="adminExpressListings" class="space-y-4">
+  {% call page_header('فایل‌های همکاران پلاس', 'فایل‌های همکاران پلاس و دیوار؛ برای صف تأیید آگهی‌ها به «آگهی‌ها» بروید.') %}
+    <a class="ad-btn ad-btn-ghost ad-btn-sm" href="{{ url_for('admin.property_listings') }}"><i class="fa-solid fa-list-check"></i> صف آگهی‌ها</a>
+  {% endcall %}
+  <nav class="ad-tabs" aria-label="فیلتر فایل‌ها">
+    {% for key, label, count in [('all', 'همه', stats.total), ('plus', 'پلاس', stats.plus), ('divar', 'دیوار', stats.divar), ('sold', 'فروخته‌شده', stats.sold)] %}
+    {{ tab(url_for('admin.express_listings', filter=key), label, count or 0, (filter_kind or 'all') == key) }}
+    {% endfor %}
+  </nav>
 
   {% if lands and lands|length > 0 %}
     <div id="adminExpressCards" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">

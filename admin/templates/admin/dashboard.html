@@ -1,188 +1,154 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}داشبورد | Vinor Control{% endblock %}
-{% block page_title_key %}dashboard.browser_title{% endblock %}
-{% block i18n_page_title %}dashboard.browser_title{% endblock %}
-{% block page_title_i18n %}dashboard.page_title{% endblock %}
-
-{% block head %}
-{{ super() }}
-<link rel="stylesheet" href="{{ 'admin/ops-dash.css'|static_version }}">
-<style>
-  #opsFlashStack.ops-flash-stack {
-    position: fixed;
-    top: 3.35rem;
-    inset-inline: 0.75rem;
-    z-index: 80;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    pointer-events: none;
-    max-width: 22rem;
-    margin-inline: auto;
-  }
-  #opsFlashStack .ops-flash-toast {
-    pointer-events: auto;
-    font-size: 0.8rem;
-    line-height: 1.45;
-    padding: 0.55rem 0.75rem;
-    border-radius: 0.65rem;
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    background: rgba(20, 23, 28, 0.96);
-    color: #e2e8f0;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-    animation: opsFlashIn 0.2s ease;
-  }
-  #opsFlashStack .ops-flash-toast--success,
-  #opsFlashStack .ops-flash-toast--ok { border-color: rgba(52, 211, 153, 0.35); color: #a7f3d0; }
-  #opsFlashStack .ops-flash-toast--warning { border-color: rgba(251, 191, 36, 0.35); color: #fde68a; }
-  #opsFlashStack .ops-flash-toast--info { border-color: rgba(56, 189, 248, 0.35); color: #bae6fd; }
-  #opsFlashStack .ops-flash-toast--danger,
-  #opsFlashStack .ops-flash-toast--error { border-color: rgba(248, 113, 113, 0.35); color: #fecaca; }
-  #opsFlashStack .ops-flash-toast.is-dismissed {
-    opacity: 0;
-    transform: translateY(-4px);
-    transition: opacity 0.25s ease, transform 0.25s ease;
-  }
-  @keyframes opsFlashIn {
-    from { opacity: 0; transform: translateY(-6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-</style>
-{% endblock %}
-
-{% block admin_flash %}
-{% with messages = get_flashed_messages(with_categories=True) %}
-  {% if messages %}
-  <div id="opsFlashStack" class="ops-flash-stack" aria-live="polite">
-    {% for category, msg in messages %}
-    <div class="ops-flash-toast ops-flash-toast--{{ category }}" role="status">{{ msg }}</div>
-    {% endfor %}
-  </div>
-  {% endif %}
-{% endwith %}
-{% endblock admin_flash %}
+{% from 'admin/partials/ui.html' import page_header, pill, empty %}
+{% block title %}داشبورد | پنل وینور{% endblock %}
+{% block page_title %}داشبورد{% endblock %}
 
 {% block content %}
 {% set ov = dash_overview|default({}) %}
-{% set queue_total = ov.queue_total|default(0) %}
-{% set ai_alerts = (ov.ai_pending|default(0)) + (ov.ai_errors|default(0)) %}
-<div id="adminOpsDashPage" class="ops-dash-layout">
-  <section class="ops-dash-board" aria-label="داشبورد عملیات">
+{% set total = ov.queue_total|default(0) %}
+<div id="adminOpsDashPage" class="ad-stack" data-dashboard>
 
-    <header class="ops-dash-hero">
-      <div class="ops-dash-hero__copy">
-        <p class="ops-dash-kicker" data-i18n="dashboard.kicker">مرکز عملیات</p>
-        <h1 class="ops-dash-title" data-i18n="dashboard.title">داشبورد</h1>
-        <p class="ops-dash-sub" data-i18n="dashboard.subtitle">وضعیت صف‌ها و میانبرهای عملیات.</p>
-      </div>
-      <div class="ops-dash-hero__meta">
-        {% if queue_total %}
-        <span class="ops-pill ops-pill--warn">
-          <i class="fa-solid fa-inbox" aria-hidden="true"></i>
-          <span class="tabular-nums">{{ queue_total|fa_digits }}</span>
-          <span data-i18n="dashboard.waiting_count">مورد در صف</span>
-        </span>
-        {% else %}
-        <span class="ops-pill ops-pill--ok">
-          <i class="fa-solid fa-check" aria-hidden="true"></i>
-          <span data-i18n="dashboard.ops_empty">اقدام عملیاتی معلقی نیست.</span>
-        </span>
-        {% endif %}
-      </div>
-    </header>
+  {% call page_header('داشبورد',
+       ('امروز ' ~ (total|fa_num) ~ ' مورد منتظر تصمیم شماست.') if total else 'صف‌ها خالی است؛ همه‌چیز رسیدگی شده.') %}
+    <a href="{{ url_for('admin.property_listings') }}" class="ad-btn ad-btn-ghost ad-btn-sm"><i class="fa-solid fa-building"></i> آگهی‌ها</a>
+    <a href="{{ url_for('admin.express_partners') }}" class="ad-btn ad-btn-ghost ad-btn-sm"><i class="fa-solid fa-user-group"></i> همکاران</a>
+  {% endcall %}
 
-    <div class="ops-dash-body">
-      <div class="ops-dash-primary">
-        <div class="ops-dash-section">
-          <div class="ops-dash-section__head">
-            <h2 class="ops-dash-section__title" data-i18n="dashboard.pending_actions">اقدام‌های معلق</h2>
-            <p class="ops-dash-section__hint" data-i18n="dashboard.queue_hint">اول صف‌هایی را ببین که نیاز به تأیید دارند.</p>
-          </div>
-          <div class="ops-queue-grid" role="list">
-            {% for q in ov.work_queues|default([]) %}
-            {% set count = q.count|default(0) %}
-            <a role="listitem" class="ops-queue {% if count %}is-hot{% else %}is-clear{% endif %}" href="{{ q.url }}">
-              <span class="ops-queue__icon" aria-hidden="true">
-                <i class="fa-solid {{ q.icon }}"></i>
-              </span>
-              <span class="ops-queue__body">
-                <span class="ops-queue__label">{{ q.label }}</span>
-                <span class="ops-queue__hint">{{ q.hint }}</span>
-              </span>
-              <span class="ops-queue__count tabular-nums">{{ count|fa_digits }}</span>
-            </a>
-            {% endfor %}
-          </div>
+  <section aria-labelledby="dashQueuesTitle">
+    <h2 id="dashQueuesTitle" class="sr-only">صف‌های کاری</h2>
+    <div class="ad-queue">
+      {% for qd in ov.queues|default([]) %}
+      <a href="{{ qd.url }}" class="{% if qd.count %}is-hot{% endif %}" data-queue="{{ qd.key }}">
+        <div class="ad-queue-top">
+          <span class="ad-queue-ico"><i class="fa-solid {{ qd.icon }}" aria-hidden="true"></i></span>
+          <span class="ad-queue-n">{{ qd.count|fa_num }}</span>
         </div>
-      </div>
-
-      <aside class="ops-dash-aside">
-        <a class="ops-ai-card" href="{{ url_for('admin.ai_hub') }}">
-          <div class="ops-ai-card__head">
-            <span class="ops-ai-card__icon" aria-hidden="true"><i class="fa-solid fa-robot"></i></span>
-            <div>
-              <h2 class="ops-ai-card__title" data-i18n="dashboard.ai_hub">هوش مصنوعی</h2>
-              <p class="ops-ai-card__sub" data-i18n="dashboard.ai_health">سلامت هوش مصنوعی</p>
-            </div>
-          </div>
-          <div class="ops-ai-card__stats">
-            <span class="ops-stat {% if ov.ai_pending %}is-warn{% endif %}">
-              <span class="ops-stat__value tabular-nums">{{ ov.ai_pending|default(0)|fa_digits }}</span>
-              <span class="ops-stat__label" data-i18n="dashboard.pending_confirm">تأیید معلق</span>
-            </span>
-            <span class="ops-stat {% if ov.ai_errors %}is-danger{% endif %}">
-              <span class="ops-stat__value tabular-nums">{{ ov.ai_errors|default(0)|fa_digits }}</span>
-              <span class="ops-stat__label" data-i18n="dashboard.errors">خطاها</span>
-            </span>
-          </div>
-          {% if ai_alerts %}
-          <span class="ops-dash-link__badge tabular-nums">{{ ai_alerts|fa_digits }}</span>
-          {% endif %}
-        </a>
-      </aside>
-    </div>
-
-    <div class="ops-dash-section">
-      <div class="ops-dash-section__head">
-        <h2 class="ops-dash-section__title" data-i18n="dashboard.modules">میانبر ماژول‌ها</h2>
-      </div>
-      <div class="ops-modules">
-        {% for group in ov.module_groups|default([]) %}
-        <section class="ops-module">
-          <h3 class="ops-module__title">{{ group.title }}</h3>
-          <div class="ops-module__links">
-            {% for link in group.links|default([]) %}
-            <a class="ops-dash-link" href="{{ link.url }}">
-              <i class="fa-solid {{ link.icon }}" aria-hidden="true"></i>
-              <span>{{ link.label }}</span>
-            </a>
-            {% endfor %}
-          </div>
-        </section>
-        {% endfor %}
-      </div>
+        <div>
+          <div class="ad-queue-label">{{ qd.label }}</div>
+          <div class="ad-queue-hint">{{ qd.hint }}</div>
+        </div>
+      </a>
+      {% endfor %}
     </div>
   </section>
-</div>
-{% endblock %}
 
-{% block scripts %}
-{{ super() }}
-<script>
-(function () {
-  var flashStack = document.getElementById('opsFlashStack');
-  if (!flashStack) return;
-  flashStack.querySelectorAll('.ops-flash-toast').forEach(function (el, i) {
-    setTimeout(function () {
-      el.classList.add('is-dismissed');
-      setTimeout(function () {
-        try { el.remove(); } catch (_) {}
-        if (!flashStack.querySelector('.ops-flash-toast')) {
-          try { flashStack.remove(); } catch (_) {}
-        }
-      }, 280);
-    }, 3800 + i * 400);
-  });
-})();
-</script>
+  {% if ov.kpis %}
+  <section class="ad-stats" aria-label="شاخص‌های کلیدی" style="margin-bottom:0">
+    {% for k in ov.kpis %}
+    <a href="{{ k.url }}" class="ad-stat">
+      <span class="ad-stat-label">{{ k.label }}</span>
+      <span class="ad-stat-value">{{ k.value|fa_num }}</span>
+    </a>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <div class="ad-grid-2">
+    <section class="ad-card" aria-labelledby="dashVisitsTitle">
+      <div class="ad-card-h">
+        <h2 id="dashVisitsTitle"><i class="fa-solid fa-route text-[13px] ad-muted"></i> آخرین بازدیدها</h2>
+        <a class="ad-link text-[12.5px]" href="{{ url_for('admin.express_visit_requests') }}">همه بازدیدها</a>
+      </div>
+      {% if ov.visits %}
+      <div class="ad-list">
+        {% for v in ov.visits %}
+        <a class="ad-list-row" href="{{ url_for('admin.express_visit_requests', filter='actions' if v.needs_action else 'all') }}">
+          <div class="ad-list-main">
+            <div class="ad-list-title">{{ v.title }}</div>
+            <div class="ad-list-sub">{{ v.who }}{% if v.customer %} · مشتری: {{ v.customer }}{% endif %}</div>
+          </div>
+          <div class="ad-list-end">
+            {{ pill(v.status, v.tone) }}
+            <span class="text-[11.5px] ad-muted">{{ v.ts|admin_ago }}</span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      {{ empty('هنوز بازدیدی ثبت نشده', icon='fa-route') }}
+      {% endif %}
+    </section>
+
+    <section class="ad-card" aria-labelledby="dashFinanceTitle">
+      <div class="ad-card-h">
+        <h2 id="dashFinanceTitle"><i class="fa-solid fa-money-bill-transfer text-[13px] ad-muted"></i> برداشت‌ها</h2>
+        <a class="ad-link text-[12.5px]" href="{{ url_for('admin.financial_withdrawals') }}">صف برداشت</a>
+      </div>
+      {% if not ov.finance_allowed %}
+      {{ empty('دسترسی مالی ندارید', 'جزئیات برداشت‌ها فقط برای ادمین مالی نمایش داده می‌شود.', icon='fa-lock') }}
+      {% elif ov.withdrawals %}
+      <div class="ad-list">
+        {% for w in ov.withdrawals %}
+        <a class="ad-list-row" href="{{ url_for('admin.financial_withdrawals') }}">
+          <div class="ad-list-main">
+            <div class="ad-list-title">{{ w.who }}</div>
+            <div class="ad-list-sub">{{ w.bank or 'حساب بانکی' }} · {{ w.ts|admin_ago }}</div>
+          </div>
+          <div class="ad-list-end">
+            <span class="text-[14px] font-bold tabular-nums">{{ w.amount|toman }}</span>
+            {{ pill(w.status, w.tone) }}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      {{ empty('درخواست برداشتی نیست', icon='fa-wallet') }}
+      {% endif %}
+    </section>
+
+    <section class="ad-card" aria-labelledby="dashListingsTitle">
+      <div class="ad-card-h">
+        <h2 id="dashListingsTitle"><i class="fa-solid fa-building text-[13px] ad-muted"></i> آگهی‌های منتظر تأیید</h2>
+        <a class="ad-link text-[12.5px]" href="{{ url_for('admin.property_listings', status='pending') }}">بررسی همه</a>
+      </div>
+      {% if ov.listings %}
+      <div class="ad-list">
+        {% for r in ov.listings %}
+        <a class="ad-list-row" href="{{ r.view_url or url_for('admin.property_listings', status='pending') }}">
+          <span class="ad-thumb">{% if r.thumbnail %}<img src="{{ r.thumbnail }}" alt="" loading="lazy">{% else %}<i class="fa-solid fa-image"></i>{% endif %}</span>
+          <div class="ad-list-main">
+            <div class="ad-list-title">{{ r.title }}</div>
+            <div class="ad-list-sub">{{ r.owner_name }} · {{ r.city }}{% if r.price %} · {{ r.price|toman }}{% endif %}</div>
+          </div>
+          <span class="text-[11.5px] ad-muted shrink-0">{{ r.created_at|admin_ago }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      {{ empty('آگهی منتظری نیست', icon='fa-circle-check') }}
+      {% endif %}
+    </section>
+
+    <section class="ad-card" aria-labelledby="dashAppsTitle">
+      <div class="ad-card-h">
+        <h2 id="dashAppsTitle"><i class="fa-solid fa-user-plus text-[13px] ad-muted"></i> درخواست‌های همکاری</h2>
+        <a class="ad-link text-[12.5px]" href="{{ url_for('admin.express_partners', filter='pending') }}">بررسی</a>
+      </div>
+      {% if ov.applications %}
+      <div class="ad-list">
+        {% for a in ov.applications %}
+        <a class="ad-list-row" href="{{ url_for('admin.express_partner_detail', phone=a.phone) if a.phone else url_for('admin.express_partners', filter='pending') }}">
+          <span class="ad-avatar">{{ a.name[:1] }}</span>
+          <div class="ad-list-main">
+            <div class="ad-list-title">{{ a.name }}</div>
+            <div class="ad-list-sub"><span class="ad-ltr">{{ a.phone }}</span>{% if a.city %} · {{ a.city }}{% endif %}</div>
+          </div>
+          <span class="text-[11.5px] ad-muted shrink-0">{{ a.ts|admin_ago }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      {{ empty('درخواست جدیدی نیست', icon='fa-user-check') }}
+      {% endif %}
+    </section>
+  </div>
+
+  {% if ov.reports_open %}
+  <a href="{{ url_for('admin.reports_list') }}" class="ad-note is-warn flex items-center gap-2">
+    <i class="fa-solid fa-flag"></i>
+    <span class="flex-1">{{ ov.reports_open|fa_num }} گزارش کاربر رسیدگی نشده است.</span>
+    <i class="fa-solid fa-angle-left"></i>
+  </a>
+  {% endif %}
+</div>
 {% endblock %}

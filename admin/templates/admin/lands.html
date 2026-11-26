@@ -1,4 +1,6 @@
 {% extends 'admin/base_admin.html' %}
+{% block title %}آگهی‌ها (lands.json) | پنل وینور{% endblock %}
+{% block page_title %}آگهی‌ها (lands.json){% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-5">
@@ -123,7 +125,7 @@
                 ویرایش
               </a>
               <form method="post" action="{{ url_for('admin.delete_land', code=land.code) }}" class="col-span-2"
-                    onsubmit="return confirm('آیا از حذف آگهی «{{ land.title or 'بدون عنوان' }}» مطمئن هستید؟')">
+                    data-confirm="آیا از حذف آگهی «{{ land.title or 'بدون عنوان' }}» مطمئن هستید؟">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit"
                         class="w-full inline-flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-sm py-2 rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500">
@@ -144,7 +146,7 @@
                 ویرایش
               </a>
               <form method="post" action="{{ url_for('admin.delete_land', land_id=loop.index0) }}" class="col-span-2"
-                    onsubmit="return confirm('آیا از حذف آگهی «{{ land.title or 'بدون عنوان' }}» مطمئن هستید؟')">
+                    data-confirm="آیا از حذف آگهی «{{ land.title or 'بدون عنوان' }}» مطمئن هستید؟">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit"
                         class="w-full inline-flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-sm py-2 rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500">

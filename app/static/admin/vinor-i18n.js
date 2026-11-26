@@ -18,13 +18,9 @@
   var FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
   var EN_DIGITS = "0123456789";
 
+  // The admin panel is Persian-first: English only when explicitly chosen (stored).
   function detectBrowserLang() {
-    try {
-      var nav = (navigator.languages && navigator.languages[0]) || navigator.language || "en";
-      return String(nav).toLowerCase().indexOf("fa") === 0 ? "fa" : "en";
-    } catch (e) {
-      return "en";
-    }
+    return "fa";
   }
 
   function readStoredLang() {

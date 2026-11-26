@@ -1,151 +1,103 @@
 {% extends 'admin/base_admin.html' %}
-{% from 'admin/partials/mobile_ui.html' import filter_pill %}
-{% block title %}درخواست‌های برداشت{% endblock %}
-{% block page_title %}درخواست‌های برداشت{% endblock %}
+{% from 'admin/partials/ui.html' import page_header, tab, pill, empty %}
+{% block title %}برداشت‌ها | پنل وینور{% endblock %}
+{% block page_title %}مالی و برداشت‌ها{% endblock %}
+
+{% set TONE = {'pending': 'warn', 'approved': 'info', 'processing': 'violet', 'paid': 'ok', 'rejected': 'danger', 'cancelled': 'muted'} %}
 
 {% block content %}
-<div class="space-y-5">
+<div id="adminWithdrawalsPage" data-withdrawals-page>
+  {% call page_header('درخواست‌های برداشت',
+       (pending_count|fa_num ~ ' درخواست منتظر بررسی') if pending_count else 'درخواست تازه‌ای منتظر بررسی نیست.') %}
+    <a href="{{ url_for('admin.express_commissions') }}" class="ad-btn ad-btn-ghost ad-btn-sm"><i class="fa-solid fa-wallet"></i> پورسانت‌ها</a>
+  {% endcall %}
 
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h2 class="text-base font-semibold text-gray-900 dark:text-white">درخواست‌های برداشت همکاران</h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-        {% if active_count %}
-        <span class="text-blue-600 dark:text-blue-400 font-medium">{{ active_count }} فعال</span>
-        ·
-        {% endif %}
-        {% if pending_count %}
-        <span class="text-amber-600 dark:text-amber-400 font-medium">{{ pending_count }} در انتظار</span>
-        {% if approved_count %} · {% endif %}
-        {% endif %}
-        {% if approved_count %}
-        <span class="text-indigo-600 dark:text-indigo-400 font-medium">{{ approved_count }} تأییدشده</span>
-        {% endif %}
-        {% if not active_count and not pending_count and not approved_count %}
-        همه درخواست‌ها بررسی شده‌اند
-        {% endif %}
-      </p>
-    </div>
-    <a href="{{ url_for('admin.express_commissions') }}"
-       class="text-xs text-blue-600 dark:text-blue-400 hover:underline">مدیریت پورسانت‌ها</a>
-  </div>
+  <details class="ad-note is-accent mb-4">
+    <summary class="cursor-pointer font-semibold text-[13px]" style="list-style:none">راهنمای جریان واریز <i class="fa-solid fa-angle-down text-[11px] ad-muted"></i></summary>
+    <ol class="mt-2 space-y-1 list-decimal ps-5">
+      <li>«تأیید شده»: مبلغ از موجودی همکار رزرو می‌شود.</li>
+      <li>«در حال پردازش»: واریز بانکی در جریان است.</li>
+      <li>«پرداخت‌شده»: پس از واریز واقعی به حساب، دستی ثبت کنید.</li>
+    </ol>
+  </details>
 
-  <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-xs text-emerald-900 dark:text-emerald-100 leading-relaxed">
-    <p class="font-semibold mb-1">جریان واریز به حساب همکار</p>
-    <p>۱) «تأیید شده» — مبلغ از موجودی همکار رزرو می‌شود · ۲) «در حال پردازش» — در حال واریز بانکی ·
-    ۳) «پرداخت‌شده» — پس از واریز واقعی به حساب بانکی ثبت کنید (دستی).</p>
-  </div>
+  <nav class="ad-tabs" aria-label="وضعیت برداشت">
+    {% for key, label, n in [('active', 'فعال', active_count), ('pending', 'در انتظار', pending_count), ('approved', 'تأییدشده', approved_count), ('processing', 'در حال پردازش', processing_count), ('paid', 'پرداخت‌شده', paid_count), ('all', 'همه', all_count)] %}
+    {{ tab(url_for('admin.financial_withdrawals', filter=key), label, n or 0, current_filter == key, hot=(key == 'pending')) }}
+    {% endfor %}
+  </nav>
 
-  <div class="adm-filter-row text-[11px]">
-    {% macro filter_link(key, label, count) %}
-    {{ filter_pill(url_for('admin.financial_withdrawals', filter=key), label, count, current_filter == key) }}
-    {% endmacro %}
-    {{ filter_link('active', 'فعال', active_count) }}
-    {{ filter_link('pending', 'در انتظار', pending_count) }}
-    {{ filter_link('approved', 'تأییدشده', approved_count) }}
-    {{ filter_link('processing', 'در حال پردازش', processing_count) }}
-    {{ filter_link('paid', 'پرداخت‌شده', paid_count) }}
-    {{ filter_link('all', 'همه', all_count) }}
-  </div>
-
-  {% if items and items|length > 0 %}
-  <div class="grid grid-cols-1 gap-3">
+  {% if items %}
+  <div class="ad-stack">
     {% for w in items %}
     {% set st = w.status or 'pending' %}
-    <div class="bg-white dark:bg-gray-900 border rounded-lg p-4
-                {% if st == 'pending' %}border-amber-200 dark:border-amber-900/50
-                {% elif st == 'approved' %}border-indigo-200 dark:border-indigo-900/50
-                {% elif st == 'processing' %}border-blue-200 dark:border-blue-900/50
-                {% else %}border-gray-200 dark:border-gray-700{% endif %}">
-      <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
-        <div class="min-w-0">
-          <h3 class="font-semibold text-sm text-gray-900 dark:text-white">
-            {{ w.partner_name or 'همکار' }}
-            <span class="text-gray-400 font-normal text-xs" dir="ltr">{{ w.phone }}</span>
-          </h3>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">ثبت: {{ w.created_at|default('—') }}</p>
-          {% if w.updated_at and w.updated_at != w.created_at %}
-          <p class="text-[10px] text-gray-400 dark:text-gray-500">آخرین بروزرسانی: {{ w.updated_at }}</p>
-          {% endif %}
+    <article class="ad-card" data-withdrawal="{{ w.id }}">
+      <div class="ad-card-b">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="ad-avatar">{{ (w.partner_name or w.holder_name or 'ه')[:1] }}</span>
+            <div class="min-w-0">
+              <div class="font-bold text-[14.5px] truncate">{{ w.partner_name or w.holder_name or 'همکار' }}</div>
+              <div class="text-[12px] ad-muted"><span class="ad-ltr">{{ w.phone }}</span> · ثبت {{ w.created_at|admin_dt }}</div>
+            </div>
+          </div>
+          <div class="flex flex-col items-end gap-1.5">
+            <span class="ad-amount">{{ w.amount|int|toman }}</span>
+            {{ pill(w.status_label, TONE.get(st, 'muted')) }}
+          </div>
         </div>
-        <div class="text-start shrink-0">
-          <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ w.amount|int|toman }}</p>
-          <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full
-            {% if st == 'pending' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
-            {% elif st == 'approved' %}bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300
-            {% elif st == 'processing' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
-            {% elif st == 'paid' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
-            {% elif st == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
-            {% elif st == 'cancelled' %}bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400
-            {% else %}bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300{% endif %}">
-            {{ w.status_label }}
-          </span>
-        </div>
-      </div>
 
-      <div class="rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 px-3 py-2.5 text-xs space-y-1 mb-3">
-        <div class="flex justify-between gap-2"><span class="text-gray-500">بانک</span><span class="text-gray-900 dark:text-white font-medium">{{ w.bank_name or '—' }}</span></div>
-        {% if w.tracking_code %}<div class="flex justify-between gap-2"><span class="text-gray-500">کد پیگیری</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr" data-admin-wd-tracking>{{ w.tracking_code }}</span></div>{% endif %}
-        {% if w.sheba %}<div class="flex justify-between gap-2"><span class="text-gray-500">شبا</span><span class="text-gray-900 dark:text-white font-mono select-all" dir="ltr" data-admin-wd-sheba>{{ w.sheba }}</span></div>{% endif %}
-        {% if w.masked_pan %}<div class="flex justify-between gap-2"><span class="text-gray-500">کارت</span><span class="text-gray-900 dark:text-white font-mono" dir="ltr">{{ w.masked_pan }}</span></div>{% endif %}
-        <div class="flex justify-between gap-2"><span class="text-gray-500">صاحب حساب</span><span class="text-gray-900 dark:text-white">{{ w.holder_name or '—' }}</span></div>
-        {% if st == 'paid' and w.commission_allocated_amount %}
-        <div class="flex justify-between gap-2"><span class="text-gray-500">تخصیص پورسانت</span><span class="text-gray-900 dark:text-white tabular-nums">{{ w.commission_allocated_amount|int|toman }}</span></div>
+        <dl class="ad-kv mt-4 pt-3" style="border-top:1px solid var(--ad-line)">
+          <dt>بانک</dt><dd>{{ w.bank_name or '—' }}</dd>
+          <dt>صاحب حساب</dt><dd>{{ w.holder_name or '—' }}</dd>
+          {% if w.sheba %}<dt>شبا</dt><dd class="ad-mono select-all" data-admin-wd-sheba>{{ w.sheba }}</dd>{% endif %}
+          {% if w.masked_pan %}<dt>کارت</dt><dd class="ad-mono">{{ w.masked_pan }}</dd>{% endif %}
+          {% if w.tracking_code %}<dt>کد پیگیری</dt><dd class="ad-mono" data-admin-wd-tracking>{{ w.tracking_code }}</dd>{% endif %}
+          {% if st == 'paid' and w.commission_allocated_amount %}<dt>تخصیص پورسانت</dt><dd class="tabular-nums">{{ w.commission_allocated_amount|int|toman }}</dd>{% endif %}
+          {% if w.updated_at and w.updated_at != w.created_at %}<dt>آخرین تغییر</dt><dd>{{ w.updated_at|admin_dt }}</dd>{% endif %}
+        </dl>
+
+        {% if w.admin_note %}<p class="ad-note mt-3">{{ w.admin_note }}</p>{% endif %}
+
+        {% if st == 'cancelled' %}
+        <p class="text-[12.5px] ad-muted mt-3">این درخواست را همکار لغو کرده است.</p>
+        {% elif st == 'paid' %}
+        <p class="text-[12.5px] mt-3" style="color:var(--ad-accent-2)">واریز انجام شده؛ پورسانت‌های مرتبط پرداخت‌شده ثبت شده‌اند.</p>
+        {% elif st == 'rejected' %}
+        <p class="text-[12.5px] mt-3" style="color:var(--ad-danger)">رد شده؛ مبلغ به موجودی قابل برداشت همکار برگشته است.</p>
+        {% elif w.is_editable %}
+        <form method="post" action="{{ url_for('admin.financial_withdrawal_status', wid=w.id) }}" class="ad-inline-form mt-4">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <label class="ad-field" style="flex:1 1 180px">
+            <span>وضعیت</span>
+            <select name="status" class="ad-select">
+              {% for opt in w.status_options %}
+              <option value="{{ opt.value }}" {% if opt.value == st %}selected{% endif %}>{{ opt.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="ad-field" style="flex:2 1 240px">
+            <span>یادداشت داخلی (اختیاری)</span>
+            <input type="text" name="admin_note" value="{{ w.admin_note or '' }}" class="ad-input" placeholder="مثلاً شمارهٔ پیگیری واریز">
+          </label>
+          <button type="submit" class="ad-btn ad-btn-primary">ثبت وضعیت</button>
+        </form>
+        <p class="text-[12px] ad-muted mt-2">
+          {% if st == 'pending' %}پس از بررسی حساب بانکی، «تأیید شده» را انتخاب کنید تا مبلغ رزرو شود.
+          {% elif st == 'approved' %}برای واریز، «در حال پردازش» یا مستقیم «پرداخت‌شده» را ثبت کنید.
+          {% elif st == 'processing' %}پس از واریز به حساب، «پرداخت‌شده» را ثبت کنید.{% endif %}
+        </p>
         {% endif %}
       </div>
-
-      {% if w.admin_note %}
-      <p class="text-xs text-gray-600 dark:text-gray-300 mb-3 bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1.5">{{ w.admin_note }}</p>
-      {% endif %}
-
-      {% if st == 'cancelled' %}
-      <p class="text-xs text-gray-500 dark:text-gray-400 italic">این درخواست توسط همکار لغو شده است.</p>
-      {% elif st == 'paid' %}
-      <p class="text-xs text-emerald-600 dark:text-emerald-400">واریز انجام شده — پورسانت‌های مرتبط به وضعیت پرداخت‌شده منتقل شده‌اند.</p>
-      {% elif st == 'rejected' %}
-      <p class="text-xs text-red-600 dark:text-red-400">رد شده — مبلغ به موجودی قابل برداشت همکار برگشته است.</p>
-      {% elif w.is_editable %}
-      <form method="post" action="{{ url_for('admin.financial_withdrawal_status', wid=w.id) }}" class="adm-form-row flex flex-wrap items-end gap-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="filter" value="{{ current_filter }}">
-        <div class="flex-1 min-w-[8rem]">
-          <label class="block text-[10px] text-gray-500 mb-1">تغییر وضعیت</label>
-          <select name="status" class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-            {% for opt in w.status_options %}
-            <option value="{{ opt.value }}" {% if opt.value == st %}selected{% endif %}>{{ opt.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="flex-[2] min-w-[10rem]">
-          <label class="block text-[10px] text-gray-500 mb-1">یادداشت (اختیاری)</label>
-          <input type="text" name="admin_note" value="{{ w.admin_note or '' }}"
-                 class="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                 placeholder="یادداشت داخلی" />
-        </div>
-        <button type="submit" class="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium">
-          ذخیره
-        </button>
-      </form>
-      {% if st == 'pending' %}
-      <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">پس از بررسی حساب بانکی، «تأیید شده» را انتخاب کنید تا مبلغ از موجودی همکار رزرو شود.</p>
-      {% elif st == 'approved' %}
-      <p class="text-xs text-indigo-600 dark:text-indigo-400 mt-2">تأیید شده — برای واریز، «در حال پردازش» یا مستقیم «پرداخت‌شده» را بزنید.</p>
-      {% elif st == 'processing' %}
-      <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">در حال پردازش — پس از واریز به حساب، «پرداخت‌شده» را ثبت کنید.</p>
-      {% endif %}
-      {% endif %}
-    </div>
+    </article>
     {% endfor %}
   </div>
   {% else %}
-  <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-10 text-center">
-    <i class="fa-solid fa-money-bill-transfer text-3xl text-gray-300 dark:text-gray-600 mb-3"></i>
-    <p class="text-sm text-gray-500 dark:text-gray-400">
-      {% if current_filter == 'active' %}درخواست فعالی (در انتظار / تأیید / در حال پردازش) وجود ندارد.{% else %}در این فیلتر درخواستی نیست.{% endif %}
-    </p>
-    {% if current_filter != 'all' %}
-    <a href="{{ url_for('admin.financial_withdrawals', filter='all') }}" class="inline-block mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline">مشاهده همه</a>
-    {% endif %}
+  <div class="ad-card">
+    {% call empty('درخواستی در این فیلتر نیست', 'درخواست فعالی (در انتظار، تأیید یا در حال پردازش) وجود ندارد.' if current_filter == 'active' else '', icon='fa-money-bill-transfer') %}
+      {% if current_filter != 'all' %}<a href="{{ url_for('admin.financial_withdrawals', filter='all') }}" class="ad-btn ad-btn-ghost ad-btn-sm mt-2">نمایش همه</a>{% endif %}
+    {% endcall %}
   </div>
   {% endif %}
 </div>

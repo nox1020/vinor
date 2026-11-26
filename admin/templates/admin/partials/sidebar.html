@@ -1,119 +1,49 @@
-{% set ep = request.endpoint or '' %}
+{# Simplified admin navigation — sections come from admin/nav.py (admin_nav). #}
+<div class="ad-brand">
+  <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="" width="34" height="34" decoding="async">
+  <a href="{{ url_for('admin.dashboard') }}" class="min-w-0">
+    <b>پنل وینور</b>
+    <small>مدیریت عملیات</small>
+  </a>
+  <button type="button" class="ad-brand-close lg:hidden" @click="menuOpen = false" aria-label="بستن منو">
+    <i class="fa-solid fa-xmark"></i>
+  </button>
+</div>
 
-<div class="h-full flex flex-col px-3 py-4">
-
-  <div class="flex items-center justify-between mb-4 px-1">
-    <a href="{{ url_for('admin.dashboard') }}" class="flex items-center gap-2 min-w-0">
-      <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="" width="28" height="28" class="rounded-md object-cover shrink-0" decoding="async">
-      <div class="min-w-0 leading-tight">
-        <div class="font-bold text-sm text-white truncate">Vinor Ops</div>
-        <div class="text-[10px] text-[#6B7380]">پنل عملیات</div>
-      </div>
+<nav class="ad-nav" aria-label="بخش‌های پنل" data-admin-nav>
+  {% for sec in admin_nav %}
+  <a href="{{ sec.url }}" class="ad-nav-item {% if sec.active %}is-active{% endif %}"
+     data-nav-key="{{ sec.key }}" {% if sec.active %}aria-current="page"{% endif %}>
+    <i class="fa-solid {{ sec.icon }}" aria-hidden="true"></i>
+    <span class="ad-nav-label">{{ sec.label }}</span>
+    {% if sec.count %}<span class="ad-count" title="در انتظار اقدام">{{ sec.count|fa_num }}</span>{% endif %}
+  </a>
+  {% if sec.active and sec.children|length > 1 %}
+  <div class="ad-nav-sub">
+    {% for ch in sec.children %}
+    <a href="{{ ch.url }}" class="{% if ch.active %}is-active{% endif %}" {% if ch.active %}aria-current="page"{% endif %}>
+      <span class="flex-1 min-w-0 truncate">{{ ch.label }}</span>
+      {% if ch.count %}<span class="ad-count">{{ ch.count|fa_num }}</span>{% endif %}
     </a>
-    <button type="button" @click="menuOpen = false" class="lg:hidden p-1 text-[#6B7380] focusable rounded" data-i18n-aria="common.close">
-      <i class="fa-solid fa-xmark"></i>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+</nav>
+
+<div class="ad-nav-foot">
+  <div class="ad-foot-row">
+    <span>زبان پنل</span>
+    <div class="vc-lang-switch" role="group" aria-label="زبان">
+      <button type="button" data-lang="fa" @click="setLang('fa')" :class="lang === 'fa' && 'is-active'" data-i18n="common.fa">FA</button>
+      <button type="button" data-lang="en" @click="setLang('en')" :class="lang === 'en' && 'is-active'" data-i18n="common.en">EN</button>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('admin.logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="ad-nav-item is-danger">
+      <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+      <span class="ad-nav-label">خروج از پنل</span>
     </button>
-  </div>
-
-  <nav class="admin-sidebar-scroll flex-1 space-y-0.5 pb-6">
-
-    <div class="vc-nav-label">صف کار</div>
-    <a href="{{ url_for('admin.dashboard') }}"
-       class="vc-nav-link {% if ep in ['admin.dashboard', 'admin.admin_root'] %}is-active{% endif %}">
-      <i class="fa-solid fa-gauge-high"></i><span>داشبورد</span>
-    </a>
-    <a href="{{ url_for('admin.express_listings') }}"
-       class="vc-nav-link {% if ep in ['admin.express_listings', 'admin.express', 'admin.edit_express_listing', 'admin.add_express_listing'] %}is-active{% endif %}">
-      <i class="fa-solid fa-building"></i><span>آگهی‌ها</span>
-    </a>
-    <a href="{{ url_for('admin.property_listings') }}"
-       class="vc-nav-link {% if ep in ['admin.property_listings', 'admin.property_listings_bulk'] %}is-active{% endif %}">
-      <i class="fa-solid fa-house-chimney"></i><span>آگهی‌ها - ملک</span>
-    </a>
-    <a href="{{ url_for('admin.express_partners') }}"
-       class="vc-nav-link {% if ep in ['admin.express_partners', 'admin.express_partner_detail', 'admin.express_partner_applications'] %}is-active{% endif %}">
-      <i class="fa-solid fa-user-group"></i><span>همکاران</span>
-      {% if control_badges and control_badges.partners %}<span class="vc-badge" data-i18n-number="{{ control_badges.partners }}">{{ control_badges.partners }}</span>{% endif %}
-    </a>
-    <a href="{{ url_for('admin.express_visit_requests') }}"
-       class="vc-nav-link {% if ep == 'admin.express_visit_requests' %}is-active{% endif %}">
-      <i class="fa-solid fa-route"></i><span>روند بازدید</span>
-      {% if control_badges and control_badges.visits %}<span class="vc-badge" data-i18n-number="{{ control_badges.visits }}">{{ control_badges.visits }}</span>{% endif %}
-    </a>
-    <a href="{{ url_for('admin.financial_withdrawals') }}"
-       class="vc-nav-link {% if ep == 'admin.financial_withdrawals' %}is-active{% endif %}">
-      <i class="fa-solid fa-money-bill-transfer"></i><span>برداشت‌ها</span>
-    </a>
-    <a href="{{ url_for('admin.reports_list') }}"
-       class="vc-nav-link {% if ep == 'admin.reports_list' %}is-active{% endif %}">
-      <i class="fa-solid fa-flag"></i><span>گزارش کاربران</span>
-    </a>
-
-    <div class="vc-nav-label">نمایش</div>
-    <a href="{{ url_for('admin.home_ads') }}"
-       class="vc-nav-link {% if ep == 'admin.home_ads' %}is-active{% endif %}">
-      <i class="fa-solid fa-images"></i><span>نوار آگهی خانه</span>
-    </a>
-    <a href="{{ url_for('admin.express_cities') }}"
-       class="vc-nav-link {% if ep == 'admin.express_cities' %}is-active{% endif %}">
-      <i class="fa-solid fa-city"></i><span>شهرهای فعال</span>
-    </a>
-    <a href="{{ url_for('admin.top_sellers') }}"
-       class="vc-nav-link {% if ep == 'admin.top_sellers' %}is-active{% endif %}">
-      <i class="fa-solid fa-trophy"></i><span>فروشنده‌های برتر</span>
-    </a>
-
-    <div class="vc-nav-label">مالی</div>
-    <a href="{{ url_for('admin.express_commissions') }}"
-       class="vc-nav-link {% if ep in ['admin.express_commissions', 'admin.express_commission_edit'] %}is-active{% endif %}">
-      <i class="fa-solid fa-wallet"></i><span>پورسانت‌ها</span>
-    </a>
-    <a href="{{ url_for('admin.zarinpal_plus') }}"
-       class="vc-nav-link {% if ep == 'admin.zarinpal_plus' %}is-active{% endif %}">
-      <i class="fa-solid fa-credit-card"></i><span>زرین‌پال / Plus</span>
-    </a>
-
-    <div class="vc-nav-label">ارتباط</div>
-    <a href="{{ url_for('admin.sms_notifications') }}"
-       class="vc-nav-link {% if ep in [
-         'admin.sms_notifications',
-         'admin.sms_colleagues', 'admin.sms_history', 'admin.sms_campaign',
-         'admin.sms_recipients', 'admin.sms_recipients_edit', 'admin.sms_recipients_upload',
-         'admin.sms_system_templates',
-         'admin.notifications_colleagues', 'admin.notifications_broadcast',
-         'admin.notifications_test'
-       ] %}is-active{% endif %}">
-      <i class="fa-solid fa-comment-sms"></i><span>پیامک و نوتیفیکیشن</span>
-    </a>
-
-    <div class="vc-nav-label">هوش مصنوعی</div>
-    <a href="{{ url_for('admin.ai_hub') }}"
-       class="vc-nav-link {% if ep in [
-         'admin.ai_hub', 'admin.ai_questions', 'admin.ai_model',
-         'admin.ai_console_dashboard', 'admin.ai_console_monitor',
-         'admin.ai_console_tools', 'admin.ai_console_memory',
-         'admin.ai_console_usage', 'admin.ai_console_conversations',
-         'admin.ai_console_analytics', 'admin.ai_console_errors',
-         'admin.ai_console_flags', 'admin.lawyer'
-       ] %}is-active{% endif %}">
-      <i class="fa-solid fa-robot"></i><span>هوش مصنوعی</span>
-      {% set _ai_alerts = (control_badges.pending if control_badges else 0) + (control_badges.errors if control_badges else 0) %}
-      {% if _ai_alerts %}<span class="vc-badge" data-i18n-number="{{ _ai_alerts }}">{{ _ai_alerts }}</span>{% endif %}
-    </a>
-
-    <div class="vc-nav-label">سیستم</div>
-    <a href="{{ url_for('admin.settings') }}"
-       class="vc-nav-link {% if ep in ['admin.settings', 'admin.settings_apk_upload', 'admin.settings_apk_sms_template'] %}is-active{% endif %}">
-      <i class="fa-solid fa-gear"></i><span>تنظیمات کلی</span>
-    </a>
-  </nav>
-
-  <div class="border-t border-line pt-3 px-1">
-    <form method="post" action="{{ url_for('admin.logout') }}" class="m-0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="vc-nav-link text-[#F87171] w-full cursor-pointer border-0 bg-transparent text-start font-inherit">
-        <i class="fa-solid fa-right-from-bracket"></i><span data-i18n="common.logout">خروج</span>
-      </button>
-    </form>
-  </div>
+  </form>
 </div>
