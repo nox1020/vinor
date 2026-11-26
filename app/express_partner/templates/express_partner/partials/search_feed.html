@@ -54,12 +54,14 @@
   #vinorSearchPage .vn-search-sticky.is-scrolled {
     border-bottom: 1px solid var(--vn-search-border);
   }
+  /* هدر خانه به سبک دیوار: یک نوار جمع‌وجور چسبان؛ «قرص» جستجو (ذره‌بین، ورودی، جداکنندهٔ عمودی، شهر)
+     + یک آیکون اعلان؛ زیرش ردیف چیپ‌های فیلتر بدون نوار اسکرول. هم‌تراز با fragment_search.xml اپ. */
   #vinorSearchPage .vn-search-head {
     display: flex;
     align-items: center;
     gap: 8px;
     height: 56px;
-    padding: 0 16px;
+    padding: 0 12px 0 8px;
   }
   #vinorSearchPage .vn-search-field {
     flex: 1;
@@ -67,51 +69,61 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 48px;
-    padding-inline: 12px 4px;
-    border-radius: 12px;
+    height: 44px;
+    padding-inline: 14px 6px;
+    border-radius: 999px;
     background: var(--vn-search-raised);
-    border: 1px solid var(--vn-search-border);
+    border: 1px solid transparent;
     color: var(--vn-search-muted);
+    transition: border-color .15s ease;
   }
   #vinorSearchPage .vn-search-field:focus-within { border-color: var(--vn-search-focus); }
-  #vinorSearchPage .vn-search-field svg { width: 20px; height: 20px; flex-shrink: 0; }
+  #vinorSearchPage .vn-search-field > svg { width: 20px; height: 20px; flex-shrink: 0; }
   #vinorSearchPage .vn-search-field input {
     flex: 1;
     min-width: 0;
-    height: 46px;
+    height: 42px;
     border: 0;
     outline: none;
     background: transparent;
     color: var(--vn-search-text);
     font: inherit;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 400;
   }
   #vinorSearchPage .vn-search-field input::placeholder { color: var(--vn-search-muted); }
+  #vinorSearchPage .vn-search-field input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
   #vinorSearchPage .vn-search-x {
     flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    margin-inline: -8px;
+    width: 32px;
+    height: 32px;
     border: 0;
     border-radius: 999px;
     background: transparent;
-    color: var(--vn-search-text);
+    color: var(--vn-search-muted);
     font: inherit;
-    font-size: 22px;
+    font-size: 20px;
     line-height: 1;
     cursor: pointer;
   }
   #vinorSearchPage .vn-search-x[hidden] { display: none; }
+  #vinorSearchPage .vn-search-divider {
+    flex-shrink: 0;
+    width: 1px;
+    height: 20px;
+    background: rgba(255,255,255,.14);
+  }
   #vinorSearchPage .vn-search-city {
     flex-shrink: 0;
-    min-width: 48px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 42%;
     height: 36px;
-    padding: 0 10px;
+    padding: 0 8px;
+    border: 0;
     border-radius: 999px;
-    border: 1px solid var(--vn-search-border);
-    background: var(--vn-search-raised);
+    background: transparent;
     color: var(--vn-search-text);
     font: inherit;
     font-size: 13px;
@@ -119,26 +131,41 @@
     white-space: nowrap;
     cursor: pointer;
   }
-  #vinorSearchPage .vn-search-city.is-active {
-    background: var(--vn-search-accent);
-    border-color: var(--vn-search-accent);
-    color: var(--vn-search-on);
+  #vinorSearchPage .vn-search-city svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--vn-search-muted); }
+  #vinorSearchPage .vn-search-city span { overflow: hidden; text-overflow: ellipsis; }
+  #vinorSearchPage .vn-search-city.is-active,
+  #vinorSearchPage .vn-search-city.is-active svg { color: var(--vn-search-accent); }
+  #vinorSearchPage .vn-search-city:active { background: rgba(255,255,255,.06); }
+  #vinorSearchPage .vn-search-bell {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    color: var(--vn-search-text);
+    text-decoration: none;
   }
+  #vinorSearchPage .vn-search-bell:active { background: var(--vn-search-raised); }
+  #vinorSearchPage .vn-search-bell svg { width: 22px; height: 22px; }
   #vinorSearchPage .vn-search-chips {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 48px;
+    height: 44px;
     overflow-x: auto;
-    padding: 0 16px;
+    overflow-y: hidden;
+    padding: 0 12px 4px;
     scrollbar-width: none;
+    -ms-overflow-style: none;
   }
-  #vinorSearchPage .vn-search-chips::-webkit-scrollbar { display: none; }
+  #vinorSearchPage .vn-search-chips::-webkit-scrollbar { display: none; width: 0; height: 0; }
   #vinorSearchPage .vn-search-chip {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
-    min-height: 48px;
+    min-height: 44px;
     padding: 6px 0;
     border: 0;
     background: transparent;
@@ -151,16 +178,18 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 36px;
+    height: 32px;
     padding: 0 12px;
     border-radius: 999px;
-    border: 1px solid var(--vn-search-border);
-    background: var(--vn-search-raised);
+    border: 1px solid rgba(255,255,255,.14);
+    background: transparent;
     color: var(--vn-search-text);
     font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
   }
+  #vinorSearchPage .vn-search-chip__face svg { width: 14px; height: 14px; color: var(--vn-search-muted); }
+  #vinorSearchPage .vn-search-chip.is-active .vn-search-chip__face svg { color: currentColor; }
   #vinorSearchPage .vn-search-chip.is-active .vn-search-chip__face {
     background: var(--vn-search-accent);
     border-color: var(--vn-search-accent);
@@ -465,8 +494,8 @@
 <div id="vinorSearchPage" class="partner-page-scroll-pad" data-vinor-search-page>
   <div class="vn-search-shell">
     <div id="vinorSearchSticky" class="vn-search-sticky">
-      <div class="vn-search-head">
-        <div class="vn-search-field" data-search-field>
+      <div class="vn-search-head" data-vn-home-header>
+        <div class="vn-search-field" data-search-field role="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
             <circle cx="11" cy="11" r="7"></circle>
             <path d="M20 20l-3.5-3.5" stroke-linecap="round"></path>
@@ -475,11 +504,17 @@
                  placeholder="جستجو در همه آگهی‌ها" autocomplete="off" aria-label="جستجو در آگهی‌ها"
                  value="{{ search_query.q }}">
           <button type="button" id="vinorSearchClear" class="vn-search-x" aria-label="پاک کردن جستجو"{% if not search_query.q %} hidden{% endif %}>×</button>
+          <span class="vn-search-divider" aria-hidden="true"></span>
           <button type="button" id="searchCityTrigger" class="vn-search-city{% if search_query.city %} is-active{% endif %}" data-city-picker-open="searchCityPicker" aria-haspopup="dialog" aria-label="{{ ('شهر، انتخاب‌شده: ' ~ search_query.city) if search_query.city else 'همه استان‌ها' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
             <span id="searchCityLabel">{{ search_query.city or 'همه استان‌ها' }}</span>
-            <span aria-hidden="true"> ▾</span>
           </button>
         </div>
+        {% if session.get('user_phone') %}
+        <a class="vn-search-bell" href="{{ url_for('express_partner.notifications') }}" data-vinor-express-nav aria-label="اعلان‌ها" data-home-bell>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+        </a>
+        {% endif %}
       </div>
       <div class="vn-search-chips" role="group" aria-label="فیلترها">
         {% if search_query.has_filters %}
@@ -488,16 +523,16 @@
         </a>
         {% endif %}
         <button type="button" class="vn-search-chip{% if search_query.sort_on %} is-active{% endif %}" data-open-sheet="sort" aria-pressed="{{ 'true' if search_query.sort_on else 'false' }}" aria-label="مرتب‌سازی: {{ search_query.sort_label }}">
-          <span class="vn-search-chip__face">{{ search_query.sort_label }} <span aria-hidden="true">▾</span></span>
+          <span class="vn-search-chip__face">{{ search_query.sort_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
         </button>
         <button type="button" class="vn-search-chip{% if search_query.district_on %} is-active{% endif %}" data-open-sheet="district" aria-pressed="{{ 'true' if search_query.district_on else 'false' }}">
-          <span class="vn-search-chip__face">{{ search_query.district_label }} <span aria-hidden="true">▾</span></span>
+          <span class="vn-search-chip__face">{{ search_query.district_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
         </button>
         <button type="button" class="vn-search-chip{% if search_query.price_on %} is-active{% endif %}" data-open-sheet="price" aria-pressed="{{ 'true' if search_query.price_on else 'false' }}" aria-label="{{ search_query.price_aria }}">
-          <span class="vn-search-chip__face">{{ search_query.price_label }} <span aria-hidden="true">▾</span></span>
+          <span class="vn-search-chip__face">{{ search_query.price_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
         </button>
         <button type="button" class="vn-search-chip{% if search_query.area_on %} is-active{% endif %}" data-open-sheet="area" aria-pressed="{{ 'true' if search_query.area_on else 'false' }}" aria-label="{{ search_query.area_aria }}">
-          <span class="vn-search-chip__face">{{ search_query.area_label }} <span aria-hidden="true">▾</span></span>
+          <span class="vn-search-chip__face">{{ search_query.area_label }} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
         </button>
       </div>
     </div>
