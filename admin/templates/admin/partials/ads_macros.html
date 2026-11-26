@@ -1,27 +1,10 @@
 {# templates/admin/partials/ads_macros.html #}
 {% macro render_tabs(active) -%}
-  <div class="flex gap-4 mb-6 border-b pb-2 text-sm sm:text-base">
-    <a href="{{ url_for('admin.pending_lands') }}"
-       class="pb-2 -mb-[1px] border-b-2 transition
-              {{ 'text-vinor-700 border-vinor-700 dark:text-vinor-300 dark:border-vinor-300 font-bold' if active=='pending'
-                 else 'text-gray-600 hover:text-vinor-700 dark:text-gray-300 dark:hover:text-vinor-300 border-transparent' }}">
-      در انتظار تأیید
-    </a>
-
-    <a href="{{ url_for('admin.approved_lands') }}"
-       class="pb-2 -mb-[1px] border-b-2 transition
-              {{ 'text-vinor-700 border-vinor-700 dark:text-vinor-300 dark:border-vinor-300 font-bold' if active=='approved'
-                 else 'text-gray-600 hover:text-vinor-700 dark:text-gray-300 dark:hover:text-vinor-300 border-transparent' }}">
-      تأیید شده
-    </a>
-
-    <a href="{{ url_for('admin.rejected_lands') }}"
-       class="pb-2 -mb-[1px] border-b-2 transition
-              {{ 'text-vinor-700 border-vinor-700 dark:text-vinor-300 dark:border-vinor-300 font-bold' if active=='rejected'
-                 else 'text-gray-600 hover:text-vinor-700 dark:text-gray-300 dark:hover:text-vinor-300 border-transparent' }}">
-      رد شده / نیاز به اصلاح
-    </a>
-  </div>
+  <nav class="ad-tabs mb-4" aria-label="وضعیت آگهی">
+    <a href="{{ url_for('admin.pending_lands') }}" class="ad-tab{{ ' is-active' if active=='pending' }}"{% if active=='pending' %} aria-current="page"{% endif %}>در انتظار تأیید</a>
+    <a href="{{ url_for('admin.approved_lands') }}" class="ad-tab{{ ' is-active' if active=='approved' }}"{% if active=='approved' %} aria-current="page"{% endif %}>تأیید شده</a>
+    <a href="{{ url_for('admin.rejected_lands') }}" class="ad-tab{{ ' is-active' if active=='rejected' }}"{% if active=='rejected' %} aria-current="page"{% endif %}>رد شده / نیاز به اصلاح</a>
+  </nav>
 {%- endmacro %}
 
 
@@ -100,7 +83,7 @@
                     <form method="post" action="{{ url_for('admin.approve_land', code=land.code) }}" class="contents" x-data>
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit"
-                              @click.prevent="if (confirm('آگهی «{{ land.title }}» تأیید شود؟')) $el.closest('form').submit()"
+                              data-confirm="آگهی «{{ land.title }}» تأیید شود؟"
                               class="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-md">
                         <i class="fa-solid fa-check"></i> تأیید
                       </button>
@@ -108,7 +91,7 @@
                     <form method="post" action="{{ url_for('admin.reject_land', code=land.code) }}" class="contents" x-data>
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit"
-                              @click.prevent="if (confirm('آگهی «{{ land.title }}» رد شود؟')) $el.closest('form').submit()"
+                              data-confirm="آگهی «{{ land.title }}» رد شود؟"
                               class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md">
                         <i class="fa-solid fa-xmark"></i> رد
                       </button>
@@ -126,7 +109,7 @@
                     <form method="post" action="{{ url_for('admin.reject_land', code=land.code) }}" class="contents" x-data>
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit"
-                              @click.prevent="if (confirm('آگهی «{{ land.title }}» به «رد شده/نیاز به اصلاح» منتقل شود؟')) $el.closest('form').submit()"
+                              data-confirm="آگهی «{{ land.title }}» به «رد شده/نیاز به اصلاح» منتقل شود؟"
                               class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md">
                         <i class="fa-solid fa-xmark"></i> رد/نیاز به اصلاح
                       </button>
@@ -144,7 +127,7 @@
                     <form method="post" action="{{ url_for('admin.approve_land', code=land.code) }}" class="contents" x-data>
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit"
-                              @click.prevent="if (confirm('آگهی «{{ land.title }}» تأیید شود؟')) $el.closest('form').submit()"
+                              data-confirm="آگهی «{{ land.title }}» تأیید شود؟"
                               class="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-md">
                         <i class="fa-solid fa-check"></i> تأیید
                       </button>

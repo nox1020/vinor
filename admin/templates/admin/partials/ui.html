@@ -1,0 +1,59 @@
+{# Shared admin UI components (design system: app/static/admin/vinor-control.css). #}
+
+{% macro page_header(title, subtitle='', crumb='') %}
+<header class="ad-page-h">
+  <div class="min-w-0">
+    {% if crumb %}<div class="ad-crumb">{{ crumb }}</div>{% endif %}
+    <h1>{{ title }}</h1>
+    {% if subtitle %}<p>{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if caller %}<div class="ad-page-actions">{{ caller() }}</div>{% endif %}
+</header>
+{% endmacro %}
+
+{% macro tab(href, label, count=None, active=False, hot=False) %}
+<a href="{{ href }}" class="ad-tab {% if active %}is-active{% endif %} {% if hot and count %}is-hot{% endif %}" {% if active %}aria-current="page"{% endif %}>
+  {{ label }}{% if count is not none %}<span class="ad-tab-n">{{ count|fa_num }}</span>{% endif %}
+</a>
+{% endmacro %}
+
+{% macro stat(label, value, href='', tone='', hint='', icon='', active=False) %}
+{% if href %}<a href="{{ href }}"{% else %}<div{% endif %} class="ad-stat {% if tone %}is-{{ tone }}{% endif %} {% if active %}is-active{% endif %}">
+  <span class="ad-stat-label">{% if icon %}<i class="fa-solid {{ icon }}"></i>{% endif %}{{ label }}</span>
+  <span class="ad-stat-value">{{ value }}</span>
+  {% if hint %}<span class="ad-stat-hint">{{ hint }}</span>{% endif %}
+{% if href %}</a>{% else %}</div>{% endif %}
+{% endmacro %}
+
+{% macro pill(label, tone='') %}<span class="ad-pill {% if tone %}is-{{ tone }}{% endif %}">{{ label }}</span>{% endmacro %}
+
+{% macro empty(title, hint='', icon='fa-inbox') %}
+<div class="ad-empty">
+  <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+  <b>{{ title }}</b>
+  {% if hint %}<span>{{ hint }}</span>{% endif %}
+  {% if caller %}{{ caller() }}{% endif %}
+</div>
+{% endmacro %}
+
+{% macro search(action, q='', placeholder='جستجو…', hidden={}) %}
+<form method="get" action="{{ action }}" class="ad-search" role="search">
+  {% for k, v in hidden.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="{{ placeholder }}" autocomplete="off" aria-label="{{ placeholder }}">
+</form>
+{% endmacro %}
+
+{% macro pager(pagination, endpoint, args={}) %}
+{% if pagination and pagination.pages and pagination.pages > 1 %}
+<nav class="ad-pager" aria-label="صفحه‌بندی">
+  {% if pagination.page > 1 %}
+  <a class="ad-btn ad-btn-ghost ad-btn-sm" href="{{ url_for(endpoint, page=pagination.page - 1, **args) }}"><i class="fa-solid fa-angle-right"></i> قبلی</a>
+  {% endif %}
+  <span>صفحهٔ {{ pagination.page|fa_num }} از {{ pagination.pages|fa_num }}</span>
+  {% if pagination.page < pagination.pages %}
+  <a class="ad-btn ad-btn-ghost ad-btn-sm" href="{{ url_for(endpoint, page=pagination.page + 1, **args) }}">بعدی <i class="fa-solid fa-angle-left"></i></a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

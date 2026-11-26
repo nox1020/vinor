@@ -56,7 +56,7 @@
         {% for city in cities %}
           <div class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
             <span class="text-sm text-gray-900 dark:text-white font-medium">{{ city }}</span>
-            <form method="post" onsubmit="return confirm('شهر {{ city }} حذف شود؟');" class="inline">
+            <form method="post" data-confirm="شهر {{ city }} حذف شود؟" class="inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="action" value="delete">
               <input type="hidden" name="city" value="{{ city }}">

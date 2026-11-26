@@ -1,95 +1,13 @@
-<!DOCTYPE html>
-<html lang="fa" dir="rtl"
-      x-data="{ darkMode: false, sidebarOpen: true }"
-      :class="{ 'dark': darkMode }"
-      x-init="
-        darkMode = localStorage.getItem('darkMode') === 'true';
-        if (window.innerWidth < 1024) sidebarOpen = false;
-      ">
-<head>
-  <meta charset="UTF-8">
-  <title>تأیید شده | پنل مدیریت وینور – بازار آنلاین ملک</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: { vazir: ["Vazir", "ui-sans-serif", "system-ui"] },
-          colors: {
-            vinor: {50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#0ea5e9',700:'#0284c7',800:'#1e40af',900:'#1e3a8a'}
-          },
-          boxShadow: { card: '0 6px 24px rgba(2,132,199,.12)' }
-        }
-      }
-    };
-  </script>
-  <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-solid-900.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-regular-400.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="preload" as="font" href="{{ url_for('static', filename='vendor/fontawesome/webfonts/fa-brands-400.woff2') }}" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-  <style> body { font-family: 'Vazir', sans-serif; } </style>
-  <link rel="stylesheet" href="{{ 'css/vinor-hide-scrollbars.css'|static_version }}">
-</head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen flex transition-all duration-300">
-
-  {% include 'admin/partials/sidebar.html' %}
-  <div class="fixed inset-0 bg-black/40 lg:hidden z-10" x-show="sidebarOpen" x-transition.opacity @click="sidebarOpen=false"></div>
-
-  <main class="flex-1 p-4 sm:p-6 lg:pr-72 w-full relative">
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-xl sm:text-2xl font-bold text-vinor-700 dark:text-vinor-300 flex items-center gap-2">
-        <i class="fa-solid fa-circle-check"></i> آگهی‌ها – تأیید شده
-      </h1>
-      <div class="flex items-center gap-3">
-        <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
-                class="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 shadow hover:shadow-md transition" aria-label="تغییر حالت">
-          <i class="fa-solid text-gray-600 dark:text-yellow-300 text-lg" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
-        </button>
-        <button @click="sidebarOpen = !sidebarOpen" class="lg:hidden w-10 h-10 rounded-xl bg-white dark:bg-gray-800 shadow hover:shadow-md transition" aria-label="منو">
-          <i class="fa-solid fa-bars text-gray-600 dark:text-gray-200 text-lg"></i>
-        </button>
-      </div>
-    </div>
-
-    {% from 'admin/partials/ads_macros.html' import render_tabs, render_table %}
-    {{ render_tabs('approved') }}
-
-    {% with messages = get_flashed_messages(with_categories=True) %}
-      {% if messages %}
-        <div class="space-y-3 mb-5">
-          {% for category, msg in messages %}
-            <div class="text-sm rounded-lg px-3 py-2 shadow-card
-              {% if category in ['success'] %}bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-200
-              {% elif category in ['warning'] %}bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-200
-              {% elif category in ['info'] %}bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200
-              {% else %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200{% endif %}">
-              {{ msg }}
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
-    {# راهنمای کوچک نشان اعتبار (legend) #}
-    <div class="mb-4 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-      <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-        <i class="fa-solid fa-infinity"></i> نامحدود
-      </span>
-      <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200">
-        <i class="fa-solid fa-hourglass-end"></i> امروز منقضی می‌شود
-      </span>
-      <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
-        <i class="fa-solid fa-clock"></i> N روز مانده
-      </span>
-    </div>
-
-    {{ render_table(lands, 'approved') }}
-  </main>
-
-  <script src="{{ url_for('static', filename='vendor/alpine/alpine-3.14.1.min.js') }}" defer></script>
-</body>
-</html>
+{% extends 'admin/base_admin.html' %}
+{% from 'admin/partials/ui.html' import page_header, pager %}
+{% from 'admin/partials/ads_macros.html' import render_tabs, render_table %}
+{% block title %}آگهی‌ها – تأیید شده | پنل وینور{% endblock %}
+{% block page_title %}آگهی‌ها – تأیید شده{% endblock %}
+{% block content %}
+{{ page_header('آگهی‌ها – تأیید شده', 'نمای قدیمی فایل‌های lands.json؛ برای صف اصلی تأیید از «آگهی‌ها / فایل‌ها» استفاده کنید.') }}
+{{ render_tabs('approved') }}
+<div class="ad-card ad-table-wrap">
+{{ render_table(lands, 'approved') }}
+</div>
+{{ pager(pagination, 'admin.approved_lands') }}
+{% endblock %}

@@ -580,7 +580,7 @@
         <form method="post"
               action="{{ url_for('admin.express_partner_send_message', phone=person.phone) }}"
               class="space-y-3"
-              onsubmit="return confirm('پیام به {{ person.phone }} ارسال شود؟');">
+              data-confirm="پیام به {{ person.phone }} ارسال شود؟">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="q" value="{{ back_q or '' }}">
           <input type="hidden" name="filter" value="{{ back_filter or 'all' }}">

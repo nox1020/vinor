@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr" class="dark" data-i18n-page-title="login.browser_title">
+<html lang="fa" dir="rtl" class="dark" data-i18n-page-title="login.browser_title">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Vinor Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>ورود مدیر | پنل وینور</title>
   <meta name="description" content="" data-i18n="meta.description" />
   <meta name="vinor-page-title-key" content="login.browser_title" />
   <script>
@@ -13,92 +14,66 @@
         location.replace(location.href.replace(/^http:/i, 'https:'));
       }
       try {
-        var k = 'vinor.control.lang';
-        var v = localStorage.getItem(k);
-        if (v !== 'fa' && v !== 'en') {
-          var nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
-          v = String(nav).toLowerCase().indexOf('fa') === 0 ? 'fa' : 'en';
-        }
+        var v = localStorage.getItem('vinor.control.lang') === 'en' ? 'en' : 'fa';
         document.documentElement.lang = v;
         document.documentElement.dir = v === 'fa' ? 'rtl' : 'ltr';
-        document.documentElement.classList.add(v === 'fa' ? 'lang-fa' : 'lang-en');
+        document.documentElement.classList.add('lang-' + v);
       } catch (e) {}
     })();
   </script>
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
-  <script src="{{ url_for('static', filename='vendor/tailwind/tailwindcdn-3.4.17.js') }}"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts/vazirmatn.css') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='admin/vinor-control.css') }}">
-  <script src="{{ url_for('static', filename='admin/vinor-i18n.js') }}"></script>
+  <link rel="stylesheet" href="{{ 'admin/vinor-control.css'|static_version }}">
   <link rel="stylesheet" href="{{ 'css/vinor-hide-scrollbars.css'|static_version }}">
+  <script src="{{ url_for('static', filename='admin/vinor-i18n.js') }}"></script>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 pb-[env(safe-area-inset-bottom,0px)] vc-body" style="background:var(--vc-void)">
-
-  <div class="w-full max-w-md">
-    <div class="flex justify-end mb-3">
-      <div class="vc-lang-switch" id="loginLangSwitch">
-        <button type="button" data-lang="fa" data-i18n="common.fa">FA</button>
+<body class="ad-login vc-body">
+  <main class="ad-login-wrap">
+    <div class="ad-login-top">
+      <div class="vc-lang-switch" id="loginLangSwitch" role="group" aria-label="زبان">
+        <button type="button" data-lang="fa" data-i18n="common.fa">فا</button>
         <button type="button" data-lang="en" data-i18n="common.en">EN</button>
       </div>
     </div>
 
-    <form method="POST" action="{{ url_for('admin.login') }}"
-          class="rounded-[12px] border p-6 space-y-4" style="background:var(--vc-panel);border-color:var(--vc-line)">
-
-      <div class="text-center space-y-3">
-        <img src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="72" height="72" class="mx-auto rounded-xl object-cover" decoding="async">
-        <div>
-          <h1 class="text-xl font-bold tracking-tight text-white" data-i18n="login.title"></h1>
-          <p class="text-xs mt-1 text-[#6B7380]" data-i18n="login.tagline"></p>
-        </div>
+    <form method="POST" action="{{ url_for('admin.login') }}" class="ad-login-card" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="ad-login-brand">
+        <img src="{{ url_for('static', filename='icons/icon-96.png') }}" alt="" width="56" height="56" decoding="async">
+        <h1 data-i18n="login.title">پنل وینور</h1>
+        <p data-i18n="login.tagline">ورود مدیر با کد پیامکی</p>
       </div>
 
       {% with messages = get_flashed_messages(with_categories=True) %}
         {% if messages %}
-          <div class="space-y-2">
+          <div class="ad-flash">
             {% for category, msg in messages %}
               {% if 'کد ورود به شماره' not in (msg|string) and 'code sent' not in (msg|string|lower) %}
-              <div class="rounded-lg px-4 py-3 border flex items-start gap-2 text-sm"
-                   style="border-color:var(--vc-line);background:var(--vc-ink);color:{% if category in ['success','ok'] %}var(--vc-ok){% elif category == 'warning' %}var(--vc-warn){% else %}var(--vc-danger){% endif %}">
-                <span class="flex-1">{{ msg }}</span>
-              </div>
+              <div class="ad-flash-item is-{{ "ok" if category in ["success","ok"] else ("warn" if category == "warning" else "danger") }}" role="status">{{ msg }}</div>
               {% endif %}
             {% endfor %}
           </div>
         {% endif %}
       {% endwith %}
 
-      <div>
-        <label class="block text-sm font-medium mb-2 text-[#A7B0BE]" data-i18n="login.otp_label"></label>
-        <input name="otp_code" type="text" inputmode="numeric" dir="ltr"
-               data-i18n-placeholder="login.otp_placeholder"
-               class="w-full px-4 py-3 rounded-lg border focusable"
-               style="background:var(--vc-panel-2);border-color:var(--vc-line);color:var(--vc-text)">
-      </div>
-      <div>
-        <button type="submit" name="action" value="verify"
-                class="w-full px-4 py-3 font-semibold rounded-lg transition-colors focusable"
-                style="background:var(--vc-signal);color:#042f2e"
-                data-i18n="login.verify"></button>
-      </div>
-      <div class="rounded-lg border px-3 py-2 text-xs text-center" style="border-color:var(--vc-line);color:var(--vc-text-2)">
-        <span id="otpCooldownText" class="font-semibold" style="color:var(--vc-signal)"></span>
-      </div>
+      <label class="ad-field">
+        <span data-i18n="login.otp_label">کد ورود پیامکی</span>
+        <input name="otp_code" type="text" inputmode="numeric" autocomplete="one-time-code" dir="ltr" autofocus
+               placeholder="مثلاً ۱۲۳۴۵" data-i18n-placeholder="login.otp_placeholder"
+               class="ad-input ad-otp-input">
+      </label>
+
+      <button type="submit" name="action" value="verify" class="ad-btn ad-btn-primary ad-btn-block" data-i18n="login.verify">تأیید کد و ورود</button>
+
+      <p class="ad-login-timer"><span id="otpCooldownText"></span></p>
       <div id="resendWrap" class="hidden">
-        <button type="submit" name="action" value="send"
-                class="w-full px-4 py-3 font-semibold rounded-lg focusable"
-                style="background:var(--vc-panel-2);border:1px solid var(--vc-line);color:var(--vc-text)"
-                data-i18n="login.resend"></button>
+        <button type="submit" name="action" value="send" class="ad-btn ad-btn-ghost ad-btn-block" data-i18n="login.resend">ارسال مجدد کد</button>
       </div>
     </form>
-  </div>
+  </main>
 
   <script>
     (function () {
@@ -108,7 +83,7 @@
       var resendWrap = document.getElementById('resendWrap');
 
       function paintLangButtons() {
-        var lang = VinorI18n.getLanguage();
+        var lang = window.VinorI18n ? VinorI18n.getLanguage() : 'fa';
         document.querySelectorAll('#loginLangSwitch button').forEach(function (btn) {
           btn.classList.toggle('is-active', btn.getAttribute('data-lang') === lang);
         });
@@ -117,7 +92,7 @@
       function renderTimer() {
         if (!cooldownText || !window.t) return;
         if (remaining > 0) {
-          cooldownText.textContent = t('login.resend_in', { seconds: formatNumber ? formatNumber(remaining, { maximumFractionDigits: 0 }) : remaining });
+          cooldownText.textContent = t('login.resend_in', { seconds: window.formatNumber ? formatNumber(remaining, { maximumFractionDigits: 0 }) : remaining });
           resendWrap && resendWrap.classList.add('hidden');
           remaining -= 1;
         } else {
@@ -126,10 +101,12 @@
         }
       }
 
-      VinorI18n.init({ baseUrl: base }).then(function () {
-        paintLangButtons();
-        renderTimer();
-      });
+      if (window.VinorI18n) {
+        VinorI18n.init({ baseUrl: base }).then(function () { paintLangButtons(); renderTimer(); });
+      } else if (resendWrap) {
+        resendWrap.classList.remove('hidden');
+      }
+      paintLangButtons();
 
       document.querySelectorAll('#loginLangSwitch button').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -143,8 +120,8 @@
       var otpInput = document.querySelector('input[name="otp_code"]');
       form && form.addEventListener('submit', function (e) {
         var action = (e.submitter && e.submitter.value || '').toLowerCase();
-        if (action === 'send') otpInput && otpInput.removeAttribute('required');
-        else otpInput && otpInput.setAttribute('required', 'required');
+        if (action === 'send') { otpInput && otpInput.removeAttribute('required'); return; }
+        if (otpInput && !otpInput.value.trim()) { e.preventDefault(); otpInput.focus(); }
       });
     })();
   </script>

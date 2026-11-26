@@ -29,6 +29,8 @@ try:
     from . import control_routes  # Vinor Control presentation hubs
 except Exception:
     pass
+from . import nav  # simplified admin navigation + pending-count badges
+from . import ui_filters  # admin_dt / admin_ago / fa_num template filters
 
 __all__ = ["admin_bp"]
 

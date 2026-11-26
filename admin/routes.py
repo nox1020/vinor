@@ -145,10 +145,10 @@ def _ad_owner_id(ad: Dict[str, Any]) -> Optional[str]:
 def _safe_action_url(ad_code: str) -> str:
     """اگر روت جزئیات آگهی نبود، به آگهی‌های من برگرد."""
     try:
-        return url_for('main.land_detail', code=ad_code)
+        return url_for('main.express_detail', code=ad_code)
     except Exception:
         try:
-            return url_for('main.my_lands')
+            return url_for('main.legacy_my_lands')
         except Exception:
             return '/my-lands'
 
@@ -215,13 +215,13 @@ def notify_status_change(ad: Dict[str, Any], status: str, reason: Optional[str] 
             body="برای تمدید از بخش آگهی‌های من اقدام کنید.",
             ntype="info",
             ad_id=code,
-            action_url=url_for('main.my_lands')
+            action_url=url_for('main.legacy_my_lands')
         )
         try:
             payload = {
                 'title': 'آگهی شما منقضی شد',
                 'body': 'برای تمدید از بخش آگهی‌های من اقدام کنید.',
-                'url': url_for('main.my_lands'),
+                'url': url_for('main.legacy_my_lands'),
                 'icon': '/static/icons/icon-192.png',
                 'badge': '/static/icons/monochrome-192.png',
                 'tag': 'vinor-ad-expired'
@@ -890,6 +890,15 @@ def cleanup_expired_ads() -> None:
 # -----------------------------------------------------------------------------
 # دکوراتور لاگین
 # -----------------------------------------------------------------------------
+def _arg_int(name: str, default: int, *, lo: int = 1, hi: int = 500) -> int:
+    """Query-string int with bounds; bad input falls back instead of a 500."""
+    try:
+        val = int(str(request.args.get(name, default) or default).strip())
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, val))
+
+
 def login_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
@@ -1118,161 +1127,6 @@ def select_portal():
     return render_template('admin/select_portal.html')
 
 
-def _dashboard_overview() -> dict[str, Any]:
-    """آمار خلاصه برای داشبورد ادمین (fail-open)."""
-    overview: dict[str, Any] = {
-        "partners_pending": 0,
-        "lands_pending": 0,
-        "visits_pending": 0,
-        "withdrawals_pending": 0,
-        "ai_pending": 0,
-        "ai_errors": 0,
-        "quick_links": [
-            {"label": "فایل‌ها", "href": "admin.express_listings", "icon": "fa-building"},
-            {"label": "همکاران", "href": "admin.express_partners", "icon": "fa-user-group"},
-            {"label": "بازدیدها", "href": "admin.express_visit_requests", "icon": "fa-route"},
-            {"label": "برداشت‌ها", "href": "admin.financial_withdrawals", "icon": "fa-money-bill-transfer"},
-            {"label": "نوار آگهی", "href": "admin.home_ads", "icon": "fa-images"},
-            {"label": "پیامک و نوتیفیکیشن", "href": "admin.sms_notifications", "icon": "fa-comment-sms"},
-        ],
-        "work_queues": [
-            {
-                "key": "partners",
-                "label": "همکار معلق",
-                "hint": "درخواست همکاری در انتظار بررسی",
-                "href": "admin.express_partners",
-                "url_kwargs": {"filter": "pending"},
-                "icon": "fa-user-group",
-                "count_key": "partners_pending",
-            },
-            {
-                "key": "lands",
-                "label": "فایل معلق",
-                "hint": "آگهی اکسپرس منتظر تأیید",
-                "href": "admin.express_listings",
-                "icon": "fa-building",
-                "count_key": "lands_pending",
-            },
-            {
-                "key": "visits",
-                "label": "بازدید معلق",
-                "hint": "روند بازدید نیازمند اقدام",
-                "href": "admin.express_visit_requests",
-                "icon": "fa-route",
-                "count_key": "visits_pending",
-            },
-            {
-                "key": "withdrawals",
-                "label": "برداشت معلق",
-                "hint": "درخواست تسویه همکاران",
-                "href": "admin.financial_withdrawals",
-                "url_kwargs": {"filter": "pending"},
-                "icon": "fa-money-bill-transfer",
-                "count_key": "withdrawals_pending",
-            },
-        ],
-        "module_groups": [
-            {
-                "title": "عملیات",
-                "links": [
-                    {"label": "آگهی‌ها", "href": "admin.express_listings", "icon": "fa-building"},
-                    {"label": "آگهی‌ها - ملک", "href": "admin.property_listings", "icon": "fa-house-chimney"},
-                    {"label": "همکاران", "href": "admin.express_partners", "icon": "fa-user-group"},
-                    {"label": "روند بازدید", "href": "admin.express_visit_requests", "icon": "fa-route"},
-                    {"label": "گزارش کاربران", "href": "admin.reports_list", "icon": "fa-flag"},
-                ],
-            },
-            {
-                "title": "نمایش",
-                "links": [
-                    {"label": "نوار آگهی خانه", "href": "admin.home_ads", "icon": "fa-images"},
-                    {"label": "شهرهای فعال", "href": "admin.express_cities", "icon": "fa-city"},
-                    {"label": "فروشنده‌های برتر", "href": "admin.top_sellers", "icon": "fa-trophy"},
-                ],
-            },
-            {
-                "title": "مالی",
-                "links": [
-                    {"label": "پورسانت‌ها", "href": "admin.express_commissions", "icon": "fa-wallet"},
-                    {"label": "برداشت‌ها", "href": "admin.financial_withdrawals", "icon": "fa-money-bill-transfer"},
-                    {"label": "زرین‌پال / Plus", "href": "admin.zarinpal_plus", "icon": "fa-credit-card"},
-                ],
-            },
-            {
-                "title": "ارتباط و سیستم",
-                "links": [
-                    {"label": "پیامک و نوتیفیکیشن", "href": "admin.sms_notifications", "icon": "fa-comment-sms"},
-                    {"label": "هوش مصنوعی", "href": "admin.ai_hub", "icon": "fa-robot"},
-                    {"label": "تنظیمات", "href": "admin.settings", "icon": "fa-gear"},
-                ],
-            },
-        ],
-    }
-    try:
-        from app.utils.storage import load_express_partner_apps
-
-        apps = load_express_partner_apps() or []
-        overview["partners_pending"] = sum(
-            1
-            for a in apps
-            if isinstance(a, dict)
-            and str(a.get("status") or "").strip().lower()
-            in ("pending", "under_review", "waiting", "review")
-        )
-    except Exception:
-        pass
-    try:
-        lands = load_json(_lands_path())
-        express = [
-            l
-            for l in (lands if isinstance(lands, list) else [])
-            if isinstance(l, dict) and l.get("is_express")
-        ]
-        p, _a, _r = counts_by_status(express)
-        overview["lands_pending"] = int(p or 0)
-    except Exception:
-        pass
-    try:
-        from app.utils.storage import load_express_visit_requests
-
-        visits = load_express_visit_requests() or []
-        overview["visits_pending"] = sum(
-            1
-            for v in visits
-            if isinstance(v, dict)
-            and str(v.get("status") or "").strip() in ("pending", "done_pending")
-        )
-    except Exception:
-        pass
-    try:
-        from app.utils.storage import load_partner_withdrawals
-
-        rows = load_partner_withdrawals() or []
-        overview["withdrawals_pending"] = sum(
-            1
-            for w in rows
-            if isinstance(w, dict) and str(w.get("status") or "").strip() == "pending"
-        )
-    except Exception:
-        pass
-    try:
-        from app.ai_console.service import dashboard_snapshot
-
-        snap = dashboard_snapshot() or {}
-        k = snap.get("kpis") or {}
-        overview["ai_pending"] = int(k.get("pending_confirms") or 0)
-        overview["ai_errors"] = int(k.get("errors_sample") or 0)
-    except Exception:
-        pass
-    overview["queue_total"] = (
-        int(overview.get("partners_pending") or 0)
-        + int(overview.get("lands_pending") or 0)
-        + int(overview.get("visits_pending") or 0)
-        + int(overview.get("withdrawals_pending") or 0)
-    )
-    return overview
-
-
 @admin_bp.route("", endpoint="admin_root", strict_slashes=False)
 @admin_bp.route("/", endpoint="dashboard", strict_slashes=False)
 @login_required
@@ -1282,24 +1136,9 @@ def dashboard():
         _purge_admin_created_express_listings()
     except Exception:
         pass
-    overview = _dashboard_overview()
+    from .dashboard_data import build_overview
 
-    def _resolve_href(item: dict) -> None:
-        href = item.get("href") or ""
-        kwargs = item.get("url_kwargs") or {}
-        try:
-            item["url"] = url_for(href, **kwargs) if href else "#"
-        except Exception:
-            item["url"] = "#"
-
-    for link in overview.get("quick_links") or []:
-        _resolve_href(link)
-    for queue in overview.get("work_queues") or []:
-        _resolve_href(queue)
-        queue["count"] = int(overview.get(queue.get("count_key") or "") or 0)
-    for group in overview.get("module_groups") or []:
-        for item in group.get("links") or []:
-            _resolve_href(item)
+    overview = build_overview()
     return render_template("admin/dashboard.html", dash_overview=overview)
 
 
@@ -1472,7 +1311,7 @@ def notifications_broadcast():
                 "body": body,
                 "icon": "/static/icons/icon-192.png",
                 "badge": "/static/icons/monochrome-192.png",
-                "url": url_for('main.app_home', _external=True),
+                "url": url_for('express_partner.home', _external=True),
                 "sound": "/static/sounds/notify.mp3"
             }
             for s in subs:
@@ -2552,7 +2391,7 @@ def sms_history():
         filtered_history.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
         # Pagination
-        page = int(request.args.get('page', 1))
+        page = _arg_int("page", 1, hi=100000)
         per_page = 50
         total = len(filtered_history)
         start = (page - 1) * per_page
@@ -3431,8 +3270,8 @@ def lands():
     for ad in lands_list:
         ad["_expiry"] = expiry_meta(ad)
 
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", PER_PAGE_DEFAULT))
+    page = _arg_int("page", 1, hi=100000)
+    per_page = _arg_int("per_page", PER_PAGE_DEFAULT, hi=200)
     pagination = paginate(lands_list, page, per_page)
     p, a, r = counts_by_status(lands_list)
     return render_template(
@@ -3452,8 +3291,8 @@ def pending_lands():
     for ad in subset:
         ad["_expiry"] = expiry_meta(ad)
 
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", PER_PAGE_DEFAULT))
+    page = _arg_int("page", 1, hi=100000)
+    per_page = _arg_int("per_page", PER_PAGE_DEFAULT, hi=200)
     pagination = paginate(subset, page, per_page)
     p, a, r = counts_by_status(lands_list)
     return render_template(
@@ -3473,8 +3312,8 @@ def approved_lands():
     for ad in subset:
         ad["_expiry"] = expiry_meta(ad)
 
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", PER_PAGE_DEFAULT))
+    page = _arg_int("page", 1, hi=100000)
+    per_page = _arg_int("per_page", PER_PAGE_DEFAULT, hi=200)
     pagination = paginate(subset, page, per_page)
     p, a, r = counts_by_status(lands_list)
     return render_template(
@@ -3494,8 +3333,8 @@ def rejected_lands():
     for ad in subset:
         ad["_expiry"] = expiry_meta(ad)
 
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", PER_PAGE_DEFAULT))
+    page = _arg_int("page", 1, hi=100000)
+    per_page = _arg_int("per_page", PER_PAGE_DEFAULT, hi=200)
     pagination = paginate(subset, page, per_page)
     p, a, r = counts_by_status(lands_list)
     return render_template(
@@ -3519,8 +3358,8 @@ def reports_list():
         items.sort(key=lambda x: x.get('created_at',''), reverse=True)
     except Exception:
         pass
-    page = int(request.args.get('page', 1) or 1)
-    per_page = int(request.args.get('per_page', 20) or 20)
+    page = _arg_int("page", 1, hi=100000)
+    per_page = _arg_int("per_page", 20, hi=200)
     pagination = paginate(items, page, per_page)
     return render_template(
         'admin/reports.html',
@@ -4162,8 +4001,8 @@ def express_listings():
         key=lambda l: str(l.get('express_status') or '').strip().lower() == 'sold',
     )
 
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", PER_PAGE_DEFAULT))
+    page = _arg_int("page", 1, hi=100000)
+    per_page = _arg_int("per_page", PER_PAGE_DEFAULT, hi=200)
     pagination = paginate(express_lands, page, per_page)
 
     stats = {
@@ -4198,8 +4037,8 @@ def property_listings():
     status_filter = (request.args.get('status') or 'all').strip().lower()
     q = (request.args.get('q') or '').strip()
     filtered = filter_rows(rows, status_filter, q)
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', PER_PAGE_DEFAULT))
+    page = _arg_int("page", 1, hi=100000)
+    per_page = _arg_int("per_page", PER_PAGE_DEFAULT, hi=200)
     pagination = paginate(filtered, page, per_page)
     return render_template(
         'admin/property_listings.html',
@@ -5663,18 +5502,34 @@ def express_escrow_review_deal(code: str):
     return redirect(url_for('admin.express_commissions') if 'admin.express_commissions' in current_app.view_functions else url_for('admin.express_escrow_review'))
 
 
-_DEAL_INTEGRITY_TEMPLATE = """{% autoescape true %}
-<style>html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>
-<h1>{{ title }}</h1>
-<p>{{ intro }}</p>
-<ul>
-{% for row in rows %}
-<li>{{ row.land_code }} — {{ row.partner_phone }} — {{ row.visit_id or row.deal_overdue_at }} — {{ row.title or '' }}</li>
-{% else %}
-<li>موردی نیست.</li>
-{% endfor %}
-</ul>
-{% endautoescape %}
+_DEAL_INTEGRITY_TEMPLATE = """{% extends 'admin/base_admin.html' %}
+{% from 'admin/partials/ui.html' import page_header, empty %}
+{% block title %}{{ title }} | پنل وینور{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header(title, intro) }}
+<div class="ad-card">
+  {% if rows %}
+  <div class="ad-table-wrap">
+    <table class="ad-table is-stack">
+      <thead><tr><th>فایل</th><th>همکار</th><th>بازدید / دیرکرد</th><th>عنوان</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td class="is-primary"><span class="ad-ltr">{{ row.land_code }}</span></td>
+          <td data-label="همکار">{% if row.partner_phone %}<a class="ad-link ad-ltr" href="{{ url_for('admin.express_partner_detail', phone=row.partner_phone) }}">{{ row.partner_phone }}</a>{% else %}—{% endif %}</td>
+          <td data-label="بازدید / دیرکرد" class="ad-ltr">{{ row.visit_id or row.deal_overdue_at }}</td>
+          <td data-label="عنوان">{{ row.title or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  {{ empty('موردی نیست.', icon='fa-circle-check') }}
+  {% endif %}
+</div>
+{% endblock %}
 """
 
 

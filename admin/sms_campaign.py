@@ -212,6 +212,7 @@ def _save_phonebook(data: dict) -> None:
 
 
 @admin_bp.post('/sms-campaign/phonebook')
+@login_required
 def save_phonebook_group():
     name = (request.form.get('group_name') or '').strip() or 'گروه بدون نام'
     file = request.files.get('phonebook_file')
@@ -395,6 +396,7 @@ def _run_sms_job(app, job_id: str, numbers: list[str], template_id: int, params:
 
 
 @admin_bp.get('/sms-campaign/job/<string:job_id>')
+@login_required
 def sms_job_status(job_id: str):
     data = _load_jobs()
     job = data['jobs'].get(job_id)

@@ -1,59 +1,31 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}روند بازدید{% endblock %}
-{% block page_title %}روند بازدید{% endblock %}
+{% block title %}بازدیدها و پیگیری | پنل وینور{% endblock %}
+{% block page_title %}بازدیدها و پیگیری{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-5">
+{% from 'admin/partials/ui.html' import page_header, tab %}
+<div class="max-w-3xl mx-auto space-y-4" data-visits-page>
+  {% set _sub %}{% if current_filter == 'plus' %}مانیتور بازدیدهای همکاران پلاس{% if plus_count %} — {{ plus_count|fa_num }} پرونده{% endif %}{% elif action_count %}{{ action_count|fa_num }} پرونده منتظر تأیید شماست.{% elif workflow_count %}{{ workflow_count|fa_num }} پرونده در روند — فعلاً اقدامی لازم نیست.{% else %}پرونده فعالی وجود ندارد.{% endif %}{% endset %}
+  {% call page_header('بازدیدها و پیگیری', _sub) %}
+    <a class="ad-btn ad-btn-ghost ad-btn-sm" href="{{ url_for('admin.express_deals_overdue') }}"><i class="fa-solid fa-hourglass-half"></i> معاملات معوق</a>
+  {% endcall %}
 
-  {# ── هدر ── #}
-  <div>
-    <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-      {% if current_filter == 'plus' %}
-      مانیتور بازدیدهای همکاران پلاس
-      {% if plus_count %}<span class="font-semibold text-teal-600 dark:text-teal-400"> — {{ plus_count }} پرونده</span>{% endif %}
-      {% elif action_count %}
-      <span class="font-semibold text-amber-600 dark:text-amber-400">{{ action_count }} پرونده</span> منتظر تأیید شماست.
-      {% elif workflow_count %}
-      {{ workflow_count }} پرونده در روند — فعلاً اقدامی لازم نیست.
-      {% else %}
-      پرونده فعالی وجود ندارد.
-      {% endif %}
-    </p>
-  </div>
-
-  {# ── فیلترها ── #}
-  <div class="flex flex-wrap gap-2">
-    {% macro filter_pill(key, label, count, accent) %}
-    <a href="{{ url_for('admin.express_visit_requests', filter=key) }}"
-       class="px-3 py-1.5 rounded-full text-xs font-medium border transition
-              {% if current_filter == key %}
-                {% if accent == 'amber' %}border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-600
-                {% else %}border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-600{% endif %}
-              {% else %}border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600{% endif %}">
-      {{ label }}{% if count %} <span class="tabular-nums opacity-75">({{ count }})</span>{% endif %}
-    </a>
-    {% endmacro %}
-    {{ filter_pill('plus', 'پلاس', plus_count|default(0), 'blue') }}
-    {{ filter_pill('actions', 'نیاز به اقدام', action_count, 'amber') }}
-    {{ filter_pill('done_pending', 'تأیید انجام', done_pending_count, 'amber') }}
-    {{ filter_pill('workflow', 'در روند', workflow_count, 'blue') }}
-    {{ filter_pill('all', 'همه', all_count, 'blue') }}
+  <nav class="ad-tabs" aria-label="فیلتر بازدیدها">
+    {{ tab(url_for('admin.express_visit_requests', filter='plus'), 'پلاس', plus_count|default(0), current_filter == 'plus') }}
+    {{ tab(url_for('admin.express_visit_requests', filter='actions'), 'نیاز به اقدام', action_count, current_filter == 'actions', hot=True) }}
+    {{ tab(url_for('admin.express_visit_requests', filter='done_pending'), 'تأیید انجام', done_pending_count, current_filter == 'done_pending', hot=True) }}
+    {{ tab(url_for('admin.express_visit_requests', filter='workflow'), 'در روند', workflow_count, current_filter == 'workflow') }}
+    {{ tab(url_for('admin.express_visit_requests', filter='all'), 'همه', all_count, current_filter == 'all') }}
     {% if visit_result_ui_enabled|default(false) %}
-    {{ filter_pill('no_show', 'عدم حضور', no_show_count|default(0), 'blue') }}
+    {{ tab(url_for('admin.express_visit_requests', filter='no_show'), 'عدم حضور', no_show_count|default(0), current_filter == 'no_show') }}
     {% endif %}
-    {{ filter_pill('closed', 'بسته', closed_count, 'blue') }}
-  </div>
+    {{ tab(url_for('admin.express_visit_requests', filter='closed'), 'بسته', closed_count, current_filter == 'closed') }}
+  </nav>
 
   {% if current_filter == 'done_pending' and (done_pending_count|default(0)) %}
-  <p class="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-    صف سریع: بازاریاب «بازدید انجام شد» زده — با تأیید، معامله از چت آزاد می‌شود.
-  </p>
+  <p class="ad-note is-warn">صف سریع: بازاریاب «بازدید انجام شد» زده — با تأیید، معامله از چت آزاد می‌شود.</p>
   {% elif (done_pending_count|default(0)) > 0 and current_filter != 'done_pending' %}
-  <p class="text-xs text-amber-700 dark:text-amber-300">
-    <a href="{{ url_for('admin.express_visit_requests', filter='done_pending') }}" class="font-semibold underline">
-      {{ done_pending_count }} مورد منتظر تأیید انجام
-    </a>
-  </p>
+  <p class="ad-note is-warn"><a href="{{ url_for('admin.express_visit_requests', filter='done_pending') }}" class="ad-link">{{ done_pending_count|fa_num }} مورد منتظر تأیید انجام</a></p>
   {% endif %}
 
   {# ── لیست ── #}
