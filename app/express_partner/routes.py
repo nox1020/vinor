@@ -3892,6 +3892,38 @@ def _build_partner_sales_pipeline(
         'visit_presence_address': visit_presence_address,
         'archive_status': 'archived' if archive_status == 'archived' else 'active',
         'archive_counts': archive_counts,
+        'summary_stats': _follow_summary_stats(ph, is_approved, raw_rows),
+    }
+
+
+def _follow_summary_stats(
+    phone: str,
+    is_approved: bool,
+    visit_rows: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    """نوار خلاصهٔ پیگیری: همان اعداد سابق «وینور من» (home/data).
+
+    از همان ردیف‌های بازدیدی که پایپ‌لاین خوانده و پورسانت‌های کش‌شدهٔ درخواست
+    ساخته می‌شود؛ هیچ خواندن اضافه‌ای ندارد.
+    """
+    ph = (phone or '').strip()
+    if not ph or not is_approved:
+        return {'active_customers': 0, 'visits_done': 0, 'deals_done': 0, 'visible': False}
+    from flask import has_app_context
+
+    stats: Dict[str, Any] = {}
+    try:
+        # بیرون از app context (تست‌های خالص پایپ‌لاین) پورسانت کش‌شده در دسترس نیست.
+        comms = _commissions_for_phone(ph) if has_app_context() else []
+        stats = _home_performance_stats(ph, visit_rows, comms)
+    except Exception:
+        if has_app_context():
+            current_app.logger.exception('follow summary stats failed')
+    return {
+        'active_customers': int(stats.get('home_active_customers') or 0),
+        'visits_done': int(stats.get('home_visits_done') or 0),
+        'deals_done': int(stats.get('home_deals_done') or 0),
+        'visible': True,
     }
 
 
@@ -7080,6 +7112,7 @@ def requests_page():
         follow_tab=tab if tab in ('requests', 'visits', 'deals') else '',
         archive_status=pipe.get('archive_status') or archive_status,
         archive_counts=pipe.get('archive_counts') or {'active': 0, 'archived': 0},
+        summary_stats=pipe.get('summary_stats') or {},
     ))
     if is_approved:
         _append_partner_tab_prefetch(resp)

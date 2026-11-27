@@ -275,6 +275,11 @@ def requests_payload(
         'active_tab': requested,
         'status': archive_status,
         'archive_counts': pipe.get('archive_counts') or {'active': 0, 'archived': 0},
+        # همان سه عدد سابق «وینور من»؛ هر خانه فیلتر پیگیری را عوض می‌کند.
+        'summary_stats': json_ready(pipe.get('summary_stats') or {
+            'active_customers': 0, 'visits_done': 0, 'deals_done': 0, 'visible': False,
+        }),
+        'summary_tabs': {'active_customers': 'requests', 'visits_done': 'visits', 'deals_done': 'deals'},
         'tabs': [
             {'id': 'requests', 'title': 'درخواست'},
             {'id': 'visits', 'title': 'بازدید'},

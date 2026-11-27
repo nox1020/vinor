@@ -88,6 +88,58 @@
     color: #5eead4;
     font-weight: 800;
   }
+  /* نوار خلاصهٔ پیگیری: سه عدد سابق «وینور من»، هر خانه فیلتر را عوض می‌کند. */
+  #partnerRequestsPage .rq-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0.55rem 0.85rem 0;
+    border: 1px solid var(--rq-line);
+    border-radius: 0.85rem;
+    background: #11161c;
+    overflow: hidden;
+  }
+  #partnerRequestsPage .rq-stat {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 0;
+    min-height: 2.6rem;
+    padding: 0.5rem 0.4rem;
+    color: var(--rq-muted);
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  #partnerRequestsPage .rq-stat + .rq-stat {
+    border-inline-start: 1px solid var(--rq-line);
+  }
+  #partnerRequestsPage .rq-stat b {
+    color: var(--rq-text);
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  #partnerRequestsPage .rq-stat span {
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #partnerRequestsPage .rq-stat:active { background: #141920; }
+  #partnerRequestsPage .rq-stat.is-active {
+    background: #141920;
+    color: #5eead4;
+    box-shadow: inset 0 -2px 0 #2dd4bf;
+  }
+  #partnerRequestsPage .rq-stat.is-active b { color: #5eead4; }
+  #partnerRequestsPage .rq-stat:focus-visible {
+    outline: 2px solid rgba(94, 234, 212, 0.6);
+    outline-offset: -2px;
+  }
   #partnerRequestsPage .rq-tabs-wrap {
     position: sticky;
     z-index: 25;
@@ -718,6 +770,23 @@
      data-active-tab="requests">
   <main class="mx-auto w-full max-w-lg">
     {% set _arch = archive_status|default('active') %}
+    {% set _stats = summary_stats|default({}) %}
+    {% if _stats.visible and _arch != 'archived' %}
+    <nav class="rq-stats" data-rq-stats aria-label="خلاصهٔ پیگیری">
+      {% for key, tab, label in [('active_customers', 'requests', 'مشتری فعال'), ('visits_done', 'visits', 'بازدید'), ('deals_done', 'deals', 'معامله')] %}
+      {% set _on = _follow_tab == tab %}
+      <a href="{{ rq_list_href('' if _on else tab, false) }}"
+         data-vinor-express-nav
+         data-rq-stat="{{ key }}"
+         data-rq-stat-tab="{{ tab }}"
+         class="rq-stat{% if _on %} is-active{% endif %}"
+         {% if _on %}aria-current="true"{% endif %}
+         aria-label="{{ label }}: {{ (_stats[key]|default(0))|fa_digits }}{% if _on %}، نمایش همه{% endif %}">
+        <b>{{ (_stats[key]|default(0))|fa_digits }}</b><span>{{ label }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    {% endif %}
     <p class="rq-summary" data-rq-summary>
       {% if _arch == 'archived' %}
       <a href="{{ rq_list_href(_follow_tab, false) }}" data-vinor-express-nav class="rq-archive-back">بازگشت به پیگیری</a>
