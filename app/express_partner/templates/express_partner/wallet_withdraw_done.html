@@ -19,7 +19,7 @@
   </main>
   <footer class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/95 px-3.5 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))]">
     <div class="mx-auto max-w-lg">
-      <a href="{{ url_for('express_partner.wallet_home') }}" class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black" data-withdraw-back>{{ texts.back_to_wallet }}</a>
+      <a href="{{ carry_url(url_for('express_partner.wallet_home')) }}" class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black" data-withdraw-back>{{ texts.back_to_wallet }}</a>
     </div>
   </footer>
 </div>

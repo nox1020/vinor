@@ -51,7 +51,7 @@
       </form>
       {% endif %}
       {% if result.owner %}
-      <a href="{{ result['return'].url }}" data-wallet-return="{{ result['return'].key }}"
+      <a href="{{ carry_url(result['return'].url) }}" data-wallet-return="{{ result['return'].key }}"
          class="grid h-12 w-full place-items-center rounded-xl {% if st == 'success' %}bg-emerald-500 text-black font-bold{% else %}border border-white/15 text-white{% endif %} text-[15px]">{{ result['return'].label }}</a>
       {% else %}
       <a href="{{ app_url }}" data-wallet-back-app

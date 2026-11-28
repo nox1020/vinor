@@ -83,7 +83,7 @@ def test_template_structure_and_style():
     src = TPL.read_text(encoding="utf-8")
     # header = Customers / Tracking / Vinor-man
     assert "{{ ep_header_start(id='partnerNotificationsHeader') }}" in src
-    assert "{% call ep_header_row('اعلان‌ها', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}" in src
+    assert "{% call ep_header_row('اعلان‌ها', subpage_back_url(), inner_class='max-w-lg mx-auto w-full') %}" in src
     # tinted-outline active pill (Home filter language)
     active = re.search(r"#vinorNotifyPage \.vn-n-tab\.is-active \{(.*?)\}", src, re.S).group(1)
     assert "var(--vn-chip-on-bg)" in active and "var(--vn-chip-on-line)" in active

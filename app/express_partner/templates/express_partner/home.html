@@ -49,6 +49,24 @@
   {% set show_ai_plus = false %}
   {% set show_get_plus = plus_system_enabled|default(false) %}
   {% include 'express_partner/partials/ep_header_float_actions.html' %}
+  {% if from_profile %}
+  <a href="{{ url_for('express_partner.profile') }}" data-vinor-express-nav class="ep-from-profile-back" aria-label="بازگشت به وینور من">
+    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+  </a>
+  <style>
+    .ep-from-profile-back{
+      position:fixed;top:calc(env(safe-area-inset-top,0px) + .45rem);
+      right:calc(env(safe-area-inset-right,0px) + .7rem);
+      z-index:91;width:42px;height:42px;border-radius:999px;
+      display:grid;place-items:center;color:#fff;
+      background:rgba(20,24,30,.72);border:1px solid rgba(255,255,255,.12);
+      -webkit-tap-highlight-color:transparent;
+    }
+    #homeDashboardPage:has(.ep-from-profile-back) .ep-header-float-actions--brand{
+      visibility:hidden;pointer-events:none;
+    }
+  </style>
+  {% endif %}
 
   <div class="vn-home-shell mx-auto flex w-full max-w-lg flex-col">
     {# بالای خانه چیزی جز فید آگهی‌ها نیست — هم‌تراز با DashboardFragment اپ (فید داخل aiHomeEmpty است) #}

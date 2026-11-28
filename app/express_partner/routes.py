@@ -1635,6 +1635,35 @@ def track_online_partner():
     except Exception:
         pass
 
+@express_partner_bp.app_template_filter("with_from")
+def _jinja_with_from(url, origin="profile"):
+    from .nav_origin import with_from
+    return with_from(url, origin)
+
+
+@express_partner_bp.app_template_filter("with_from_profile")
+def _jinja_with_from_profile(url):
+    from .nav_origin import with_from
+    return with_from(url, "profile")
+
+
+@express_partner_bp.app_context_processor
+def inject_subpage_back():
+    from .nav_origin import came_from_profile, origin_token, subpage_back_url, with_from
+    token = origin_token()
+    def carry_url(url: str) -> str:
+        return with_from(url, token) if token else url
+    return {
+        "from_profile": came_from_profile(),
+        "from_origin": token,
+        "from_query": {"from": token} if token else {},
+        "subpage_back_url": subpage_back_url,
+        "with_from": with_from,
+        "with_from_profile": lambda url: with_from(url, "profile"),
+        "carry_url": carry_url,
+    }
+
+
 @express_partner_bp.app_context_processor
 def inject_role_flags():
     try:
@@ -9462,7 +9491,8 @@ def verify():
 @require_partner_access(allow_pending=True, allow_guest=True)
 def help():
     """صفحه راهنما حذف شد — هدایت به دستیار AI روی داشبورد."""
-    return redirect(url_for('express_partner.home', ai=1))
+    from .nav_origin import carry_from_kwargs
+    return redirect(url_for('express_partner.home', **carry_from_kwargs({"ai": 1})))
 
 
 @express_partner_bp.route('/training', methods=['GET'], endpoint='training')

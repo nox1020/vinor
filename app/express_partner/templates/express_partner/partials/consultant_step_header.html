@@ -3,7 +3,7 @@
 {% set _step = consultant_step|default(1)|int %}
 {% set _fa = ['۰', '۱', '۲', '۳', '۴', '۵'] %}
 {% set _title = step_title|default('بازاریاب وینور') %}
-{% set _back = consultant_back_url|default(url_for('express_partner.home')) %}
+{% set _back = consultant_back_url|default(subpage_back_url()) %}
 
 {{ ep_header_start(sticky=true) }}
 <div class="express-dash-header-inner w-full px-3 pt-2.5 pb-2 mx-auto ep-partner-header-inner--auto" style="max-width:480px">

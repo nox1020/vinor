@@ -28,7 +28,7 @@
 
   <header class="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur px-3.5 pt-[calc(.75rem+env(safe-area-inset-top,0px))] pb-3 border-b border-white/10">
     <div class="mx-auto flex max-w-lg items-center gap-2">
-      <button type="button" data-ww-back data-href="{{ url_for('express_partner.wallet_home') }}"
+      <button type="button" data-ww-back data-href="{{ carry_url(carry_url(url_for('express_partner.wallet_home'))) }}"
               class="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10" aria-label="بازگشت">
         <i class="fas fa-arrow-right" aria-hidden="true"></i>
       </button>
@@ -145,7 +145,7 @@
       <button type="button" data-ww-next disabled
               class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black disabled:opacity-40">{{ t.next }}</button>
       {% else %}
-      <a href="{{ url_for('express_partner.wallet_home') }}" class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black">{{ t.back_to_wallet }}</a>
+      <a href="{{ carry_url(url_for('express_partner.wallet_home')) }}" class="grid h-12 w-full place-items-center rounded-xl bg-emerald-500 text-[15px] font-bold text-black">{{ t.back_to_wallet }}</a>
       {% endif %}
     </div>
   </footer>
