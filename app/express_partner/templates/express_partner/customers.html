@@ -3,7 +3,7 @@
 {% block content %}
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   {{ ep_header_start(id='partnerCustomersHeader') }}
-  {% call ep_header_row('مشتریان من', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+  {% call ep_header_row('مشتریان من', subpage_back_url(), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
   <div id="partnerCustomersPage"

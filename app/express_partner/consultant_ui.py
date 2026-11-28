@@ -64,7 +64,8 @@ def _stay(phone: str, endpoint: str):
     snap = onboarding_snapshot(phone)
     dest = _destination(snap)
     if dest != endpoint:
-        return snap, redirect(url_for(dest))
+        from .nav_origin import carry_from_kwargs
+        return snap, redirect(url_for(dest, **carry_from_kwargs()))
     return snap, None
 
 
@@ -74,7 +75,8 @@ def consultant_gate():
     phone, bounce = _gate()
     if bounce is not None:
         return bounce
-    return redirect(url_for(_destination(onboarding_snapshot(phone))))
+    from .nav_origin import carry_from_kwargs
+    return redirect(url_for(_destination(onboarding_snapshot(phone)), **carry_from_kwargs()))
 
 
 @express_partner_bp.get("/consultant/apply", endpoint="consultant_apply")
@@ -146,7 +148,8 @@ def consultant_dashboard_page():
     if bounce is not None:
         return bounce
     if str(snap.get("status") or "") != "approved":
-        return redirect(url_for("express_partner.consultant_status"))
+        from .nav_origin import carry_from_kwargs
+        return redirect(url_for("express_partner.consultant_status", **carry_from_kwargs()))
     return render_template(
         "express_partner/consultant_dashboard.html",
         step_title=_STEP_TITLES["dashboard"],

@@ -142,7 +142,7 @@ def test_vinor_man_menu_locks(client, monkeypatch):
     assert 'role="dialog"' in body
     assert "خروج از حساب؟" in body
     assert "انصراف" in body
-    assert 'href="/express/partner/consultant"' in body
+    assert '/express/partner/consultant' in body
     _crawl(client, body)
     assert _style_hexes(body) <= PALETTE
     page = _chunk(body)
@@ -167,8 +167,8 @@ def test_vinor_man_menu_locks(client, monkeypatch):
     assert "درخواست همکاری" in off_body
     assert not re.search(r'class="vn-me-label">آگهی‌های من<', off_body)
     assert "همکاری با وینور" in off_body
-    assert 'href="/express/partner/apply"' in off_body
-    assert 'href="/express/partner/consultant"' not in off_body
+    assert '/express/partner/apply' in off_body
+    assert '/express/partner/consultant' not in off_body
     _crawl(client, off_body)
 
 
@@ -218,7 +218,7 @@ def test_marketer_banner_moves_to_vinor_man(client, app):
 
     guest_me = client.get(PROFILE).get_data(as_text=True)
     assert MARKETER_LABEL in guest_me
-    assert "login_next=/express/partner/consultant" in guest_me
+    assert "login_next=" in guest_me and "consultant" in guest_me
     assert "menu=1" in guest_me
     assert "شروع همکاری فروش و دریافت پورسانت" in guest_me
 
@@ -230,7 +230,7 @@ def test_marketer_banner_moves_to_vinor_man(client, app):
     assert 'class="vn-hub__hero"' not in open_home_body
     open_me = client.get(PROFILE).get_data(as_text=True)
     assert MARKETER_LABEL in open_me
-    assert 'href="/express/partner/consultant"' in open_me
+    assert '/express/partner/consultant' in open_me
 
     with app.app_context():
         from app.utils.storage import save_express_partner_apps
@@ -244,7 +244,7 @@ def test_marketer_banner_moves_to_vinor_man(client, app):
     pending_me = client.get(PROFILE).get_data(as_text=True)
     assert MARKETER_LABEL not in pending_me
     assert "وضعیت درخواست" in pending_me
-    assert 'href="/express/partner/consultant"' in pending_me
+    assert '/express/partner/consultant' in pending_me
 
     with app.app_context():
         from app.utils.storage import save_express_partners
@@ -258,7 +258,7 @@ def test_marketer_banner_moves_to_vinor_man(client, app):
     approved_me = client.get(PROFILE).get_data(as_text=True)
     assert MARKETER_LABEL not in approved_me
     assert "وضعیت درخواست" not in _chunk(approved_me)
-    assert 'href="/express/partner/consultant"' not in approved_me
+    assert '/express/partner/consultant' not in approved_me
 
 
 @pytest.mark.parametrize(

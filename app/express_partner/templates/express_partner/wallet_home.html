@@ -47,11 +47,11 @@
 <div class="wh min-h-[100dvh] flex flex-col text-white" data-wallet-home data-wallet-style="v2">
   <header class="sticky top-0 z-20 px-3.5 pt-[calc(.6rem+env(safe-area-inset-top,0px))] pb-2" style="background:rgba(11,16,32,.92);backdrop-filter:blur(10px)">
     <div class="mx-auto flex max-w-lg items-center gap-2">
-      <a href="{{ url_for('express_partner.home') }}" data-vinor-express-nav class="grid h-10 w-10 place-items-center rounded-2xl text-white hover:bg-white/10" aria-label="بازگشت">
+      <a href="{{ subpage_back_url() }}" data-vinor-express-nav class="grid h-10 w-10 place-items-center rounded-2xl text-white hover:bg-white/10" aria-label="بازگشت">
         <i class="fas fa-arrow-right" aria-hidden="true"></i>
       </a>
       <p class="min-w-0 flex-1 truncate text-center text-[15px] font-bold">{{ texts.wallet_title }}</p>
-      <a href="{{ url_for('express_partner.commissions_transactions') }}" data-vinor-express-nav class="grid h-10 w-10 place-items-center rounded-2xl text-slate-300 hover:bg-white/10" aria-label="همه تراکنش‌ها">
+      <a href="{{ carry_url(url_for('express_partner.commissions_transactions')) }}" data-vinor-express-nav class="grid h-10 w-10 place-items-center rounded-2xl text-slate-300 hover:bg-white/10" aria-label="همه تراکنش‌ها">
         <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
       </a>
     </div>
@@ -145,11 +145,11 @@
 
   <footer class="wh-bar">
     <div class="mx-auto grid max-w-lg grid-cols-2 gap-2.5">
-      <a href="{{ url_for('express_partner.wallet_charge', **{'return': 'wallet'}) }}" data-wallet-topup class="wh-btn wh-btn-primary">
+      <a href="{{ carry_url(url_for('express_partner.wallet_charge', **{'return': 'wallet'})) }}" data-wallet-topup class="wh-btn wh-btn-primary">
         <i class="fas fa-plus" aria-hidden="true"></i>{{ texts.topup_button }}
       </a>
       {% if withdraw_enabled %}
-      <a href="{{ url_for('express_partner.wallet_withdraw') }}" data-wallet-withdraw class="wh-btn wh-btn-ghost"
+      <a href="{{ carry_url(url_for('express_partner.wallet_withdraw')) }}" data-wallet-withdraw class="wh-btn wh-btn-ghost"
          {% if not can_withdraw %}aria-disabled="true" title="کمترین مبلغ برداشت {{ min_withdrawal_label }} است."{% endif %}>
         <i class="fas fa-arrow-up" aria-hidden="true"></i>{{ texts.withdraw_button }}
       </a>

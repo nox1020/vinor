@@ -12,7 +12,7 @@
 {% endblock %}
 {% block content %}
 {% set _safe_next = safe_internal_path(request.args.get('next')) %}
-{% set _back = back_href if back_href is defined else (_safe_next or url_for('express_partner.login')) %}
+{% set _back = back_href if back_href is defined else (subpage_back_url() if from_profile else (_safe_next or url_for('express_partner.login'))) %}
 <div class="min-h-[100dvh] bg-[#050810] text-zinc-100 flex flex-col">
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_back_link, ep_header_spacer %}
   {{ ep_header_start(sticky=true) }}

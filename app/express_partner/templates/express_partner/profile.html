@@ -2,7 +2,10 @@
 {% block title %}{{ seo_title|default('وینور من | وینور اکسپرس') }}{% endblock %}
 
 {% block content %}
-{% from 'express_partner/partials/profile_macros.html' import profile_menu_row %}
+{% from 'express_partner/partials/profile_macros.html' import profile_menu_row as _profile_menu_row %}
+{% macro profile_menu_row(href, icon, title, subtitle='', tour='', row_id='', nav=true, download=false, extra_class='', badge_key='', badge='', aria_label='') -%}
+{{ _profile_menu_row(href|with_from_profile, icon, title, subtitle, tour, row_id, nav, download, extra_class, badge_key, badge, aria_label) }}
+{%- endmacro %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 {% include 'express_partner/partials/profile_page_styles.html' %}
 
@@ -30,7 +33,7 @@
   <div class="vn-me-shell">
 
     {% if _logged %}
-    <a class="vn-me-profile" href="{{ url_for('express_partner.profile_edit') }}" data-vinor-express-nav aria-label="ویرایش پروفایل، {{ _name }}">
+    <a class="vn-me-profile" href="{{ url_for('express_partner.profile_edit')|with_from_profile }}" data-vinor-express-nav aria-label="ویرایش پروفایل، {{ _name }}">
       <div class="vn-me-avatar" aria-hidden="true">
         {% if avatar_url %}
         <img src="{{ avatar_url }}" alt="">
@@ -42,8 +45,8 @@
         <div class="vn-me-profile__name">{{ _name }}</div>
         <bdi dir="ltr" class="vn-me-profile__phone">{{ me_phone_masked|fa_digits }}</bdi>
       </div>
-      <span class="vn-me-profile__edit">ویرایش
-        <svg class="vn-me-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" style="display:none">
+      <span class="vn-me-profile__edit" aria-hidden="true">
+        <svg class="vn-me-chev" viewBox="0 0 24 24" width="16" height="16" focusable="false">
           <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </span>

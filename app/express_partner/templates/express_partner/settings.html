@@ -120,7 +120,7 @@
   <div class="ps-shell">
     <h2 class="ps-block-label">حساب</h2>
     <div class="ps-actions">
-      <a href="{{ url_for('express_partner.profile_edit') }}"
+      <a href="{{ with_from(url_for('express_partner.profile_edit'), 'settings') }}"
          data-vinor-express-nav
          class="ps-action">
         <i class="fas fa-user" aria-hidden="true"></i>

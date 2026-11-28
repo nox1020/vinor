@@ -4,20 +4,21 @@
 {% block content %}
 {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
 {% macro rq_list_href(tab='', archived=false) -%}
+  {%- set _q = from_query if from_query is defined else {} -%}
   {%- if archived and tab -%}
-    {{- url_for('express_partner.requests', tab=tab, status='archived') -}}
+    {{- url_for('express_partner.requests', tab=tab, status='archived', **_q) -}}
   {%- elif archived -%}
-    {{- url_for('express_partner.requests', status='archived') -}}
+    {{- url_for('express_partner.requests', status='archived', **_q) -}}
   {%- elif tab -%}
-    {{- url_for('express_partner.requests', tab=tab) -}}
+    {{- url_for('express_partner.requests', tab=tab, **_q) -}}
   {%- else -%}
-    {{- url_for('express_partner.requests') -}}
+    {{- url_for('express_partner.requests', **_q) -}}
   {%- endif -%}
 {%- endmacro %}
 {% set _follow_tab = follow_tab|default('') %}
 {% set _follow_archived = (archive_status|default('active')) == 'archived' %}
 {{ ep_header_start(id='partnerRequestsHeader', sticky=true) }}
-{% call ep_header_row('پیگیری', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}
+{% call ep_header_row('پیگیری', subpage_back_url(), inner_class='max-w-lg mx-auto w-full') %}
   <div class="flex items-center gap-1">
     <details class="rq-filter">
       <summary id="rqFilterBtn"

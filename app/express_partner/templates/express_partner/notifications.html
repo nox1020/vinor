@@ -13,7 +13,7 @@
 <script>window.__VINOR_NOTIFY_SEED__={{ {'notifications': notifications, 'unread': unread_count|default(0)}|tojson }};</script>
 
 {{ ep_header_start(id='partnerNotificationsHeader') }}
-{% call ep_header_row('اعلان‌ها', url_for('express_partner.home'), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
+{% call ep_header_row('اعلان‌ها', subpage_back_url(), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
 {{ ep_header_end() }}
 
 <style>

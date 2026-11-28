@@ -22,11 +22,13 @@ def test_profile_uses_same_header_macros_as_customers_and_requests():
     profile = (TPL / "profile.html").read_text(encoding="utf-8")
     assert "import ep_header_start, ep_header_end, ep_header_row" in profile
     p_start, p_row = _header_call("profile.html")
-    c_start, c_row = _header_call("customers.html")
-    r_start, r_row = _header_call("requests.html")
     assert p_start == "id='partnerProfileHeader'"
-    # same back target (Home) + same inner width as both references
-    assert p_row == c_row == r_row == "url_for('express_partner.home')|max-w-lg mx-auto w-full"
+    # هدر «وینور من» خودش به خانه برمی‌گردد؛ زیرصفحات از subpage_back_url استفاده می‌کنند.
+    assert p_row == "url_for('express_partner.home')|max-w-lg mx-auto w-full"
+    for name in ("customers.html", "requests.html"):
+        src = (TPL / name).read_text(encoding="utf-8")
+        assert "subpage_back_url()" in src
+        assert "inner_class='max-w-lg mx-auto w-full'" in src
     assert "{% call ep_header_row('وینور من'" in profile
     assert "{{ ep_header_end() }}" in profile
     # header renders before the page body, like customers.html
