@@ -7,67 +7,84 @@
 
   {% from 'express_partner/partials/partner_header.html' import ep_header_start, ep_header_end, ep_header_row %}
   <style>
+    html:has(#profileEditPage),
+    body:has(#profileEditPage),
+    html:has(#profileEditPage) #tg-page-shell,
+    html:has(#profileEditPage) * {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    html:has(#profileEditPage)::-webkit-scrollbar,
+    body:has(#profileEditPage)::-webkit-scrollbar,
+    html:has(#profileEditPage) #tg-page-shell::-webkit-scrollbar,
+    html:has(#profileEditPage) *::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    html:has(#profileEditPage),
+    body:has(#profileEditPage) {
+      background: #050a0e !important;
+    }
     #profileEditPage {
-      --pe-bg: #171717;
-      --pe-surface: #212121;
-      --pe-hover: rgba(255, 255, 255, 0.06);
-      --pe-border: rgba(255, 255, 255, 0.08);
+      --pe-bg: #050a0e;
+      --pe-card: #14181f;
+      --pe-line: rgba(255, 255, 255, 0.08);
+      --pe-border: rgba(255, 255, 255, 0.1);
       --pe-text: #ececec;
-      --pe-muted: #a0a0a0;
+      --pe-muted: #8e8e93;
+      --pe-accent: #2dd4bf;
+      --pe-danger: #fda4af;
       background: var(--pe-bg);
       color: var(--pe-text);
     }
     #profileEditPage .pe-shell {
-      max-width: 28rem;
+      max-width: 32rem; /* max-w-lg */
       margin-inline: auto;
-      padding: 0.75rem 0.85rem 1.5rem;
+      padding: 0.75rem 0.85rem 8.25rem;
     }
     #profileEditPage .pe-avatar-wrap {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 0.5rem 0 1.25rem;
+      padding: 0.15rem 0 0.85rem;
     }
     #profileEditPage #avatarEditTrigger {
       width: 5.5rem;
       height: 5.5rem;
       border-radius: 9999px;
       border: 1px solid var(--pe-border);
-      background: var(--pe-surface);
+      background: var(--pe-card);
       box-shadow: none;
       overflow: hidden;
       position: relative;
       flex-shrink: 0;
     }
-    #profileEditPage #avatarEditTrigger:active {
-      transform: scale(0.98);
-    }
+    #profileEditPage #avatarEditTrigger:active { transform: scale(0.98); }
     #profileEditPage .pe-avatar-hint {
       margin-top: 0.65rem;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
+      font-weight: 600;
       color: var(--pe-muted);
       text-align: center;
+      line-height: 1.45;
     }
     #profileEditPage .pe-group {
-      border-radius: 0.85rem;
-      background: var(--pe-surface);
+      border-radius: 1rem;
+      background: var(--pe-card);
       border: 1px solid var(--pe-border);
       overflow: hidden;
     }
-    #profileEditPage .pe-group + .pe-group {
-      margin-top: 0.75rem;
-    }
+    #profileEditPage .pe-group + .pe-group { margin-top: 0.7rem; }
     #profileEditPage .pe-row {
-      padding: 0.85rem 0.95rem;
-      border-bottom: 1px solid var(--pe-border);
+      padding: 0.7rem 1rem 0.55rem;
+      border-bottom: 1px solid var(--pe-line);
     }
-    #profileEditPage .pe-row:last-child {
-      border-bottom: 0;
-    }
+    #profileEditPage .pe-row:last-child { border-bottom: 0; }
     #profileEditPage .pe-label {
       display: block;
-      margin-bottom: 0.4rem;
-      font-size: 0.75rem;
+      margin-bottom: 0.15rem;
+      font-size: 0.72rem;
       font-weight: 600;
       color: var(--pe-muted);
       text-align: right;
@@ -76,31 +93,44 @@
     #profileEditPage .pe-trigger,
     #profileEditPage #bioInput {
       width: 100%;
-      border-radius: 0.65rem;
-      border: 1px solid transparent;
-      background: rgba(0, 0, 0, 0.28);
+      border: 0;
+      border-bottom: 1px solid var(--pe-border);
+      border-radius: 0;
+      background: transparent;
       color: var(--pe-text);
-      font-size: 0.875rem;
-      padding: 0.75rem 0.85rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.55rem 0 0.5rem;
       outline: none;
-      transition: border-color 0.15s ease, background 0.15s ease;
+      transition: border-color 0.15s ease;
     }
     #profileEditPage .pe-input::placeholder,
-    #profileEditPage #bioInput::placeholder {
-      color: #717171;
-    }
+    #profileEditPage #bioInput::placeholder { color: #6b7280; font-weight: 500; }
     #profileEditPage .pe-input:focus,
     #profileEditPage .pe-trigger:focus,
     #profileEditPage #bioInput:focus {
-      border-color: rgba(255, 255, 255, 0.18);
-      background: rgba(0, 0, 0, 0.38);
+      border-bottom-color: var(--pe-accent);
+      background: transparent;
       box-shadow: none;
     }
     #profileEditPage .pe-input[readonly] {
       color: var(--pe-muted);
-      cursor: not-allowed;
-      opacity: 0.9;
+      cursor: default;
+      opacity: 1;
+      border-bottom-style: dashed;
     }
+    #profileEditPage .pe-input--error,
+    #profileEditPage .pe-input.pe-input--error:focus {
+      border-bottom-color: #fb7185;
+    }
+    #profileEditPage .pe-error {
+      margin-top: 0.35rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #fb7185;
+      text-align: right;
+    }
+    #profileEditPage .pe-error[hidden] { display: none !important; }
     #profileEditPage .pe-trigger {
       display: flex;
       align-items: center;
@@ -108,36 +138,36 @@
       gap: 0.5rem;
       text-align: right;
     }
-    #profileEditPage .pe-trigger:hover {
-      background: rgba(0, 0, 0, 0.36);
-    }
+    #profileEditPage .pe-trigger:hover { background: transparent; }
     #profileEditPage .pe-hint {
       margin-top: 0.4rem;
-      font-size: 0.6875rem;
-      color: #737373;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--pe-muted);
       text-align: right;
+      line-height: 1.45;
     }
-    #profileEditPage .pe-bio-wrap {
-      position: relative;
-    }
+    #profileEditPage .pe-bio-wrap { position: relative; }
     #profileEditPage #bioInput {
       resize: none;
-      min-height: 7rem;
-      padding-bottom: 1.75rem;
+      min-height: 4.25rem;
+      padding-bottom: 1.7rem;
+      line-height: 1.6;
     }
     #profileEditPage #bioCounter {
-      position: absolute;
-      bottom: 0.55rem;
-      left: 0.75rem;
-      font-size: 0.6875rem;
+      position: static;
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 0.7rem;
+      font-weight: 600;
       color: var(--pe-muted);
-      pointer-events: none;
+      text-align: left;
     }
     #profileEditPage .pe-danger {
-      margin-top: 1rem;
-      border-radius: 0.85rem;
+      margin-top: 0.7rem;
+      border-radius: 1rem;
       border: 1px solid rgba(244, 63, 94, 0.22);
-      background: rgba(244, 63, 94, 0.06);
+      background: #14181f;
       overflow: hidden;
     }
     #profileEditPage .pe-danger summary {
@@ -153,12 +183,13 @@
     #profileEditPage .pe-danger summary::-webkit-details-marker { display: none; }
     #profileEditPage .pe-danger__title {
       font-size: 0.875rem;
-      font-weight: 650;
-      color: #fda4af;
+      font-weight: 700;
+      color: var(--pe-danger);
     }
     #profileEditPage .pe-danger__sub {
       margin-top: 0.2rem;
-      font-size: 0.6875rem;
+      font-size: 0.7rem;
+      font-weight: 600;
       color: rgba(253, 164, 175, 0.65);
     }
     #profileEditPage .pe-danger__body {
@@ -167,32 +198,66 @@
     }
     #profileEditPage #deleteAccountOpen {
       width: 100%;
-      border-radius: 0.7rem;
+      border-radius: 0.85rem;
       border: 1px solid rgba(244, 63, 94, 0.35);
       background: rgba(244, 63, 94, 0.12);
       color: #fecdd3;
       font-size: 0.8125rem;
-      font-weight: 650;
+      font-weight: 700;
       padding: 0.75rem 1rem;
     }
     #profileEditPage #deleteAccountOpen:hover {
       background: rgba(244, 63, 94, 0.18);
     }
-    #profileEditHeader .ep-partner-header-btn--primary:disabled {
-      opacity: 0.35;
+    .pe-savebar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 55;
+      pointer-events: none;
+      background: linear-gradient(to top, #050a0e 80%, rgba(5, 10, 14, 0));
+      padding: 1.1rem 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+    }
+    html:has(#bottomNavMenu.tg-tabbar-shell) .pe-savebar {
+      bottom: calc(3.6rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: 0.55rem;
+    }
+    .pe-savebar .pe-save {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      width: 100%;
+      max-width: 32rem;
+      margin-inline: auto;
+      min-height: 2.75rem;
+      border-radius: 0.85rem;
+      border: 0;
+      background: #059669;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 800;
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pe-savebar .pe-save.hover\:bg-emerald-500:hover,
+    .pe-savebar .pe-save.bg-emerald-600 { background: #059669; color: #fff; }
+    .pe-savebar .pe-save.bg-zinc-600 { background: #3f3f46; color: #fff; }
+    .pe-savebar .pe-save.bg-rose-600 { background: #e11d48; color: #fff; }
+    .pe-savebar .pe-save:disabled,
+    .pe-savebar .pe-save.opacity-40 {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    @media (min-width: 1024px) {
+      html:has(#bottomNavMenu.tg-tabbar-shell) .pe-savebar { bottom: 0; }
     }
   </style>
 
   {{ ep_header_start(id='profileEditHeader') }}
-  {% call ep_header_row('ویرایش پروفایل', subpage_back_url(), inner_class='max-w-lg mx-auto w-full') %}
-    <button type="button"
-            id="profileEditSaveBtn"
-            disabled
-            class="ep-partner-header-btn ep-partner-header-btn--primary"
-            aria-label="ذخیره تغییرات">
-      <i id="profileEditSaveBtnIcon" class="fas fa-check ep-partner-header-btn-icon" aria-hidden="true"></i>
-    </button>
-  {% endcall %}
+  {% call ep_header_row('ویرایش پروفایل', subpage_back_url(), inner_class='max-w-lg mx-auto w-full') %}{% endcall %}
   {{ ep_header_end() }}
 
   <main id="profileEditPage" class="partner-page-scroll-pad min-h-[100dvh] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
@@ -204,7 +269,7 @@
 
       <form id="avatarEditForm" method="post" action="{{ url_for('express_partner.profile_avatar_upload') }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="next" value="{{ url_for('express_partner.profile_edit') }}">
+        <input type="hidden" name="next" value="{{ carry_url(url_for('express_partner.profile_edit')) }}">
         <input id="avatarInputCamera" name="avatar" type="file" accept="image/*" capture="environment" class="hidden">
         <input id="avatarInputLibrary" name="avatar" type="file" accept="image/*" class="hidden">
 
@@ -245,7 +310,8 @@
           <div class="pe-row">
             <label for="profileName" class="pe-label">نام و نام خانوادگی</label>
             <input id="profileName" type="text" name="name" value="{{ me_name }}" maxlength="60" autocomplete="name"
-                   class="pe-input" placeholder="نام و نام خانوادگی">
+                   class="pe-input" placeholder="نام و نام خانوادگی" aria-describedby="profileNameError">
+            <p id="profileNameError" class="pe-error" hidden>نام را وارد کنید</p>
           </div>
 
           <div class="pe-row">
@@ -262,6 +328,7 @@
               <span id="cityPickerTriggerText" class="min-w-0 flex-1 truncate {% if not me_city %}text-zinc-500{% endif %}">{{ me_city or 'انتخاب شهر' }}</span>
               <i class="fas fa-chevron-down pointer-events-none shrink-0 text-[10px] text-zinc-500" aria-hidden="true"></i>
             </button>
+            <p class="pe-hint">شهری که آگهی‌ها و مشتریان را در آن می‌بینید</p>
           </div>
 
           <div class="pe-row">
@@ -283,7 +350,7 @@
           <div class="pe-row">
             <label for="bioInput" class="pe-label">درباره من <span class="font-normal opacity-70">(اختیاری)</span></label>
             <div class="pe-bio-wrap">
-              <textarea id="bioInput" name="bio" rows="5" maxlength="200" data-bio-counter
+              <textarea id="bioInput" name="bio" rows="3" maxlength="200" data-bio-counter
                         placeholder="چند خط درباره خودتان…">{{ me_bio }}</textarea>
               <span id="bioCounter">0/200</span>
             </div>
@@ -402,6 +469,16 @@
     </div>
   </div>
 
+  <div class="pe-savebar">
+    <button type="button"
+            id="profileEditSaveBtn"
+            disabled
+            class="pe-save bg-emerald-600 hover:bg-emerald-500"
+            aria-label="ذخیره تغییرات">
+      <i id="profileEditSaveBtnIcon" class="fas fa-check" aria-hidden="true"></i>
+      <span id="profileEditSaveBtnLabel">ذخیره تغییرات</span>
+    </button>
+  </div>
   {% include 'express_partner/partials/partner_tab_footer.html' %}
 {% endblock %}
 
@@ -576,6 +653,7 @@ function initProfileEditSave() {
   };
   var saveBtn = document.getElementById('profileEditSaveBtn');
   var saveBtnIcon = document.getElementById('profileEditSaveBtnIcon');
+  var saveBtnLabel = document.getElementById('profileEditSaveBtnLabel');
   var savedTimer = null;
   var lastSavedKey = '';
   var formDirty = false;
@@ -587,6 +665,7 @@ function initProfileEditSave() {
     var icon = saveBtnIcon || (saveBtn && saveBtn.querySelector('i'));
     if (icon) icon.className = iconClasses + ' text-sm sm:text-base';
     if (saveBtn && ariaLabel) saveBtn.setAttribute('aria-label', ariaLabel);
+    if (saveBtnLabel && ariaLabel) saveBtnLabel.textContent = ariaLabel;
   }
 
   function resetSaveBtnAppearance() {
@@ -766,13 +845,25 @@ function initProfileEditSave() {
     syncSaveButton(false);
   }
 
+  function setNameError(on) {
+    var nameEl = document.getElementById('profileName');
+    var err = document.getElementById('profileNameError');
+    if (nameEl) {
+      nameEl.classList.toggle('pe-input--error', !!on);
+      nameEl.setAttribute('aria-invalid', on ? 'true' : 'false');
+    }
+    if (err) err.hidden = !on;
+  }
+
   function validatePayload(payload) {
     if (!payload.name) {
+      setNameError(true);
       setSaveButtonFeedback('error', 'نام الزامی است');
       var nameEl = document.getElementById('profileName');
       if (nameEl) try { nameEl.focus(); } catch (_) {}
       return false;
     }
+    setNameError(false);
     return true;
   }
 
@@ -829,7 +920,11 @@ function initProfileEditSave() {
     ['profileName', 'bioInput'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('input', function () { markDirty(); syncSaveButton(false); }, { signal: pageSignal });
+      el.addEventListener('input', function () {
+        if (id === 'profileName') setNameError(false);
+        markDirty();
+        syncSaveButton(false);
+      }, { signal: pageSignal });
     });
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
